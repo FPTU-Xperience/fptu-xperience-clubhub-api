@@ -1,11 +1,6 @@
 using AuthService.Contracts;
-using AuthService.Data;
-using AuthService.Models;
 using AuthService.Services;
 using AuthService.Validators;
-using ClubReportHub.Shared.Auth;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Endpoints;
 
@@ -15,13 +10,11 @@ public static class AuthEndpoints
     {
         var auth = app.MapGroup("/api/auth").WithTags("Authentication");
 
-        auth.MapPost("/login", HandleLogin)
+        // Password login and public registration are intentionally absent.
+        // Accounts are provisioned by an ADMIN and enter through Google only.
+        auth.MapPost("/google", HandleGoogleSignIn)
             .AllowAnonymous()
-            .RequireRateLimiting("loginLimit");
-
-        auth.MapPost("/register", HandleRegister)
-            .AllowAnonymous()
-            .RequireRateLimiting("registerLimit");
+            .RequireRateLimiting("googleSignInLimit");
 
         auth.MapPost("/refresh", HandleRefresh)
             .AllowAnonymous()
@@ -33,103 +26,31 @@ public static class AuthEndpoints
         return app;
     }
 
-    private static async Task<IResult> HandleLogin(
-        LoginRequest request,
-        AuthDbContext db,
-        IPasswordHasher<User> passwordHasher,
-        RefreshTokenService refreshTokenService)
+    private static async Task<IResult> HandleGoogleSignIn(
+        GoogleLoginRequest request,
+        GoogleSignInService googleSignInService,
+        CancellationToken cancellationToken)
     {
-        // Validate input
-        var validation = AuthValidators.ValidateLogin(request);
+        var validation = AuthValidators.ValidateGoogleLogin(request);
         if (!validation.IsValid)
         {
             return Results.BadRequest(new { message = string.Join(" ", validation.Errors) });
         }
 
-        // Find user
-        var user = await db.Users
-            .Include(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .FirstOrDefaultAsync(x =>
-                x.Username == request.Username ||
-                x.Email == request.Username);
-
-        // Check user status
-        if (user is null || !user.IsActive || user.IsLocked)
+        var result = await googleSignInService.SignInAsync(request.Credential, cancellationToken);
+        return result.Status switch
         {
-            return Results.Unauthorized();
-        }
-
-        // Check valid role configuration
-        if (!HasValidActorConfiguration(user))
-        {
-            return Results.Forbid();
-        }
-
-        // Verify password
-        var passwordResult = passwordHasher.VerifyHashedPassword(
-            user, user.PasswordHash, request.Password);
-
-        if (passwordResult == PasswordVerificationResult.Failed)
-        {
-            return Results.Unauthorized();
-        }
-
-        // Create tokens
-        var refreshToken = await refreshTokenService.CreateRefreshTokenAsync(user.Id);
-        return Results.Ok(refreshTokenService.CreateAuthResponse(user, refreshToken));
-    }
-
-    private static async Task<IResult> HandleRegister(
-        RegisterRequest request,
-        AuthDbContext db,
-        IPasswordHasher<User> passwordHasher,
-        RefreshTokenService refreshTokenService)
-    {
-        // Validate input
-        var validation = AuthValidators.ValidateRegister(request);
-        if (!validation.IsValid)
-        {
-            return Results.BadRequest(new { errors = validation.Errors.ToDictionary(e => e) });
-        }
-
-        // Check duplicate
-        var username = request.Username.Trim();
-        var email = request.Email.Trim();
-
-        if (await db.Users.AnyAsync(x => x.Username == username || x.Email == email))
-        {
-            return Results.Conflict(new { message = "Username or email already exists." });
-        }
-
-        // Get or create CLUB_MEMBER role
-        var memberRole = await db.Roles.FirstOrDefaultAsync(x => x.Name == AuthRoles.ClubMember);
-        if (memberRole is null)
-        {
-            memberRole = new Role { Name = AuthRoles.ClubMember };
-            db.Roles.Add(memberRole);
-            await db.SaveChangesAsync();
-        }
-
-        // Create user
-        var user = new User
-        {
-            Username = username,
-            FullName = request.FullName.Trim(),
-            Email = email,
-            IsActive = true
+            GoogleSignInStatus.Authenticated => Results.Ok(result.Response),
+            GoogleSignInStatus.InvalidGoogleCredential => Results.Json(
+                new { message = "Thông tin xác thực Google không hợp lệ hoặc đã hết hạn." },
+                statusCode: StatusCodes.Status401Unauthorized),
+            GoogleSignInStatus.NotConfigured => Results.Problem(
+                title: "Google sign-in is not configured.",
+                statusCode: StatusCodes.Status503ServiceUnavailable),
+            _ => Results.Json(
+                new { message = "Bạn không có quyền truy cập." },
+                statusCode: StatusCodes.Status403Forbidden)
         };
-        user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
-        user.UserRoles.Add(new UserRole { User = user, Role = memberRole });
-
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-
-        // Create tokens
-        var refreshToken = await refreshTokenService.CreateRefreshTokenAsync(user.Id);
-        return Results.Created(
-            $"/api/users/{user.Id}",
-            refreshTokenService.CreateAuthResponse(user, refreshToken, [AuthRoles.ClubMember]));
     }
 
     private static async Task<IResult> HandleRefresh(
@@ -142,10 +63,9 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         }
 
-        // Check token validity
         if (!oldToken.IsActive)
         {
-            // Token is expired or revoked - revoke entire family for security
+            // Token is expired or revoked - revoke entire family for security.
             if (oldToken.IsRevoked && !oldToken.IsExpired)
             {
                 await refreshTokenService.RevokeFamilyAsync(oldToken.FamilyId, null);
@@ -153,13 +73,13 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         }
 
-        // Check valid role
-        if (!HasValidActorConfiguration(oldToken.User))
+        if (!ActorAccountPolicy.HasValidActorConfiguration(oldToken.User))
         {
-            return Results.Forbid();
+            return Results.Json(
+                new { message = "Bạn không có quyền truy cập." },
+                statusCode: StatusCodes.Status403Forbidden);
         }
 
-        // Rotate token
         var rotatedToken = await refreshTokenService.RotateRefreshTokenAsync(oldToken, null);
         if (rotatedToken is null)
         {
@@ -179,14 +99,5 @@ public static class AuthEndpoints
             await refreshTokenService.RevokeFamilyAsync(token.FamilyId, null);
         }
         return Results.NoContent();
-    }
-
-    private static bool HasValidActorConfiguration(User user)
-    {
-        var roles = user.UserRoles
-            .Select(x => x.Role.Name)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        return roles.Length == 1 && AuthRoles.IsKnown(roles[0]);
     }
 }

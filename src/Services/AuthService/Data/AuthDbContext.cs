@@ -16,10 +16,13 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
         {
             entity.HasIndex(x => x.Username).IsUnique();
             entity.HasIndex(x => x.Email).IsUnique();
+            entity.HasIndex(x => x.GoogleSubject)
+                .IsUnique()
+                .HasFilter("[GoogleSubject] IS NOT NULL");
             entity.Property(x => x.Username).HasMaxLength(100);
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.Email).HasMaxLength(200);
-            entity.Property(x => x.PasswordHash).HasMaxLength(500);
+            entity.Property(x => x.GoogleSubject).HasMaxLength(255);
         });
 
         modelBuilder.Entity<Role>(entity =>

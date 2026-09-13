@@ -4,77 +4,19 @@ namespace AuthService.Validators;
 
 public static class AuthValidators
 {
-    public static ValidationResult ValidateLogin(LoginRequest request)
+    public static ValidationResult ValidateGoogleLogin(GoogleLoginRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Username))
+        if (string.IsNullOrWhiteSpace(request.Credential))
         {
-            return ValidationResult.Failure("Username is required.");
+            return ValidationResult.Failure("Google credential is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.Password))
+        if (request.Credential.Length > 8192)
         {
-            return ValidationResult.Failure("Password is required.");
+            return ValidationResult.Failure("Google credential is too long.");
         }
 
         return ValidationResult.Success();
-    }
-
-    public static ValidationResult ValidateRegister(RegisterRequest request)
-    {
-        var errors = new List<string>();
-
-        // Required fields
-        if (string.IsNullOrWhiteSpace(request.Username))
-            errors.Add("Username is required.");
-        if (string.IsNullOrWhiteSpace(request.FullName))
-            errors.Add("Full name is required.");
-        if (string.IsNullOrWhiteSpace(request.Email))
-            errors.Add("Email is required.");
-        if (string.IsNullOrWhiteSpace(request.Password))
-            errors.Add("Password is required.");
-
-        // Length validation
-        if (request.Username?.Length > 100)
-            errors.Add("Username must not exceed 100 characters.");
-        if (request.FullName?.Length > 200)
-            errors.Add("Full name must not exceed 200 characters.");
-        if (request.Email?.Length > 255)
-            errors.Add("Email must not exceed 255 characters.");
-
-        // Email format
-        if (!string.IsNullOrWhiteSpace(request.Email))
-        {
-            if (!System.Net.Mail.MailAddress.TryCreate(request.Email, out var parsedEmail)
-                || !string.Equals(parsedEmail.Address, request.Email, StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add("Email address is invalid.");
-            }
-        }
-
-        // Password complexity
-        if (!string.IsNullOrWhiteSpace(request.Password))
-        {
-            if (request.Password.Length < 8)
-            {
-                errors.Add("Password must be at least 8 characters.");
-            }
-            else
-            {
-                var hasUpper = request.Password.Any(char.IsUpper);
-                var hasLower = request.Password.Any(char.IsLower);
-                var hasDigit = request.Password.Any(char.IsDigit);
-                var hasSpecial = request.Password.Any(c => !char.IsLetterOrDigit(c));
-
-                if (!(hasUpper && hasLower && hasDigit && hasSpecial))
-                {
-                    errors.Add("Password must contain uppercase, lowercase, digit, and special character.");
-                }
-            }
-        }
-
-        return errors.Count > 0
-            ? ValidationResult.Failure(errors)
-            : ValidationResult.Success();
     }
 
     public static ValidationResult ValidateCreateUser(CreateUserRequest request)
@@ -87,15 +29,15 @@ public static class AuthValidators
             errors.Add("Full name is required.");
         if (string.IsNullOrWhiteSpace(request.Email))
             errors.Add("Email is required.");
-        if (string.IsNullOrWhiteSpace(request.Password))
-            errors.Add("Password is required.");
+        if (request.Roles is null || request.Roles.Count == 0)
+            errors.Add("Exactly one actor role is required.");
 
         if (request.Username?.Length > 100)
             errors.Add("Username must not exceed 100 characters.");
         if (request.FullName?.Length > 200)
             errors.Add("Full name must not exceed 200 characters.");
-        if (request.Email?.Length > 255)
-            errors.Add("Email must not exceed 255 characters.");
+        if (request.Email?.Length > 200)
+            errors.Add("Email must not exceed 200 characters.");
 
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
@@ -104,9 +46,6 @@ public static class AuthValidators
                 errors.Add("Email address is invalid.");
             }
         }
-
-        if (request.Password?.Length < 8)
-            errors.Add("Password must be at least 8 characters.");
 
         return errors.Count > 0
             ? ValidationResult.Failure(errors)
@@ -121,6 +60,13 @@ public static class AuthValidators
             errors.Add("Full name is required.");
         if (string.IsNullOrWhiteSpace(request.Email))
             errors.Add("Email is required.");
+
+        if (request.FullName?.Length > 200)
+            errors.Add("Full name must not exceed 200 characters.");
+        if (request.Email?.Length > 200)
+            errors.Add("Email must not exceed 200 characters.");
+        if (request.Roles is null || request.Roles.Count == 0)
+            errors.Add("Exactly one actor role is required.");
 
         if (!string.IsNullOrWhiteSpace(request.Email))
         {

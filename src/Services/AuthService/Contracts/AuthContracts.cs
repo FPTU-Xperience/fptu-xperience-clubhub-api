@@ -2,15 +2,13 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AuthService.Contracts;
 
-public sealed record LoginRequest(
-    [StringLength(100)] string Username,
-    string Password);
-
-public sealed record RegisterRequest(
-    [StringLength(100)] string Username,
-    [StringLength(200)] string FullName,
-    [StringLength(255), EmailAddress] string Email,
-    string Password);
+/// <summary>
+/// Google Identity Services returns the signed ID token in its `credential`
+/// field. The client must forward that value unchanged; e-mail and roles are
+/// never accepted as login input.
+/// </summary>
+public sealed record GoogleLoginRequest(
+    [Required, StringLength(8192)] string Credential);
 
 public sealed record RefreshTokenRequest(string RefreshToken);
 
@@ -33,13 +31,12 @@ public sealed record UserSummary(
 public sealed record CreateUserRequest(
     [StringLength(100)] string Username,
     [StringLength(200)] string FullName,
-    [StringLength(255), EmailAddress] string Email,
-    [StringLength(100, MinimumLength = 8)] string Password,
+    [StringLength(200), EmailAddress] string Email,
     IReadOnlyCollection<string> Roles);
 
 public sealed record UpdateUserRequest(
     [StringLength(200)] string FullName,
-    [StringLength(255), EmailAddress] string Email,
+    [StringLength(200), EmailAddress] string Email,
     bool IsActive,
     IReadOnlyCollection<string> Roles);
 

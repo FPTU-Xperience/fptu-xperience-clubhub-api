@@ -1,9 +1,7 @@
-using System.Security.Claims;
 using System.Threading.RateLimiting;
 using AuthService.Data;
-using AuthService.Models;
+using AuthService.Services;
 using ClubReportHub.Shared.Auth;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,11 +17,15 @@ public static class AuthServiceCollectionExtensions
         services.AddDbContext<AuthDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
-        // Password Hasher
-        services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-
         // JWT Authentication
         services.AddClubReportJwt(configuration);
+
+        // Google proves identity; the local database allow-list decides whether
+        // that identity is permitted to receive this application's JWT.
+        services.Configure<GoogleAuthenticationOptions>(
+            configuration.GetSection(GoogleAuthenticationOptions.SectionName));
+        services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+        services.AddScoped<GoogleSignInService>();
 
         // Refresh Token Service
         services.AddScoped<Services.RefreshTokenService>();
@@ -33,27 +35,14 @@ public static class AuthServiceCollectionExtensions
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-            // Strict rate limit for login attempts
-            options.AddPolicy("loginLimit", context =>
+            // Strict rate limit for Google credential submissions.
+            options.AddPolicy("googleSignInLimit", context =>
                 RateLimitPartition.GetSlidingWindowLimiter(
                     partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     factory: _ => new SlidingWindowRateLimiterOptions
                     {
                         PermitLimit = 5,
                         Window = TimeSpan.FromMinutes(1),
-                        SegmentsPerWindow = 5,
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    }));
-
-            // Moderate limit for registration
-            options.AddPolicy("registerLimit", context =>
-                RateLimitPartition.GetSlidingWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    factory: _ => new SlidingWindowRateLimiterOptions
-                    {
-                        PermitLimit = 3,
-                        Window = TimeSpan.FromMinutes(5),
                         SegmentsPerWindow = 5,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0

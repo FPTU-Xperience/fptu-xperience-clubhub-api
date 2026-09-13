@@ -59,17 +59,16 @@ export default api;
 
 | Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/auth/login` | Public | Đăng nhập hệ thống, lấy JWT & RefreshToken | `{"usernameOrEmail": "", "password": ""}` |
-| `POST` | `/api/auth/register` | Public | Đăng ký tài khoản sinh viên mới | `{"username": "", "password": "", "email": "", "fullName": ""}` |
+| `POST` | `/api/auth/google` | Public | Đăng nhập Google: backend kiểm tra chữ ký ID token, email đã xác minh và danh sách cho phép trong DB rồi cấp JWT & RefreshToken | `{"credential": "Google ID token từ Google Identity Services"}` |
 | `POST` | `/api/auth/refresh` | Public | Cấp lại AccessToken mới bằng RefreshToken | `{"refreshToken": ""}` |
 | `POST` | `/api/auth/logout` | Authenticated | Đăng xuất (Thu hồi refresh token) | `{"refreshToken": ""}` |
-| `GET` | `/api/users` | Admin, SystemAdmin | Danh sách toàn bộ người dùng (Phân trang, tìm kiếm) | `?search=&role=&page=1&pageSize=20` |
-| `POST` | `/api/users` | Admin, SystemAdmin | Tạo tài khoản người dùng mới (gán vai trò) | `{"username": "", "email": "", "fullName": "", "password": "", "roles": ["ClubManager"]}` |
-| `PUT` | `/api/users/{id}` | Admin, SystemAdmin | Cập nhật thông tin người dùng & vai trò | `{"fullName": "", "email": "", "roles": ["Treasurer"]}` |
-| `PATCH` | `/api/users/{id}/lock` | Admin, SystemAdmin | Khóa tài khoản người dùng | *(Không có body)* |
-| `PATCH` | `/api/users/{id}/unlock` | Admin, SystemAdmin | Mở khóa tài khoản người dùng | *(Không có body)* |
-| `GET` | `/api/roles` | Admin, SystemAdmin | Danh sách các quyền/vai trò trong hệ thống | *(Không có body)* |
-| `POST` | `/api/roles` | Admin, SystemAdmin | Thêm vai trò mới | `{"name": "Moderator", "description": ""}` |
+| `GET` | `/api/users` | Admin | Danh sách toàn bộ người dùng (Phân trang, tìm kiếm) | `?search=&role=&page=1&pageSize=20` |
+| `POST` | `/api/users` | Admin | Thêm một email Google vào danh sách cho phép và gán `ADMIN`, `CLUB_MANAGER`, hoặc `CLUB_MEMBER`; không có mật khẩu | `{"username": "", "email": "", "fullName": "", "roles": ["CLUB_MANAGER"]}` |
+| `PUT` | `/api/users/{id}` | Admin | Cập nhật thông tin người dùng & vai trò | `{"fullName": "", "email": "", "isActive": true, "roles": ["CLUB_MEMBER"]}` |
+| `PATCH` | `/api/users/{id}/lock` | Admin | Khóa tài khoản người dùng | *(Không có body)* |
+| `PATCH` | `/api/users/{id}/unlock` | Admin | Mở khóa tài khoản người dùng | *(Không có body)* |
+| `GET` | `/api/roles` | Admin | Danh sách các quyền/vai trò trong hệ thống | *(Không có body)* |
+| `POST` | `/api/roles` | Admin | Thêm vai trò mới | `{"name": "CLUB_MEMBER"}` |
 
 ---
 
@@ -129,9 +128,11 @@ export default api;
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/activities` | Authenticated | Danh sách hoạt động sinh hoạt CLB | `?clubId=&status=&fromUtc=&toUtc=&includeStats=true` |
 | `GET` | `/api/activities/{id}` | Authenticated | Chi tiết 1 hoạt động & thống kê tham gia | *(Param `id`)* |
+| `POST` | `/api/activities` | ClubManager, Admin | Tạo hoạt động mới cho CLB được quản lý | `{"clubId": 1, "clubName": "...", "title": "...", "description": "...", "startTimeUtc": "...", "endTimeUtc": "...", "location": "...", "meetingDays": [3]}` |
+| `POST` | `/api/activities/from-approved-report` | Admin | Xuất bản báo cáo sự kiện tương lai đã duyệt thành hoạt động; gọi lại không tạo trùng | Được gọi nội bộ từ luồng duyệt báo cáo |
 | `GET` | `/api/clubs/{clubId}/activities/{activityId}/attendance` | ClubManager, Admin | Bảng danh sách điểm danh của một buổi sinh hoạt | `?search=&page=1&pageSize=50` |
-| `PUT` | `/api/clubs/{clubId}/activities/{activityId}/attendance/{userId}` | ClubManager | Điểm danh cho từng thành viên lẻ | `{"status": "Present", "note": ""}` *(Present, Absent, Excused)* |
-| `PUT` | `/api/clubs/{clubId}/activities/{activityId}/attendance/bulk` | ClubManager | Điểm danh hàng loạt cả danh sách thành viên | `{"items": [{"userId": 1, "status": "Present"}, {"userId": 2, "status": "Absent"}]}` |
+| `PUT` | `/api/clubs/{clubId}/activities/{activityId}/attendance/{memberId}` | ClubManager | Điểm danh cho từng thành viên lẻ | `{"status": "Present", "note": ""}` *(Present, Absent, Excused, Late, NotMarked)* |
+| `PUT` | `/api/clubs/{clubId}/activities/{activityId}/attendance` | ClubManager | Điểm danh hàng loạt cả danh sách thành viên | `{"items": [{"memberId": 1, "status": "Present"}, {"memberId": 2, "status": "Absent"}]}` |
 | `POST` | `/api/activities/clubs/{clubId}/member-statistics` | ClubManager, Admin | Thống kê số buổi tham gia của danh sách thành viên | `{"members": [{"userId": 1}, {"userId": 2}]}` |
 | `POST` | `/api/activities/clubs/{clubId}/member-statistics/detail`| ClubManager, Admin | Thống kê chi tiết chuyên cần & tỷ lệ tham gia | `{"members": [{"userId": 1}]}` |
 

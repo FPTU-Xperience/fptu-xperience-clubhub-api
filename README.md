@@ -42,7 +42,7 @@ graph LR
 | Service | Port | Database | Description |
 |---------|------|----------|-------------|
 | API Gateway | 7000 | - | YARP reverse proxy |
-| Auth | 5101 | Auth | Login, Register, JWT, Roles |
+| Auth | 5101 | Auth | Google Sign-In, JWT, Roles |
 | Club | 5102 | Club | Clubs, Members, Applications |
 | Activity | 5106 | Activity | Activities, Participants |
 | Report | 5103 | Report | Reports, KPI, Deadlines |
@@ -227,7 +227,7 @@ dotnet test ClubReportHub.sln
 ```bash
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with your SQL_PASSWORD and JWT_SIGNING_KEY
+# Edit .env with your SQL_PASSWORD, JWT_SIGNING_KEY, and GOOGLE_CLIENT_ID
 
 # Start all services
 docker compose up -d
@@ -238,6 +238,24 @@ docker compose ps
 # Check Redis
 docker compose exec redis redis-cli ping
 ```
+
+### Demo dataset for server testing
+
+The repository includes a one-shot, idempotent dataset focused on `ADMIN`, `CLUB_MANAGER`, and `CLUB_MEMBER` (Student). It creates coherent users, clubs, memberships, activities, attendance, reports, finance history, and notifications across the service databases.
+
+```bash
+# Build the one-shot seed image
+docker compose --profile demo build demo-data-seeder
+
+# Disposable demo server only: remove old test rows and rebuild clean data
+docker compose --profile demo run --rm -e DemoData__ResetAll=true demo-data-seeder
+
+# Later idempotent refreshes (no full reset)
+docker compose --profile demo run --rm demo-data-seeder
+```
+
+See [DEMO_DATA.md](DEMO_DATA.md) for all demo accounts, dataset counts, safety notes, and recommended teacher test scenarios.
+Google login configuration and the front-end handoff are in [GOOGLE_SIGN_IN.md](GOOGLE_SIGN_IN.md).
 
 ## Docker Services
 
@@ -364,7 +382,7 @@ docker compose logs sqlserver | grep -i "error"
 
 ### Part 1: Report Submission → Redis Stream → Notification
 
-1. **Login**: `POST /api/auth/login` with admin credentials
+1. **Login**: complete Google Sign-In in the browser, then send its ID token to `POST /api/auth/google`
 2. **Create club** (if needed): `POST /api/clubs/`
 3. **Create report**: `POST /api/reports/`
 4. **Add details**: `PUT /api/reports/{id}/`

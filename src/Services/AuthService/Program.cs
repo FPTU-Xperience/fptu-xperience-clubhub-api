@@ -1,8 +1,6 @@
 using AuthService.Data;
 using AuthService.Endpoints;
 using AuthService.Extensions;
-using AuthService.Models;
-using AuthService.Services;
 using ClubReportHub.Shared.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,10 +59,7 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
     await db.ApplyMigrationsWithRetryAsync(logger);
 
-    await AuthSeeder.SeedAsync(
-        db,
-        scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.IPasswordHasher<User>>(),
-        builder.Configuration);
+    await AuthSeeder.SeedAsync(db, builder.Configuration);
 }
 
 app.Run();

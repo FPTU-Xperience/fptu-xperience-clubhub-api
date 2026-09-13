@@ -5,7 +5,6 @@ using AuthService.Models;
 using AuthService.Services;
 using AuthService.Validators;
 using ClubReportHub.Shared.Auth;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Endpoints;
@@ -72,7 +71,6 @@ public static class UserEndpoints
     private static async Task<IResult> HandleCreateUser(
         CreateUserRequest request,
         AuthDbContext db,
-        IPasswordHasher<User> passwordHasher,
         ClaimsPrincipal actor)
     {
         // Validate input
@@ -82,18 +80,23 @@ public static class UserEndpoints
             return Results.BadRequest(new { errors = validation.Errors.ToDictionary(e => e) });
         }
 
-        // Check duplicate
+        var username = request.Username.Trim();
+        var email = NormalizeEmail(request.Email);
+
+        // E-mail is the Google allow-list key; username remains an internal
+        // display/reference field and is never accepted for authentication.
         if (await db.Users.AnyAsync(x =>
-            x.Username == request.Username || x.Email == request.Email))
+            x.Username == username || x.Email.ToLower() == email))
         {
             return Results.Conflict(new { message = "Username or email already exists." });
         }
 
         // Validate role
         var requestedRoleNames = request.Roles.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (requestedRoleNames.Length != 1 || !AuthRoles.IsKnown(requestedRoleNames[0]))
+        if (requestedRoleNames.Length != 1 ||
+            !ActorAccountPolicy.IsAllowedGoogleActorRole(requestedRoleNames[0]))
         {
-            return Results.BadRequest(new { message = "Each account must have exactly one predefined actor role." });
+            return Results.BadRequest(new { message = "Each account must have exactly one Google-enabled actor role: ADMIN, CLUB_MANAGER, or CLUB_MEMBER." });
         }
 
         // Only ADMIN can create another ADMIN
@@ -115,12 +118,11 @@ public static class UserEndpoints
         // Create user
         var user = new User
         {
-            Username = request.Username,
-            FullName = request.FullName,
-            Email = request.Email,
+            Username = username,
+            FullName = request.FullName.Trim(),
+            Email = email,
             IsActive = true
         };
-        user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
 
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -158,17 +160,18 @@ public static class UserEndpoints
         }
 
         // Check email duplicate
-        var trimmedEmail = request.Email.Trim();
-        if (await db.Users.AnyAsync(x => x.Id != id && x.Email == trimmedEmail))
+        var trimmedEmail = NormalizeEmail(request.Email);
+        if (await db.Users.AnyAsync(x => x.Id != id && x.Email.ToLower() == trimmedEmail))
         {
             return Results.Conflict(new { message = "Email already belongs to another account." });
         }
 
         // Validate role
         var requestedRoleNames = request.Roles.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (requestedRoleNames.Length != 1 || !AuthRoles.IsKnown(requestedRoleNames[0]))
+        if (requestedRoleNames.Length != 1 ||
+            !ActorAccountPolicy.IsAllowedGoogleActorRole(requestedRoleNames[0]))
         {
-            return Results.BadRequest(new { message = "Each account must have exactly one predefined actor role." });
+            return Results.BadRequest(new { message = "Each account must have exactly one Google-enabled actor role: ADMIN, CLUB_MANAGER, or CLUB_MEMBER." });
         }
 
         // Get role from DB
@@ -216,10 +219,18 @@ public static class UserEndpoints
             }
         }
 
+        // Updating an allow-listed e-mail detaches any prior Google account.
+        // The holder of the new e-mail must complete Google sign-in again.
+        var emailChanged = !string.Equals(user.Email, trimmedEmail, StringComparison.OrdinalIgnoreCase);
+
         // Update user
         user.FullName = request.FullName.Trim();
         user.Email = trimmedEmail;
         user.IsActive = request.IsActive;
+        if (emailChanged)
+        {
+            user.GoogleSubject = null;
+        }
 
         db.UserRoles.RemoveRange(user.UserRoles);
         db.UserRoles.AddRange(roles.Select(role =>
@@ -229,6 +240,7 @@ public static class UserEndpoints
 
         // Revoke tokens if status changed
         if (!request.IsActive ||
+            emailChanged ||
             !string.Equals(currentRoleName, requestedRoleName, StringComparison.OrdinalIgnoreCase))
         {
             await refreshTokenService.RevokeForUserAsync(user.Id);
@@ -337,4 +349,6 @@ public static class UserEndpoints
             user.IsActive,
             user.IsLocked);
     }
+
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 }

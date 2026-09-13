@@ -1,6 +1,5 @@
 using AuthService.Models;
 using ClubReportHub.Shared.Auth;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -8,10 +7,8 @@ namespace AuthService.Data;
 
 public static class AuthSeeder
 {
-    public static async Task SeedAsync(AuthDbContext db, IPasswordHasher<User> passwordHasher, IConfiguration? configuration = null)
+    public static async Task SeedAsync(AuthDbContext db, IConfiguration? configuration = null)
     {
-        var resetExistingPasswords = configuration?.GetValue<bool>("SeedPasswords:ResetExistingUsers") ?? false;
-
         await EnsureRoleAsync(db, AuthRoles.Admin);
         await EnsureRoleAsync(db, AuthRoles.SystemAdmin);
         await EnsureRoleAsync(db, AuthRoles.StudentAffairsAdmin);
@@ -20,87 +17,69 @@ public static class AuthSeeder
         await EnsureRoleAsync(db, AuthRoles.ClubMember);
         await db.SaveChangesAsync();
 
-        // Read default passwords from configuration, fallback to environment variable or throw
-        var adminPassword = GetSeedPassword(configuration, "SeedPasswords:Admin", "ADMIN_SEED_PASSWORD")
-            ?? throw new InvalidOperationException("Admin seed password must be configured via SeedPasswords:Admin or ADMIN_SEED_PASSWORD environment variable");
-        var systemAdminPassword = GetSeedPassword(configuration, "SeedPasswords:SystemAdmin", "SYSTEM_ADMIN_SEED_PASSWORD")
-            ?? throw new InvalidOperationException("System Admin seed password must be configured via SeedPasswords:SystemAdmin or SYSTEM_ADMIN_SEED_PASSWORD environment variable");
-        var managerPassword = GetSeedPassword(configuration, "SeedPasswords:Manager", "MANAGER_SEED_PASSWORD")
-            ?? throw new InvalidOperationException("Manager seed password must be configured via SeedPasswords:Manager or MANAGER_SEED_PASSWORD environment variable");
-        var studentAffairsPassword = GetSeedPassword(configuration, "SeedPasswords:StudentAffairs", "STUDENT_AFFAIRS_SEED_PASSWORD")
-            ?? throw new InvalidOperationException("Student Affairs seed password must be configured via SeedPasswords:StudentAffairs or STUDENT_AFFAIRS_SEED_PASSWORD environment variable");
-        var treasurerPassword = GetSeedPassword(configuration, "SeedPasswords:Treasurer", "TREASURER_SEED_PASSWORD")
-            ?? throw new InvalidOperationException("Treasurer seed password must be configured via SeedPasswords:Treasurer or TREASURER_SEED_PASSWORD environment variable");
-        var studentPassword = GetSeedPassword(configuration, "SeedPasswords:Student", "STUDENT_SEED_PASSWORD")
-            ?? throw new InvalidOperationException("Student seed password must be configured via SeedPasswords:Student or STUDENT_SEED_PASSWORD environment variable");
+        // The application still keeps every role definition because authorization policies
+        // reference them. Demo accounts, however, are intentionally limited to ADMIN,
+        // CLUB_MANAGER and CLUB_MEMBER. Managers and students are created by DemoDataSeeder.
+        var adminEmail = GetOptionalConfiguration(
+            configuration,
+            "BootstrapAdmin:Email",
+            "admin@fpt.edu.vn");
+        var adminFullName = GetOptionalConfiguration(
+            configuration,
+            "BootstrapAdmin:FullName",
+            "Nguyễn Thu Hà");
+        ValidateBootstrapAdmin(adminEmail, adminFullName);
 
         await EnsureUserAsync(
             db,
-            passwordHasher,
-            username: "admin@club.local",
-            fullName: "System Administrator",
-            email: "admin@club.local",
-            password: adminPassword,
-            roles: [AuthRoles.Admin],
-            resetExistingPassword: resetExistingPasswords);
+            username: adminEmail,
+            fullName: adminFullName,
+            email: adminEmail,
+            roles: [AuthRoles.Admin]);
 
-        await EnsureUserAsync(
-            db,
-            passwordHasher,
-            username: "systemadmin@club.local",
-            fullName: "Technical System Administrator",
-            email: "systemadmin@club.local",
-            password: systemAdminPassword,
-            roles: [AuthRoles.SystemAdmin],
-            resetExistingPassword: resetExistingPasswords);
+        if (configuration is not null)
+        {
+            var additionalEmails = configuration.GetSection("PreApprovedAdmins").Get<string[]>()
+                ?? (Environment.GetEnvironmentVariable("PRE_APPROVED_ADMINS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) 
+                    ?? ["namthse173516@fpt.edu.vn", "namhoang20032710@gmail.com"]);
 
-        await EnsureUserAsync(
-            db,
-            passwordHasher,
-            username: "manager@club.local",
-            fullName: "Club Manager",
-            email: "manager@club.local",
-            password: managerPassword,
-            roles: [AuthRoles.ClubManager],
-            resetExistingPassword: resetExistingPasswords);
-
-        await EnsureUserAsync(
-            db,
-            passwordHasher,
-            username: "studentaffairs@club.local",
-            fullName: "Student Affairs Administrator",
-            email: "studentaffairs@club.local",
-            password: studentAffairsPassword,
-            roles: [AuthRoles.StudentAffairsAdmin],
-            resetExistingPassword: resetExistingPasswords);
-
-        await EnsureUserAsync(
-            db,
-            passwordHasher,
-            username: "treasurer@club.local",
-            fullName: "Club Treasurer",
-            email: "treasurer@club.local",
-            password: treasurerPassword,
-            roles: [AuthRoles.Treasurer],
-            resetExistingPassword: resetExistingPasswords);
-
-        await EnsureUserAsync(
-            db,
-            passwordHasher,
-            username: "student@club.local",
-            fullName: "Club Member",
-            email: "student@club.local",
-            password: studentPassword,
-            roles: [AuthRoles.ClubMember],
-            resetExistingPassword: resetExistingPasswords);
+            foreach (var extraEmail in additionalEmails)
+            {
+                var trimmed = extraEmail.Trim();
+                await EnsureUserAsync(
+                    db,
+                    username: trimmed,
+                    fullName: trimmed.StartsWith("namth", StringComparison.OrdinalIgnoreCase) ? "Hoàng Nam" : "Nam Hoàng",
+                    email: trimmed,
+                    roles: [AuthRoles.Admin]);
+            }
+        }
 
         await db.SaveChangesAsync();
     }
 
-    private static string? GetSeedPassword(IConfiguration? configuration, string configKey, string envVar)
+    private static string GetOptionalConfiguration(
+        IConfiguration? configuration,
+        string configKey,
+        string fallback)
     {
-        var value = configuration?[configKey] ?? Environment.GetEnvironmentVariable(envVar);
-        return string.IsNullOrWhiteSpace(value) ? null : value;
+        var value = configuration?[configKey];
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    private static void ValidateBootstrapAdmin(string email, string fullName)
+    {
+        if (email.Length > 100 || !System.Net.Mail.MailAddress.TryCreate(email, out _))
+        {
+            throw new InvalidOperationException(
+                "BootstrapAdmin:Email must be a valid e-mail address up to 100 characters.");
+        }
+
+        if (fullName.Length > 200)
+        {
+            throw new InvalidOperationException(
+                "BootstrapAdmin:FullName must not exceed 200 characters.");
+        }
     }
 
     private static async Task EnsureRoleAsync(AuthDbContext db, string roleName)
@@ -113,13 +92,10 @@ public static class AuthSeeder
 
     private static async Task EnsureUserAsync(
         AuthDbContext db,
-        IPasswordHasher<User> passwordHasher,
         string username,
         string fullName,
         string email,
-        string password,
-        IReadOnlyCollection<string> roles,
-        bool resetExistingPassword)
+        IReadOnlyCollection<string> roles)
     {
         var existing = await db.Users.Include(x => x.UserRoles).ThenInclude(x => x.Role)
             .FirstOrDefaultAsync(x => x.Username == username);
@@ -129,10 +105,6 @@ public static class AuthSeeder
             existing.Email = email;
             existing.IsActive = true;
             existing.IsLocked = false;
-            if (resetExistingPassword)
-            {
-                existing.PasswordHash = passwordHasher.HashPassword(existing, password);
-            }
 
             var existingRoleNames = existing.UserRoles.Select(x => x.Role.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var unexpectedRoles = existing.UserRoles
@@ -163,7 +135,6 @@ public static class AuthSeeder
             Email = email,
             IsActive = true
         };
-        user.PasswordHash = passwordHasher.HashPassword(user, password);
         db.Users.Add(user);
         await db.SaveChangesAsync();
 

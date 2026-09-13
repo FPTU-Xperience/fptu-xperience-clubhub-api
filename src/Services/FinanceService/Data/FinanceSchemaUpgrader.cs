@@ -16,6 +16,9 @@ public static class FinanceSchemaUpgrader
             IF COL_LENGTH(N'dbo.BudgetProposals', N'ManagerReviewNote') IS NULL
                 ALTER TABLE [dbo].[BudgetProposals] ADD [ManagerReviewNote] nvarchar(1000) NULL;
 
+            IF COL_LENGTH(N'dbo.BudgetProposals', N'Version') IS NULL
+                ALTER TABLE [dbo].[BudgetProposals] ADD [Version] int NOT NULL DEFAULT 1;
+
             IF COL_LENGTH(N'dbo.BudgetProposals', N'SourceReportId') IS NULL
                 ALTER TABLE [dbo].[BudgetProposals] ADD [SourceReportId] int NULL;
 

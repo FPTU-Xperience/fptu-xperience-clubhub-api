@@ -15,7 +15,6 @@ using ReportService.Data;
 using ReportService.Endpoints;
 using ReportService.Jobs;
 using ReportService.Models;
-using ReportService.Options;
 using ReportService.Services;
 
 using KpiContract = ReportService.Contracts;
@@ -29,7 +28,6 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ReportDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.Configure<ReportAttachmentOptions>(builder.Configuration.GetSection(ReportAttachmentOptions.SectionName));
-builder.Services.Configure<DemoDataOptions>(builder.Configuration.GetSection("DemoData"));
 
 // Authentication & Authorization & Tracing
 builder.Services.AddClubReportJwt(builder.Configuration);
@@ -151,25 +149,6 @@ using (var scope = app.Services.CreateScope())
     var logger = loggerFactory.CreateLogger("DatabaseStartup");
     await reportDb.ApplyMigrationsWithRetryAsync(logger);
     await ReportSchemaUpgrader.ApplyAsync(reportDb);
-
-    // Demo data seeding — only in Development or Docker, only when explicitly enabled
-    var demoEnabled = builder.Configuration.GetValue<bool>("DemoData:Enabled");
-    var environment = builder.Environment.EnvironmentName;
-    if (demoEnabled && (environment == "Development" || environment == "Docker"))
-    {
-        var resetReports = builder.Configuration.GetValue<bool>("DemoData:ResetReports");
-        var demoOptions = new DemoDataOptions();
-        builder.Configuration.GetSection("DemoData").Bind(demoOptions);
-        var clubIds = demoOptions.GetClubIds();
-        var resetService = new DemoResetService(reportDb);
-        await DevelopmentDataSeeder.SeedAsync(reportDb, resetService, clubIds, resetReports, logger, CancellationToken.None);
-    }
-    else
-    {
-        logger.LogInformation(
-            "[DevSeeder] Skipped — DemoData.Enabled={Enabled}, Environment={Env}",
-            demoEnabled, environment);
-    }
 }
 
 // Ensure Hangfire schema is set up

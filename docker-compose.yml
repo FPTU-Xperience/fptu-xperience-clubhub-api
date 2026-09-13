@@ -87,13 +87,10 @@ services:
       Jwt__Audience: "ClubReportHub.Client"
       Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
       Jwt__ExpirationMinutes: "120"
-      SeedPasswords__Admin: "${ADMIN_SEED_PASSWORD:-Admin@2026!}"
-      SeedPasswords__SystemAdmin: "${SYSTEM_ADMIN_SEED_PASSWORD:-SystemAdmin@2026!}"
-      SeedPasswords__Manager: "${MANAGER_SEED_PASSWORD:-Manager@2026!}"
-      SeedPasswords__StudentAffairs: "${STUDENT_AFFAIRS_SEED_PASSWORD:-StudentAffairs@2026!}"
-      SeedPasswords__Treasurer: "${TREASURER_SEED_PASSWORD:-Treasurer@2026!}"
-      SeedPasswords__Student: "${STUDENT_SEED_PASSWORD:-Student@2026!}"
-      SeedPasswords__ResetExistingUsers: "${RESET_SEED_PASSWORDS:-true}"
+      GoogleAuthentication__ClientId: "${GOOGLE_CLIENT_ID:-}"
+      GoogleAuthentication__AllowedHostedDomain: "${GOOGLE_ALLOWED_HOSTED_DOMAIN:-}"
+      BootstrapAdmin__Email: "${DEMO_ADMIN_EMAIL:-admin@fpt.edu.vn}"
+      BootstrapAdmin__FullName: "${DEMO_ADMIN_FULL_NAME:-Nguyễn Thu Hà}"
     deploy:
       resources:
         limits:
@@ -331,6 +328,51 @@ services:
       resources:
         limits:
           memory: 250M
+    networks:
+      - internal-net
+
+  # ============================================================================
+  # 12. One-shot coherent demo dataset (only runs with --profile demo)
+  # ============================================================================
+  demo-data-seeder:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: src/Tools/DemoDataSeeder/Dockerfile
+    restart: "no"
+    depends_on:
+      auth-service:
+        condition: service_started
+      club-service:
+        condition: service_started
+      activity-service:
+        condition: service_started
+      report-service:
+        condition: service_started
+      finance-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      export-service:
+        condition: service_started
+    environment:
+      DemoData__Enabled: "true"
+      DemoData__ResetAll: "${DEMO_DATA_RESET_ALL:-false}"
+      DemoData__ReferenceDate: "${DEMO_REFERENCE_DATE:-2026-09-11}"
+      DemoData__DatabaseWaitSeconds: "180"
+      DemoData__ServiceHealthUrls: "http://auth-service:8080/health;http://club-service:8080/health;http://activity-service:8080/health;http://report-service:8080/health;http://finance-service:8080/health;http://notification-service:8080/health;http://export-service:8080/health"
+      DemoData__AdminEmail: "${DEMO_ADMIN_EMAIL:-admin@fpt.edu.vn}"
+      DemoData__ClubManagerEmail: "${DEMO_CLUB_MANAGER_EMAIL:-manager.tech@fpt.edu.vn}"
+      DemoData__StudentEmail: "${DEMO_STUDENT_EMAIL:-se170002@fpt.edu.vn}"
+      Redis__ConnectionString: "redis:6379"
+      Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
+      ConnectionStrings__Auth: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Club: "Server=sqlserver,1433;Database=ClubReportHub_Club;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Activity: "Server=sqlserver,1433;Database=ClubReportHub_Activity;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Report: "Server=sqlserver,1433;Database=ClubReportHub_Report;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Finance: "Server=sqlserver,1433;Database=ClubReportHub_Finance;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Notification: "Server=sqlserver,1433;Database=ClubReportHub_Notification;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Export: "Server=sqlserver,1433;Database=ClubReportHub_Export;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
     networks:
       - internal-net
 

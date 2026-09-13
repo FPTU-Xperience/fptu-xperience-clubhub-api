@@ -1,5 +1,6 @@
 using AuthService.Contracts;
 using AuthService.Data;
+using AuthService.Services;
 using ClubReportHub.Shared.Auth;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,10 +35,11 @@ public static class RoleEndpoints
     {
         var roleName = request.Name.Trim().ToUpperInvariant();
 
-        // Check if role is predefined
-        if (!AuthRoles.IsKnown(roleName))
+        // Google-only demo accounts are deliberately limited to the three
+        // actors that the teacher is expected to test.
+        if (!ActorAccountPolicy.IsAllowedGoogleActorRole(roleName))
         {
-            return Results.BadRequest(new { message = "Only predefined ClubReportHub actor roles are supported." });
+            return Results.BadRequest(new { message = "Only ADMIN, CLUB_MANAGER, and CLUB_MEMBER roles are enabled for Google sign-in." });
         }
 
         // Check if already exists
