@@ -60,6 +60,7 @@ export default api;
 | Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/auth/google` | Public | Đăng nhập Google: backend kiểm tra chữ ký ID token, email đã xác minh và danh sách cho phép trong DB rồi cấp JWT & RefreshToken | `{"credential": "Google ID token từ Google Identity Services"}` |
+| `POST` | `/api/auth/dev-login` | Public | **[Dev/Test Bypass]** Đăng nhập nhanh bằng email (không cần Google token). Kiểm tra email trong DB, nếu hợp lệ cấp JWT & RefreshToken | `{"email": "namhoang20032710@gmail.com"}` |
 | `POST` | `/api/auth/refresh` | Public | Cấp lại AccessToken mới bằng RefreshToken | `{"refreshToken": ""}` |
 | `POST` | `/api/auth/logout` | Authenticated | Đăng xuất (Thu hồi refresh token) | `{"refreshToken": ""}` |
 | `GET` | `/api/users` | Admin | Danh sách toàn bộ người dùng (Phân trang, tìm kiếm) | `?search=&role=&page=1&pageSize=20` |

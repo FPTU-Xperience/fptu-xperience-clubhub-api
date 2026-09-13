@@ -1,6 +1,8 @@
 using AuthService.Contracts;
+using AuthService.Data;
 using AuthService.Services;
 using AuthService.Validators;
+using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Endpoints;
 
@@ -15,6 +17,13 @@ public static class AuthEndpoints
         auth.MapPost("/google", HandleGoogleSignIn)
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
+
+        // Development & testing bypass login by email (no Google token required).
+        auth.MapPost("/dev-login", HandleDevLogin)
+            .AllowAnonymous();
+
+        auth.MapPost("/test-login", HandleDevLogin)
+            .AllowAnonymous();
 
         auth.MapPost("/refresh", HandleRefresh)
             .AllowAnonymous()
@@ -51,6 +60,36 @@ public static class AuthEndpoints
                 new { message = "Bạn không có quyền truy cập." },
                 statusCode: StatusCodes.Status403Forbidden)
         };
+    }
+
+    private static async Task<IResult> HandleDevLogin(
+        DevLoginRequest request,
+        AuthDbContext db,
+        RefreshTokenService refreshTokenService,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Email))
+        {
+            return Results.BadRequest(new { message = "Email là bắt buộc." });
+        }
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+        var user = await db.Users
+            .Include(x => x.UserRoles)
+            .ThenInclude(x => x.Role)
+            .SingleOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail, cancellationToken);
+
+        if (user is null || !user.IsActive || user.IsLocked ||
+            !ActorAccountPolicy.HasValidActorConfiguration(user))
+        {
+            return Results.Json(
+                new { message = "Bạn không có quyền truy cập." },
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var refreshToken = await refreshTokenService.CreateRefreshTokenAsync(user.Id);
+        return Results.Ok(refreshTokenService.CreateAuthResponse(user, refreshToken));
     }
 
     private static async Task<IResult> HandleRefresh(

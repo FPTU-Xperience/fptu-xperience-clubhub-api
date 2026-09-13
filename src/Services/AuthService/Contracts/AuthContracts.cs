@@ -10,6 +10,9 @@ namespace AuthService.Contracts;
 public sealed record GoogleLoginRequest(
     [Required, StringLength(8192)] string Credential);
 
+public sealed record DevLoginRequest(
+    [Required, EmailAddress, StringLength(200)] string Email);
+
 public sealed record RefreshTokenRequest(string RefreshToken);
 
 public sealed record AuthResponse(
