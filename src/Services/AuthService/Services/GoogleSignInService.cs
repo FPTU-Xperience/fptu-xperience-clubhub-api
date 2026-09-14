@@ -2,6 +2,7 @@ using AuthService.Contracts;
 using AuthService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using ClubReportHub.Shared.Auth;
 
 namespace AuthService.Services;
 
@@ -45,7 +46,7 @@ public sealed class GoogleSignInService(
         var normalizedEmail = NormalizeEmail(identity.Email);
 
         // Once linked, subject is the stable Google identity. We still require
-        // its currently verified e-mail to remain on the local allow-list.
+        // its currently verified e-mail to remain on the local roster.
         var user = await db.Users
             .Include(x => x.UserRoles)
             .ThenInclude(x => x.Role)
@@ -62,7 +63,7 @@ public sealed class GoogleSignInService(
             user = await db.Users
                 .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
-                .SingleOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail, cancellationToken);
+                .SingleOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
         }
 
         if (user is null || !user.IsActive || user.IsLocked ||
@@ -70,6 +71,23 @@ public sealed class GoogleSignInService(
         {
             return new GoogleSignInResult(GoogleSignInStatus.NotAllowlisted);
         }
+
+        // // The semester roster represents active students. Staff and admins
+        // // must be able to sign in even when preparing the next roster.
+        // if (user.UserRoles.Any(x => x.Role.Name == AuthRoles.ClubMember))
+        // {
+        //     var isCurrentSemesterStudent = await db.SemesterStudents
+        //         .AsNoTracking()
+        //         .AnyAsync(x => x.EmailNormalized == normalizedEmail &&
+        //                        x.IsActive &&
+        //                        x.Semester.IsCurrent,
+        //             cancellationToken);
+
+        //     if (!isCurrentSemesterStudent)
+        //     {
+        //         return new GoogleSignInResult(GoogleSignInStatus.NotAllowlisted);
+        //     }
+        // }
 
         if (!string.IsNullOrWhiteSpace(user.GoogleSubject) &&
             !string.Equals(user.GoogleSubject, identity.Subject, StringComparison.Ordinal))

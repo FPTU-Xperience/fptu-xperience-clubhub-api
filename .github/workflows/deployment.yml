@@ -24,10 +24,14 @@ jobs:
 
       - name: Execute Docker Compose via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.CLUBHUB_GOOGLE_CLIENT_ID }}
+          ENABLE_DEV_LOGIN: "true"
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           password: ${{ secrets.VPC_PASSWORD }}
+          envs: GOOGLE_CLIENT_ID,ENABLE_DEV_LOGIN
           script: |
             cd ${{ env.TARGET_DIR }}
             

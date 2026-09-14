@@ -45,7 +45,7 @@ app.MapGet("/", () => Results.Ok(new { service = "Auth Service", status = "runni
 // Map Endpoints
 // ============================================================================
 
-app.MapAuthEndpoints();
+app.MapAuthEndpoints(app.Environment, app.Configuration);
 app.MapUserEndpoints();
 app.MapRoleEndpoints();
 

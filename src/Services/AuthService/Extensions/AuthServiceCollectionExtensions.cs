@@ -35,15 +35,16 @@ public static class AuthServiceCollectionExtensions
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-            // Strict rate limit for Google credential submissions.
+            // Allow a campus-wide login burst. The old limit of five requests
+            // per IP incorrectly blocked students behind one NAT/proxy.
             options.AddPolicy("googleSignInLimit", context =>
                 RateLimitPartition.GetSlidingWindowLimiter(
                     partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     factory: _ => new SlidingWindowRateLimiterOptions
                     {
-                        PermitLimit = 5,
+                        PermitLimit = 1200,
                         Window = TimeSpan.FromMinutes(1),
-                        SegmentsPerWindow = 5,
+                        SegmentsPerWindow = 10,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));

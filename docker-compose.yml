@@ -18,7 +18,11 @@ services:
         limits:
           memory: 1800M
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" 2>/dev/null || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" 2>/dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" 2>/dev/null || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -Q "SELECT 1" 2>/dev/null || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -81,6 +85,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Auth__EnableDevLogin: "${ENABLE_DEV_LOGIN:-false}"
       DOTNET_gcServer: "0"
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
@@ -89,6 +94,7 @@ services:
       Jwt__ExpirationMinutes: "120"
       GoogleAuthentication__ClientId: "${GOOGLE_CLIENT_ID:-}"
       GoogleAuthentication__AllowedHostedDomain: "${GOOGLE_ALLOWED_HOSTED_DOMAIN:-}"
+      GoogleAuthentication__AllowedEmailDomains: "${GOOGLE_ALLOWED_EMAIL_DOMAINS:-fpt.edu.vn, gmail.com}"
       BootstrapAdmin__Email: "${DEMO_ADMIN_EMAIL:-admin@fpt.edu.vn}"
       BootstrapAdmin__FullName: "${DEMO_ADMIN_FULL_NAME:-Nguyễn Thu Hà}"
     deploy:

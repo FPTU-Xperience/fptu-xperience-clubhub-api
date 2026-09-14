@@ -8,7 +8,10 @@ namespace AuthService.Endpoints;
 
 public static class AuthEndpoints
 {
-    public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapAuthEndpoints(
+        this IEndpointRouteBuilder app,
+        IHostEnvironment environment,
+        IConfiguration configuration)
     {
         var auth = app.MapGroup("/api/auth").WithTags("Authentication");
 
@@ -18,12 +21,17 @@ public static class AuthEndpoints
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
 
-        // Development & testing bypass login by email (no Google token required).
-        auth.MapPost("/dev-login", HandleDevLogin)
-            .AllowAnonymous();
+        // The email-only bypass is available in development, or when explicitly
+        // enabled for a temporary deployment through Auth:EnableDevLogin.
+        if (environment.IsDevelopment() ||
+            configuration.GetValue<bool>("Auth:EnableDevLogin"))
+        {
+            auth.MapPost("/dev-login", HandleDevLogin)
+                .AllowAnonymous();
 
-        auth.MapPost("/test-login", HandleDevLogin)
-            .AllowAnonymous();
+            auth.MapPost("/test-login", HandleDevLogin)
+                .AllowAnonymous();
+        }
 
         auth.MapPost("/refresh", HandleRefresh)
             .AllowAnonymous()
@@ -78,7 +86,7 @@ public static class AuthEndpoints
         var user = await db.Users
             .Include(x => x.UserRoles)
             .ThenInclude(x => x.Role)
-            .SingleOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail, cancellationToken);
+            .SingleOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
 
         if (user is null || !user.IsActive || user.IsLocked ||
             !ActorAccountPolicy.HasValidActorConfiguration(user))

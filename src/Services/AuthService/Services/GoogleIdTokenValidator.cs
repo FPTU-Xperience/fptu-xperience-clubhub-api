@@ -119,6 +119,22 @@ public sealed class GoogleIdTokenValidator : IGoogleIdTokenValidator
             out var verified) && verified;
         var hostedDomain = principal.FindFirst("hd")?.Value?.Trim();
 
+        var atIndex = email.LastIndexOf('@');
+        if (atIndex <= 0 || atIndex == email.Length - 1)
+        {
+            return null;
+        }
+
+        var emailDomain = email[(atIndex + 1)..].Trim();
+        var allowedEmailDomains = (_options.AllowedEmailDomains ?? string.Empty)
+            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (allowedEmailDomains.Length > 0 &&
+            !allowedEmailDomains.Any(x => string.Equals(x, emailDomain, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
         if (!string.IsNullOrWhiteSpace(_options.AllowedHostedDomain) &&
             !string.Equals(
                 hostedDomain,

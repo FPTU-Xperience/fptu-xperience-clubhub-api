@@ -1,4 +1,4 @@
-# 📡 TÀI LIỆU API ENDPOINTS TOÀN BỘ HỆ THỐNG CLUBREPORTHUB
+# 📡 TÀI LIỆU API ENDPOINTS TOÀN BỘ HỆ THỐNG FPTU-Xperience ClubHub
 
 > **Dành cho Frontend Developer:** Tài liệu hướng dẫn cấu hình Base URL và toàn bộ các API Endpoints của hệ thống Backend Microservices. Tuyệt đối không gọi trực tiếp vào các port nội bộ của các microservice con, **toàn bộ request bắt buộc phải đi qua API Gateway**.
 
