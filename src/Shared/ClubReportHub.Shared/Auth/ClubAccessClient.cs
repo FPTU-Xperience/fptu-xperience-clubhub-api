@@ -6,6 +6,9 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Polly.CircuitBreaker;
+using Polly.RateLimiting;
+using Polly.Timeout;
 
 namespace ClubReportHub.Shared.Auth;
 
@@ -106,7 +109,16 @@ public sealed class ClubAccessClient(
 
             return await response.Content.ReadFromJsonAsync<List<ClubAccessSnapshot>>(JsonOptions, cancellationToken) ?? [];
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException
+            or TaskCanceledException
+            or JsonException
+            or BrokenCircuitException
+            or TimeoutRejectedException
+            or RateLimiterRejectedException)
         {
             logger.LogWarning(ex, "Club access lookup failed.");
             return [];

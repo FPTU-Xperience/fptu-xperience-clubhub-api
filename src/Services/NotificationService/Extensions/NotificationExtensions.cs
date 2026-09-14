@@ -105,6 +105,13 @@ public static class NotificationExtensions
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // ADMIN can access every notification and does not need club-derived roles.
+        // Avoid making this endpoint depend on ClubService for an unnecessary lookup.
+        if (roles.Contains(AuthRoles.Admin))
+        {
+            return roles.ToArray();
+        }
+
         var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
         if (access.Any(item => item.IsManager)) roles.Add(AuthRoles.ClubManager);
         if (access.Any(item => item.IsTreasurer)) roles.Add(AuthRoles.Treasurer);

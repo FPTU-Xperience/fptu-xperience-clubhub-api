@@ -254,6 +254,7 @@ services:
       Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
+      Services__ClubService__BaseUrl: "http://club-service:8080/"
     deploy:
       resources:
         limits:
