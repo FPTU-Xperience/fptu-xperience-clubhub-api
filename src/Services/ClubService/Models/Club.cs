@@ -1,4 +1,4 @@
-namespace ClubService.Models;
+﻿namespace ClubService.Models;
 
 public sealed class Club
 {
@@ -10,6 +10,8 @@ public sealed class Club
     public string? LogoUrl { get; set; }
     public string ContactEmail { get; set; } = string.Empty;
     public string ContactPhone { get; set; } = string.Empty;
+    public string? ScheduleLabel { get; set; }
+    public bool IsRecruiting { get; set; } = false;
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? DeletedAtUtc { get; set; }

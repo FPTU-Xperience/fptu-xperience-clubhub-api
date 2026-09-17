@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
@@ -76,7 +76,9 @@ public static class ClubEndpoints
 
     private static async Task<IResult> GetAllClubs(
         string? search,
+        string? category,
         bool? active,
+        bool? recruiting,
         ClubDbContext db,
         ClaimsPrincipal user)
     {
@@ -100,28 +102,24 @@ public static class ClubEndpoints
             query = query.Where(x => x.Code.Contains(search) || x.Name.Contains(search));
         }
 
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(x => x.Category == category);
+        }
+
         if (active.HasValue)
         {
             query = query.Where(x => x.IsActive == active);
         }
 
-        var result = await query.OrderBy(x => x.Name).ToListAsync();
-
-        if (user.IsStudentAffairsAdministrator())
+        if (recruiting.HasValue)
         {
-            return Results.Ok(result.Select(ClubMappers.ToResponse));
+            query = query.Where(x => x.IsRecruiting == recruiting);
         }
 
-        var userId = user.GetUserId();
-        var managedClubIds = result
-            .Where(x => x.ManagerAssignments.Any(m => m.ManagerUserId == userId && m.IsActive))
-            .Select(x => x.Id)
-            .ToHashSet();
+        var result = await query.OrderBy(x => x.Name).ToListAsync();
 
-        return Results.Ok(result.Select(club =>
-            managedClubIds.Contains(club.Id)
-                ? ClubMappers.ToResponse(club)
-                : ClubMappers.ToDirectoryResponse(club)));
+        return Results.Ok(result.Select(ClubMappers.ToDirectoryResponse));
     }
 
     private static async Task<IResult> GetManagedClubs(
@@ -239,8 +237,8 @@ public static class ClubEndpoints
 
         var canViewPrivateDetails = user.IsStudentAffairsAdministrator() || isAssignedManager;
         return Results.Ok(canViewPrivateDetails
-            ? ClubMappers.ToResponse(club)
-            : ClubMappers.ToDirectoryResponse(club));
+            ? (object)ClubMappers.ToResponse(club)
+            : (object)ClubMappers.ToPublicDetailResponse(club));
     }
 
     private static async Task<IResult> GetClubsForManager(
@@ -285,7 +283,9 @@ public static class ClubEndpoints
             Description = request.Description.Trim(),
             LogoUrl = request.LogoUrl?.Trim(),
             ContactEmail = request.ContactEmail.Trim(),
-            ContactPhone = request.ContactPhone.Trim()
+            ContactPhone = request.ContactPhone.Trim(),
+            ScheduleLabel = request.ScheduleLabel?.Trim(),
+            IsRecruiting = request.IsRecruiting
         };
 
         db.Clubs.Add(club);
@@ -323,6 +323,16 @@ public static class ClubEndpoints
         club.ContactEmail = request.ContactEmail.Trim();
         club.ContactPhone = request.ContactPhone.Trim();
         club.IsActive = request.IsActive;
+
+        if (request.ScheduleLabel is not null)
+        {
+            club.ScheduleLabel = string.IsNullOrWhiteSpace(request.ScheduleLabel) ? null : request.ScheduleLabel.Trim();
+        }
+
+        if (request.IsRecruiting.HasValue)
+        {
+            club.IsRecruiting = request.IsRecruiting.Value;
+        }
 
         if (request.IsActive)
         {

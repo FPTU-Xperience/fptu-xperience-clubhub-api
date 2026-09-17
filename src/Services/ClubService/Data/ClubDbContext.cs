@@ -1,4 +1,4 @@
-using ClubService.Models;
+﻿using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Data;
@@ -25,6 +25,8 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.Property(x => x.LogoUrl).HasMaxLength(1000);
             entity.Property(x => x.ContactEmail).HasMaxLength(200);
             entity.Property(x => x.ContactPhone).HasMaxLength(40);
+            entity.Property(x => x.ScheduleLabel).HasMaxLength(500);
+            entity.Property(x => x.IsRecruiting).HasDefaultValue(false);
             entity.HasMany(x => x.Memberships)
                 .WithOne(x => x.Club)
                 .HasForeignKey(x => x.ClubId)

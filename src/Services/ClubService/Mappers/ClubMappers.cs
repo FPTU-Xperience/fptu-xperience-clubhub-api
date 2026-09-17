@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ClubService.Contracts;
 using ClubService.Models;
 
@@ -41,11 +41,13 @@ public static class ClubMappers
             club.ContactEmail,
             club.ContactPhone,
             club.IsActive,
+            club.ScheduleLabel,
+            club.IsRecruiting,
             managers,
             members);
     }
 
-    public static ClubResponse ToDirectoryResponse(Club club)
+    public static ClubDirectoryResponse ToDirectoryResponse(Club club)
     {
         var managers = club.ManagerAssignments
             .OrderByDescending(x => x.IsActive)
@@ -59,42 +61,9 @@ public static class ClubMappers
                 x.IsActive))
             .ToArray();
 
-        var visibleMembers = club.Memberships
-            .Where(x => x.Status == ClubMembershipStatuses.Approved)
-            .OrderByDescending(x => x.Role == ClubMemberRoles.Treasurer)
-            .ThenBy(x => x.FullName)
-            .Select(m => new ClubMembershipResponse(
-                m.Id,
-                m.ClubId,
-                club.Name,
-                club.Category,
-                m.UserId,
-                m.FullName,
-                null,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                m.Role,
-                m.Status,
-                null,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                new Dictionary<string, string>(),
-                false,
-                false,
-                null,
-                m.RequestedAtUtc,
-                m.ReviewedAtUtc,
-                m.ReviewedByUserId))
-            .ToArray();
+        var memberCount = club.Memberships.Count(x => x.Status == ClubMembershipStatuses.Approved);
 
-        return new ClubResponse(
+        return new ClubDirectoryResponse(
             club.Id,
             club.Code,
             club.Name,
@@ -103,9 +72,44 @@ public static class ClubMappers
             club.LogoUrl,
             club.ContactEmail,
             club.ContactPhone,
+            club.ScheduleLabel,
+            club.IsRecruiting,
+            memberCount,
             club.IsActive,
-            managers,
-            visibleMembers);
+            managers);
+    }
+
+    public static ClubPublicDetailResponse ToPublicDetailResponse(Club club)
+    {
+        var memberCount = club.Memberships.Count(x => x.Status == ClubMembershipStatuses.Approved);
+
+        var publicLeaders = club.ManagerAssignments
+            .Where(x => x.IsActive)
+            .OrderByDescending(x => x.AssignedAtUtc)
+            .Select(x => new PublicLeaderResponse(x.ManagerName, "Chủ nhiệm"))
+            .Concat(
+                club.Memberships
+                    .Where(x => x.Status == ClubMembershipStatuses.Approved && x.Role == ClubMemberRoles.Treasurer)
+                    .Select(x => new PublicLeaderResponse(x.FullName, "Thủ quỹ"))
+            )
+            .ToArray();
+
+        return new ClubPublicDetailResponse(
+            club.Id,
+            club.Code,
+            club.Name,
+            club.Category,
+            club.Description,
+            club.LogoUrl,
+            club.ScheduleLabel,
+            club.IsRecruiting,
+            null,
+            null,
+            memberCount,
+            club.ContactEmail,
+            club.ContactPhone,
+            publicLeaders,
+            club.IsActive);
     }
 
     // ========================================================================

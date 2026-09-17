@@ -1,4 +1,4 @@
-# 📡 TÀI LIỆU API ENDPOINTS TOÀN BỘ HỆ THỐNG FPTU-Xperience ClubHub
+﻿# 📡 TÀI LIỆU API ENDPOINTS TOÀN BỘ HỆ THỐNG FPTU-Xperience ClubHub
 
 > **Dành cho Frontend Developer:** Tài liệu hướng dẫn cấu hình Base URL và toàn bộ các API Endpoints của hệ thống Backend Microservices. Tuyệt đối không gọi trực tiếp vào các port nội bộ của các microservice con, **toàn bộ request bắt buộc phải đi qua API Gateway**.
 
@@ -265,3 +265,4 @@ AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp en
 1. Khi gọi các API nộp file đính kèm (`/api/reports/upload`, `/api/reports/{id}/attachments/upload`), nhớ dùng `FormData` và không set cứng header `Content-Type: application/json` để trình duyệt tự động điền `multipart/form-data; boundary=...`.
 2. Khi gọi các API lấy file xem trước hoặc tải về (`/api/reports/{id}/file/preview`, `/api/exports/{id}/download`), cấu hình `responseType: 'blob'` trong Axios.
 3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 65+ API trên sẽ tự động hoạt động bình thường!
+

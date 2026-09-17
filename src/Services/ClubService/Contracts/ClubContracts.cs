@@ -1,6 +1,42 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace ClubService.Contracts;
+
+public sealed record ClubDirectoryResponse(
+    int Id,
+    string Code,
+    string Name,
+    string Category,
+    string Description,
+    string? LogoUrl,
+    string ContactEmail,
+    string ContactPhone,
+    string? ScheduleLabel,
+    bool IsRecruiting,
+    int MemberCount,
+    bool IsActive,
+    IReadOnlyCollection<ManagerAssignmentResponse> Managers);
+
+public sealed record PublicLeaderResponse(
+    string DisplayName,
+    string RoleLabel);
+
+public sealed record ClubPublicDetailResponse(
+    int Id,
+    string Code,
+    string Name,
+    string Category,
+    string Description,
+    string? LogoUrl,
+    string? ScheduleLabel,
+    bool IsRecruiting,
+    string? CoverImageUrl,
+    string? LocationLabel,
+    int MemberCount,
+    string ContactEmail,
+    string ContactPhone,
+    IReadOnlyCollection<PublicLeaderResponse> PublicLeaders,
+    bool IsActive);
 
 public sealed record ClubResponse(
     int Id,
@@ -12,6 +48,8 @@ public sealed record ClubResponse(
     string ContactEmail,
     string ContactPhone,
     bool IsActive,
+    string? ScheduleLabel,
+    bool IsRecruiting,
     IReadOnlyCollection<ManagerAssignmentResponse> Managers,
     IReadOnlyCollection<ClubMembershipResponse> Members);
 
@@ -110,7 +148,9 @@ public sealed record CreateClubRequest(
     [StringLength(255), EmailAddress] string ContactEmail,
     [StringLength(20)] string ContactPhone,
     [StringLength(40)] string? Category = null,
-    [StringLength(1000)] string? LogoUrl = null);
+    [StringLength(1000)] string? LogoUrl = null,
+    [StringLength(500)] string? ScheduleLabel = null,
+    bool IsRecruiting = false);
 
 public sealed record UpdateClubRequest(
     [StringLength(200)] string Name,
@@ -119,7 +159,9 @@ public sealed record UpdateClubRequest(
     [StringLength(20)] string ContactPhone,
     bool IsActive,
     [StringLength(40)] string? Category = null,
-    [StringLength(1000)] string? LogoUrl = null);
+    [StringLength(1000)] string? LogoUrl = null,
+    [StringLength(500)] string? ScheduleLabel = null,
+    bool? IsRecruiting = null);
 
 public sealed record AssignManagerRequest(
     int ManagerUserId,

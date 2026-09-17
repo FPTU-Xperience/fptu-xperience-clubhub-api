@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Data;
 
@@ -7,6 +7,20 @@ public static class ClubSchemaUpgrader
     public static Task ApplyAsync(ClubDbContext db, CancellationToken cancellationToken = default)
     {
         const string sql = """
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.columns
+                WHERE object_id = OBJECT_ID(N'[dbo].[Clubs]') AND name = N'ScheduleLabel')
+            BEGIN
+                ALTER TABLE [dbo].[Clubs] ADD [ScheduleLabel] NVARCHAR(500) NULL;
+            END
+
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.columns
+                WHERE object_id = OBJECT_ID(N'[dbo].[Clubs]') AND name = N'IsRecruiting')
+            BEGIN
+                ALTER TABLE [dbo].[Clubs] ADD [IsRecruiting] BIT NOT NULL CONSTRAINT [DF_Clubs_IsRecruiting] DEFAULT 0;
+            END
+
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE object_id = OBJECT_ID(N'[dbo].[ClubMemberships]')
