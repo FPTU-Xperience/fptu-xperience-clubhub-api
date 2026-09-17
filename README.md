@@ -2,7 +2,7 @@
 
 ## Overview
 
-ClubReportHub is a microservices-based backend for managing FPTU student club reports, activities, KPIs, and finances. Built with **.NET 8**, **Entity Framework Core**, **Redis Streams** (replacing RabbitMQ), and **gRPC**.
+ClubReportHub is a microservices-based backend for managing FPTU student clubs, reports, activities, KPIs, finances, and the System Admin / Student Affairs backoffice. Built with **.NET 8**, **Entity Framework Core**, **Redis Streams** (replacing RabbitMQ), and **gRPC**.
 
 ## Technology Stack
 
@@ -28,11 +28,13 @@ graph LR
     Gateway --> Export[ExportService<br/>:5104]
     Gateway --> Notify[NotificationService<br/>:5105]
     Gateway --> Activity[ActivityService<br/>:5106]
+    Gateway --> Admin[AdminService<br/>:5108]
 
     Report --> SQLReport[(SQL Server<br/>ClubReportHub_Report)]
     Report --> Redis[("Redis Streams<br/>clubreporthub-events")]
     Redis --> Notify
     Notify --> SQLNotify[(SQL Server<br/>ClubReportHub_Notification)]
+    Admin --> SQLAdmin[(SQL Server<br/>ClubReportHub_Admin)]
 
     Report -.gRPC.-> KpiGrpc[KpiGrpcService<br/>:5110]
 ```
@@ -49,6 +51,7 @@ graph LR
 | Finance | 5107 | Finance | Budget, Settlements |
 | Export | 5104 | Export | PDF/Excel generation |
 | Notification | 5105 | Notification | **Redis Streams consumer** |
+| Admin | 5108 | Admin | System Admin / Student Affairs foundation and admin audit |
 | KpiGrpc | 5110 | - | **gRPC service** for KPI calculation |
 
 ## REST API
@@ -65,6 +68,10 @@ graph LR
 - `GET/POST /api/finance/*` — Financial management
 - `GET /api/notifications/*` — Notifications
 - `GET/POST /api/deadlines/*` — Reporting deadlines
+- `GET /api/v1/me` — Current verified backoffice actor
+- `GET /api/v1/admin/me` — ADMIN-only identity check
+- `GET /api/v1/student-affairs/me` — STUDENT_AFFAIRS_ADMIN-only identity check
+- `GET /api/v1/admin/audit-events` — Paginated ADMIN audit query
 
 ## Redis Streams Architecture
 
@@ -168,6 +175,24 @@ GET /api/kpis/leaderboard
 - `ReportingDeadlines` table in Report DB
 - No cross-service DB dependencies
 - EF Core migrations per service
+- AuthService remains the source of truth for users, roles, refresh tokens, Google identity, and account state.
+- ClubService remains the source of truth for clubs, memberships, and manager assignments.
+- AdminService currently owns only `AuditRecords`; it has no duplicate User, Role, Club, Report, Activity, Finance, or Notification tables.
+
+## AdminService secure foundation
+
+AdminService consumes JWTs issued by AuthService; it does not issue tokens and contains no login, Google authentication, refresh-token, User, Role, or Club persistence. The current token contract uses HMAC-SHA256, issuer `ClubReportHub`, audience `ClubReportHub.Client`, a positive AuthService user ID in `sub`/`NameIdentifier`, and standard .NET role claims. The current token does not include email, so the normalized actor email may be `null`.
+
+AdminService policies are deliberately strict:
+
+- `ADMIN` can use `/api/v1/admin/*`.
+- `STUDENT_AFFAIRS_ADMIN` can use `/api/v1/student-affairs/*`.
+- Either role can use `/api/v1/me`.
+- Request fields such as `actorId`, `userId`, `role`, or `performedBy` never determine the acting identity; only the validated JWT principal does.
+
+All public requests go through Gateway. Local direct service access on port `5108` is for development only. Swagger is available at `http://localhost:5108/swagger` in Development, while liveness and readiness are exposed at `/health/live` and `/health/ready`. Admin errors use a consistent envelope with `X-Correlation-ID`; pagination defaults to 20 and is capped at 100.
+
+`STUDENT_AFFAIRS_ADMIN` exists in the platform role constants and AdminService policy, but the current AuthService Google actor allow-list does not issue that role yet. Production CTSV onboarding remains an AuthService follow-up; there is no AdminService bypass.
 
 ## Configuration
 
@@ -216,10 +241,14 @@ dotnet run --project src/Services/ClubService
 dotnet run --project src/Services/ReportService
 dotnet run --project src/Services/KpiGrpcService
 dotnet run --project src/Services/NotificationService
+dotnet run --project src/Services/AdminService
 # ...
 
 # Or run all tests
 dotnet test ClubReportHub.sln
+
+# Run only the AdminService integration suite
+dotnet test tests/AdminService.IntegrationTests/AdminService.IntegrationTests.csproj
 ```
 
 ### Docker Deployment

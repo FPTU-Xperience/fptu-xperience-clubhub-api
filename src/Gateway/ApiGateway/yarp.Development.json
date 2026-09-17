@@ -35,6 +35,11 @@
         "Destinations": {
           "primary": { "Address": "http://localhost:5105/" }
         }
+      },
+      "admin-service": {
+        "Destinations": {
+          "primary": { "Address": "http://localhost:5108/" }
+        }
       }
     }
   }

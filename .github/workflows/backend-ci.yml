@@ -1,0 +1,85 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: AdminService_CI_Only_2026!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'AdminService_CI_Only_2026!' -C -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+          --health-start-period 20s
+
+    env:
+      CI: "true"
+      ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=AdminService_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore ClubReportHub.sln
+
+      - name: Verify formatting
+        run: |
+          dotnet format src/Services/AdminService/AdminService.csproj --no-restore --verify-no-changes
+          dotnet format tests/AdminService.IntegrationTests/AdminService.IntegrationTests.csproj --no-restore --verify-no-changes
+          dotnet format src/Shared/ClubReportHub.Shared/ClubReportHub.Shared.csproj \
+            --no-restore \
+            --verify-no-changes \
+            --include \
+              src/Shared/ClubReportHub.Shared/Auth/JwtServiceCollectionExtensions.cs \
+              src/Shared/ClubReportHub.Shared/Tracing/CorrelationIdMiddleware.cs
+
+      - name: Build
+        run: dotnet build ClubReportHub.sln --configuration Release --no-restore -warnaserror
+
+      - name: Verify Admin EF model matches migrations
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.0.18
+          dotnet ef migrations has-pending-model-changes \
+            --project src/Services/AdminService/AdminService.csproj \
+            --startup-project src/Services/AdminService/AdminService.csproj \
+            --configuration Release \
+            --no-build
+
+      - name: Test full solution
+        run: dotnet test ClubReportHub.sln --configuration Release --no-build --logger "trx;LogFileName=backend-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+
+      - name: Validate Compose
+        run: docker compose config --quiet
+
+      - name: Build AdminService production image
+        run: docker build --file src/Services/AdminService/Dockerfile --tag clubreporthub-admin:ci .

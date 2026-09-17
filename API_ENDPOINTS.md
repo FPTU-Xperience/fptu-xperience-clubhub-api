@@ -73,6 +73,22 @@ export default api;
 
 ---
 
+### 1A. NỀN TẢNG QUẢN TRỊ HỆ THỐNG & CTSV (ADMIN SERVICE)
+* **Base Path:** `{{baseUrl}}/api/v1`
+* Tất cả request công khai phải đi qua API Gateway; không gọi trực tiếp port nội bộ của AdminService.
+
+| Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/me` | `ADMIN` hoặc `STUDENT_AFFAIRS_ADMIN` | Trả về actor đã được xác minh từ JWT (`subjectId`, `userId`, email tùy chọn, roles) | *(Không có body)* |
+| `GET` | `/api/v1/admin/me` | `ADMIN` | Kiểm tra quyền và danh tính System Admin | *(Không có body)* |
+| `GET` | `/api/v1/student-affairs/me` | `STUDENT_AFFAIRS_ADMIN` | Kiểm tra quyền và danh tính cán bộ CTSV | *(Không có body)* |
+| `GET` | `/api/v1/admin/audit-events` | `ADMIN` | Danh sách audit Admin có phân trang | `?page=1&pageSize=20` (tối đa 100) |
+| `GET` | `/api/v1/admin/audit-events/{id}` | `ADMIN` | Chi tiết một audit event | *(Param `id` dạng GUID)* |
+
+AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp endpoint login/refresh. Các trường client gửi như `actorId`, `userId`, `role`, `actorRole`, `performedBy`, `createdBy`, `updatedBy` không thể thay đổi actor hoặc nâng quyền. AuthService vẫn là nguồn dữ liệu chuẩn của User/Role; ClubService vẫn là nguồn dữ liệu chuẩn của Club/Membership.
+
+---
+
 ### 2. QUẢN LÝ CÂU LẠC BỘ (CLUBS & MEMBERSHIPS)
 * **Base Path:** `{{baseUrl}}/api/clubs`
 

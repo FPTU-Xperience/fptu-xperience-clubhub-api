@@ -61,6 +61,21 @@
         "AuthorizationPolicy": "Default",
         "Match": { "Path": "/api/exports/{**catch-all}" }
       },
+      "admin-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "Match": { "Path": "/api/v1/admin/{**catch-all}" }
+      },
+      "student-affairs-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "Match": { "Path": "/api/v1/student-affairs/{**catch-all}" }
+      },
+      "backoffice-me-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "Match": { "Path": "/api/v1/me" }
+      },
       "notifications": {
         "ClusterId": "notification-service",
         "AuthorizationPolicy": "Default",
@@ -101,6 +116,11 @@
       "notification-service": {
         "Destinations": {
           "primary": { "Address": "http://notification-service:8080/" }
+        }
+      },
+      "admin-service": {
+        "Destinations": {
+          "primary": { "Address": "http://admin-service:8080/" }
         }
       },
       "kpi-grpc-service": {

@@ -1,7 +1,10 @@
+using System.Globalization;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ClubReportHub.Shared.Auth;
@@ -10,12 +13,35 @@ public static class JwtServiceCollectionExtensions
 {
     public static IServiceCollection AddClubReportJwt(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddClubReportJwtValidation(configuration);
+        services.AddSingleton<JwtTokenFactory>();
+        return services;
+    }
+
+    public static IServiceCollection AddClubReportJwtValidation(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
+    {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
         if (string.IsNullOrWhiteSpace(jwtOptions.SigningKey))
         {
             throw new InvalidOperationException("JWT SigningKey must be configured in Jwt:SigningKey section.");
+        }
+
+        if (jwtOptions.SigningKey.Length < 32)
+        {
+            throw new InvalidOperationException("JWT SigningKey must contain at least 32 characters.");
+        }
+
+        if (environment?.IsProduction() == true
+            && (jwtOptions.SigningKey.StartsWith("dev-only-", StringComparison.OrdinalIgnoreCase)
+                || jwtOptions.SigningKey.StartsWith("replace-with-", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                "A development or placeholder JWT signing key cannot be used in Production.");
         }
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
@@ -39,6 +65,25 @@ public static class JwtServiceCollectionExtensions
                     ValidAudience = jwtOptions.Audience,
                     IssuerSigningKey = signingKey,
                     ClockSkew = TimeSpan.FromMinutes(1)
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = context =>
+                    {
+                        var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
+                            ?? context.Principal?.FindFirstValue("sub");
+                        if (!int.TryParse(
+                                subject,
+                                NumberStyles.None,
+                                CultureInfo.InvariantCulture,
+                                out var userId)
+                            || userId <= 0)
+                        {
+                            context.Fail("The token does not contain a valid AuthService user identifier.");
+                        }
+
+                        return Task.CompletedTask;
+                    }
                 };
             });
 
@@ -81,7 +126,6 @@ public static class JwtServiceCollectionExtensions
                 AuthRoles.Treasurer));
         });
 
-        services.AddSingleton<JwtTokenFactory>();
         return services;
     }
 }

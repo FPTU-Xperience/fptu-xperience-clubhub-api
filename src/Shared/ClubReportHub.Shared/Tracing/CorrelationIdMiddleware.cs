@@ -6,13 +6,12 @@ namespace ClubReportHub.Shared.Tracing;
 
 public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<CorrelationIdMiddleware> logger)
 {
+    private const int MaximumLength = 128;
+
     public async Task InvokeAsync(HttpContext context)
     {
-        var correlationId = context.Request.Headers[CorrelationIdConstants.HeaderName].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(correlationId))
-        {
-            correlationId = Guid.NewGuid().ToString("N");
-        }
+        var requested = context.Request.Headers[CorrelationIdConstants.HeaderName].FirstOrDefault();
+        var correlationId = IsValid(requested) ? requested! : Guid.NewGuid().ToString("N");
 
         context.Items[CorrelationIdConstants.ItemKey] = correlationId;
 
@@ -33,6 +32,11 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<Correl
             await next(context);
         }
     }
+
+    private static bool IsValid(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Length <= MaximumLength
+        && value.All(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.');
 }
 
 public static class CorrelationIdMiddlewareExtensions
