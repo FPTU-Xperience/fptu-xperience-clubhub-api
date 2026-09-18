@@ -88,18 +88,78 @@ jobs:
             docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
 
             gateway_port="${GATEWAY_PORT:-7000}"
-            curl --fail --silent --show-error --retry 12 --retry-delay 5 \
-              "http://127.0.0.1:${gateway_port}/health" >/dev/null
-
             network_name="${COMPOSE_PROJECT_NAME}_internal-net"
-            for service in auth-service club-service activity-service report-service finance-service notification-service export-service; do
-              docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
-                --fail --silent --show-error --retry 6 --retry-delay 5 \
-                "http://${service}:8080/health" >/dev/null
-            done
-            docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
-              --fail --silent --show-error --retry 6 --retry-delay 5 \
-              "http://admin-service:8080/health/ready" >/dev/null
+
+            wait_for_gateway() {
+              gateway_url="http://127.0.0.1:${gateway_port}/health"
+              echo "Checking Gateway readiness at ${gateway_url}."
+
+              for attempt in $(seq 1 30); do
+                if gateway_probe_error="$(curl \
+                  --fail \
+                  --silent \
+                  --show-error \
+                  --connect-timeout 3 \
+                  --max-time 5 \
+                  "${gateway_url}" 2>&1)"; then
+                  echo "Gateway is healthy (attempt ${attempt}/30)."
+                  return 0
+                fi
+
+                if [ "${attempt}" -eq 30 ]; then
+                  echo "Gateway failed to become healthy after ${attempt} attempts." >&2
+                  echo "Last Gateway probe error: ${gateway_probe_error}" >&2
+                  docker ps >&2 || true
+                  docker logs --tail 200 clubreporthub-gateway >&2 || true
+                  return 1
+                fi
+
+                echo "Waiting for Gateway readiness (${attempt}/30)..."
+                sleep 3
+              done
+            }
+
+            wait_for_internal_service() {
+              service_name="$1"
+              container_name="$2"
+              health_path="$3"
+              service_url="http://${service_name}:8080${health_path}"
+              echo "Checking ${service_name} readiness at ${service_url}."
+
+              for attempt in $(seq 1 30); do
+                if service_probe_error="$(docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
+                  --fail \
+                  --silent \
+                  --show-error \
+                  --connect-timeout 3 \
+                  --max-time 5 \
+                  "${service_url}" 2>&1)"; then
+                  echo "${service_name} is healthy (attempt ${attempt}/30)."
+                  return 0
+                fi
+
+                if [ "${attempt}" -eq 30 ]; then
+                  echo "${service_name} failed to become healthy after ${attempt} attempts." >&2
+                  echo "Last ${service_name} probe error: ${service_probe_error}" >&2
+                  docker ps >&2 || true
+                  docker logs --tail 200 "${container_name}" >&2 || true
+                  return 1
+                fi
+
+                echo "Waiting for ${service_name} readiness (${attempt}/30)..."
+                sleep 3
+              done
+            }
+
+            wait_for_gateway
+            wait_for_internal_service auth-service clubreporthub-auth /health
+            wait_for_internal_service club-service clubreporthub-club /health
+            wait_for_internal_service activity-service clubreporthub-activity /health
+            wait_for_internal_service report-service clubreporthub-report /health
+            wait_for_internal_service finance-service clubreporthub-finance /health
+            wait_for_internal_service notification-service clubreporthub-notification /health
+            wait_for_internal_service export-service clubreporthub-export /health
+            wait_for_internal_service admin-service clubreporthub-admin /health/ready
 
             ln -sfn "${RELEASE_DIR}" "${TARGET_ROOT}/current"
             trap - ERR
