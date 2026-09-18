@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using AuthService.Data;
 using AuthService.Services;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Cors;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,25 +74,9 @@ public static class AuthServiceCollectionExtensions
         {
             options.AddPolicy("frontend", policy =>
             {
-                var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-                if (!environment.IsProduction())
-                {
-                    allowedOrigins = allowedOrigins
-                        .Concat([
-                            "http://localhost:3000",
-                            "http://localhost:3001",
-                            "http://localhost:5173",
-                            "http://127.0.0.1:3000",
-                            "http://127.0.0.1:5173"
-                        ])
-                        .ToArray();
-                }
-
-                policy.WithOrigins(allowedOrigins
-                          .Where(origin => !string.IsNullOrWhiteSpace(origin))
-                          .Select(origin => origin.Trim().TrimEnd('/'))
-                          .Distinct(StringComparer.OrdinalIgnoreCase)
-                          .ToArray())
+                policy.WithOrigins(CorsOriginConfiguration.ResolveAllowedOrigins(
+                          configuration,
+                          environment))
                       .AllowAnyHeader()
                       .AllowAnyMethod()
                       .AllowCredentials();

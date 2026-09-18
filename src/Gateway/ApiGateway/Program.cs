@@ -1,4 +1,5 @@
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Cors;
 using ClubReportHub.Shared.Tracing;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,25 +12,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        if (!builder.Environment.IsProduction())
-        {
-            allowedOrigins = allowedOrigins
-                .Concat([
-                    "http://localhost:3000",
-                    "http://localhost:3001",
-                    "http://localhost:5173",
-                    "http://127.0.0.1:3000",
-                    "http://127.0.0.1:5173"
-                ])
-                .ToArray();
-        }
-
-        policy.WithOrigins(allowedOrigins
-                  .Where(origin => !string.IsNullOrWhiteSpace(origin))
-                  .Select(origin => origin.Trim().TrimEnd('/'))
-                  .Distinct(StringComparer.OrdinalIgnoreCase)
-                  .ToArray())
+        policy.WithOrigins(CorsOriginConfiguration.ResolveAllowedOrigins(
+                  builder.Configuration,
+                  builder.Environment))
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

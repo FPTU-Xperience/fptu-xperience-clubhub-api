@@ -7,7 +7,9 @@ using ClubService.Data;
 using ClubService.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -81,6 +83,44 @@ public sealed class SecurityAndSeederRegressionTests
         Assert.True(policy.IsOriginAllowed(allowedOrigin));
         Assert.False(policy.IsOriginAllowed("https://unapproved-preview.pages.dev"));
         Assert.False(policy.IsOriginAllowed("http://localhost:3000"));
+    }
+
+    [Fact]
+    public async Task ProductionCorsEmitsHeaderOnlyForConfiguredAdditionalOrigin()
+    {
+        const string allowedOrigin = "http://127.0.0.1:5174";
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Production
+        });
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:DefaultConnection"] = "Server=localhost;Database=unused",
+            ["Jwt:Issuer"] = "ClubReportHub",
+            ["Jwt:Audience"] = "ClubReportHub.Client",
+            ["Jwt:SigningKey"] = ValidSigningKey,
+            ["Cors:AllowedOrigins:0"] = "https://frontend.example",
+            ["Cors:AdditionalOrigins"] = $"{allowedOrigin},http://localhost:5174"
+        });
+        builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+        await using var app = builder.Build();
+        app.UseCors("frontend");
+        app.MapGet("/cors-test", () => Results.Ok());
+        await app.StartAsync();
+
+        using var client = app.GetTestClient();
+        using var allowedRequest = new HttpRequestMessage(HttpMethod.Get, "/cors-test");
+        allowedRequest.Headers.Add("Origin", allowedOrigin);
+        using var allowedResponse = await client.SendAsync(allowedRequest);
+        Assert.Equal(
+            allowedOrigin,
+            allowedResponse.Headers.GetValues("Access-Control-Allow-Origin").Single());
+
+        using var deniedRequest = new HttpRequestMessage(HttpMethod.Get, "/cors-test");
+        deniedRequest.Headers.Add("Origin", "https://evil.example");
+        using var deniedResponse = await client.SendAsync(deniedRequest);
+        Assert.False(deniedResponse.Headers.Contains("Access-Control-Allow-Origin"));
     }
 
     [Fact]
