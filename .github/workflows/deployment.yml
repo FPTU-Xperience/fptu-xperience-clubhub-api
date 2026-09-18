@@ -43,7 +43,7 @@ jobs:
         env:
           TARGET_ROOT: ${{ env.TARGET_ROOT }}
           RELEASE_DIR: ${{ env.RELEASE_DIR }}
-          COMPOSE_PROJECT_NAME: fptux-legacy-api
+          COMPOSE_PROJECT_NAME: legacy-api
           SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
           FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
@@ -58,18 +58,33 @@ jobs:
           script: |
             set -Eeuo pipefail
 
+            cd "${RELEASE_DIR}"
+            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
+
+            if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
+              existing_project="$(
+                docker inspect clubreporthub-sqlserver \
+                  --format '{{ index .Config.Labels "com.docker.compose.project" }}'
+              )"
+              if [ "${existing_project}" != "${COMPOSE_PROJECT_NAME}" ]; then
+                echo "Refusing deployment: existing SQL container belongs to Compose project '${existing_project}', expected '${COMPOSE_PROJECT_NAME}'." >&2
+                exit 1
+              fi
+            fi
+
             previous_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
             rollback() {
               trap - ERR
               if [ -n "${previous_release}" ] && [ -f "${previous_release}/docker-compose.yml" ]; then
+                echo "Deployment failed; rolling back to ${previous_release}." >&2
                 cd "${previous_release}"
                 docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
+              else
+                echo "Deployment failed; no previous versioned release is available for rollback." >&2
               fi
             }
             trap rollback ERR
 
-            cd "${RELEASE_DIR}"
-            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
             docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
 
             gateway_port="${GATEWAY_PORT:-7000}"
