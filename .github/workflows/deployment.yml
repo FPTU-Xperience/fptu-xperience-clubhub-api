@@ -12,51 +12,14 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      SQL_PASSWORD: "Deployment_CI_Only_2026!"
-      JWT_SIGNING_KEY: "deployment-ci-only-signing-key-at-least-32-characters"
-      FRONTEND_ORIGIN: "https://ci.example.invalid"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Restore
-        run: dotnet restore ClubReportHub.sln
-
-      - name: Build
-        run: dotnet build ClubReportHub.sln --configuration Release --no-restore -warnaserror
-
-      - name: Test full solution
-        run: dotnet test ClubReportHub.sln --configuration Release --no-build
-
-      - name: Verify EF models match migrations
-        run: |
-          dotnet tool install --global dotnet-ef --version 8.0.18
-          dotnet ef migrations has-pending-model-changes \
-            --project src/Services/AdminService/AdminService.csproj \
-            --startup-project src/Services/AdminService/AdminService.csproj \
-            --configuration Release \
-            --no-build
-          dotnet ef migrations has-pending-model-changes \
-            --project src/Services/ClubService/ClubService.csproj \
-            --startup-project src/Services/ClubService/ClubService.csproj \
-            --configuration Release \
-            --no-build
-
-      - name: Validate Compose
-        run: docker compose config --quiet
+    uses: ./.github/workflows/backend-validate.yml
 
   deploy:
     needs: validate
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Required-reviewer protection can be configured for this environment in repository settings.
     environment: production
     env:
       TARGET_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api
