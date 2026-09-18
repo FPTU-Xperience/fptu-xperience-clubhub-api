@@ -11,14 +11,15 @@ public static class AuthServiceCollectionExtensions
 {
     public static IServiceCollection AddAuthServices(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         // Database
         services.AddDbContext<AuthDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
         // JWT Authentication
-        services.AddClubReportJwt(configuration);
+        services.AddClubReportJwt(configuration, environment);
 
         // Google proves identity; the local database allow-list decides whether
         // that identity is permitted to receive this application's JWT.
@@ -72,37 +73,25 @@ public static class AuthServiceCollectionExtensions
         {
             options.AddPolicy("frontend", policy =>
             {
-                var configuredOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-                var defaultOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+                if (!environment.IsProduction())
                 {
-                    "http://localhost:3000",
-                    "http://localhost:3001",
-                    "http://localhost:5173",
-                    "https://fptux-legacy-ui.pages.dev"
-                };
-
-                foreach (var origin in configuredOrigins)
-                {
-                    if (!string.IsNullOrWhiteSpace(origin))
-                    {
-                        defaultOrigins.Add(origin.Trim().TrimEnd('/'));
-                    }
+                    allowedOrigins = allowedOrigins
+                        .Concat([
+                            "http://localhost:3000",
+                            "http://localhost:3001",
+                            "http://localhost:5173",
+                            "http://127.0.0.1:3000",
+                            "http://127.0.0.1:5173"
+                        ])
+                        .ToArray();
                 }
 
-                policy.SetIsOriginAllowed(origin =>
-                      {
-                          if (string.IsNullOrWhiteSpace(origin)) return false;
-                          if (defaultOrigins.Contains(origin.TrimEnd('/'))) return true;
-
-                          if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
-                          {
-                              return uri.Host == "localhost"
-                                  || uri.Host == "127.0.0.1"
-                                  || uri.Host.EndsWith(".pages.dev", StringComparison.OrdinalIgnoreCase);
-                          }
-
-                          return false;
-                      })
+                policy.WithOrigins(allowedOrigins
+                          .Where(origin => !string.IsNullOrWhiteSpace(origin))
+                          .Select(origin => origin.Trim().TrimEnd('/'))
+                          .Distinct(StringComparer.OrdinalIgnoreCase)
+                          .ToArray())
                       .AllowAnyHeader()
                       .AllowAnyMethod()
                       .AllowCredentials();

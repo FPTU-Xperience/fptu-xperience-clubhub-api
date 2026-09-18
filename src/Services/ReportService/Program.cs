@@ -30,7 +30,7 @@ builder.Services.AddDbContext<ReportDbContext>(options => options.UseSqlServer(c
 builder.Services.Configure<ReportAttachmentOptions>(builder.Configuration.GetSection(ReportAttachmentOptions.SectionName));
 
 // Authentication & Authorization & Tracing
-builder.Services.AddClubReportJwt(builder.Configuration);
+builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
 builder.Services.AddClubReportTracing();
 
 // HTTP Clients

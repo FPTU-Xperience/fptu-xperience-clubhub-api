@@ -27,7 +27,7 @@ builder.Services.AddDbContext<AdminDbContext>(options => options.UseSqlServer(
 builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(AdminPolicies.SystemAdminOnly, policy =>
+    options.AddPolicy(AdminPolicies.AdminOnly, policy =>
         policy.RequireRole(AuthRoles.Admin));
     options.AddPolicy(AdminPolicies.StudentAffairsOnly, policy =>
         policy.RequireRole(AuthRoles.StudentAffairsAdmin));

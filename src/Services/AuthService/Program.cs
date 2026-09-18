@@ -6,7 +6,7 @@ using ClubReportHub.Shared.Data;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add all services
-builder.Services.AddAuthServices(builder.Configuration);
+builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
@@ -45,7 +45,7 @@ app.MapGet("/", () => Results.Ok(new { service = "Auth Service", status = "runni
 // Map Endpoints
 // ============================================================================
 
-app.MapAuthEndpoints(app.Environment, app.Configuration);
+app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapRoleEndpoints();
 
@@ -59,7 +59,7 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
     await db.ApplyMigrationsWithRetryAsync(logger);
 
-    await AuthSeeder.SeedAsync(db, builder.Configuration);
+    await AuthSeeder.SeedAsync(db, app.Configuration, app.Environment);
 }
 
 app.Run();

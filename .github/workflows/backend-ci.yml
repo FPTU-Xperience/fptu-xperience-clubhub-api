@@ -30,6 +30,9 @@ jobs:
 
     env:
       CI: "true"
+      SQL_PASSWORD: "AdminService_CI_Only_2026!"
+      JWT_SIGNING_KEY: "ci-only-signing-key-with-at-least-32-characters"
+      FRONTEND_ORIGIN: "https://ci.example.invalid"
       ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=AdminService_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
 
     steps:
@@ -46,8 +49,12 @@ jobs:
 
       - name: Verify formatting
         run: |
+          # Keep formatting scoped to the stabilized services/tests to avoid a repository-wide rewrite.
           dotnet format src/Services/AdminService/AdminService.csproj --no-restore --verify-no-changes
+          dotnet format src/Services/AuthService/AuthService.csproj --no-restore --verify-no-changes
+          dotnet format src/Services/ClubService/ClubService.csproj --no-restore --verify-no-changes
           dotnet format tests/AdminService.IntegrationTests/AdminService.IntegrationTests.csproj --no-restore --verify-no-changes
+          dotnet format tests/Backend.StabilizationTests/Backend.StabilizationTests.csproj --no-restore --verify-no-changes
           dotnet format src/Shared/ClubReportHub.Shared/ClubReportHub.Shared.csproj \
             --no-restore \
             --verify-no-changes \
@@ -58,12 +65,17 @@ jobs:
       - name: Build
         run: dotnet build ClubReportHub.sln --configuration Release --no-restore -warnaserror
 
-      - name: Verify Admin EF model matches migrations
+      - name: Verify EF models match migrations
         run: |
           dotnet tool install --global dotnet-ef --version 8.0.18
           dotnet ef migrations has-pending-model-changes \
             --project src/Services/AdminService/AdminService.csproj \
             --startup-project src/Services/AdminService/AdminService.csproj \
+            --configuration Release \
+            --no-build
+          dotnet ef migrations has-pending-model-changes \
+            --project src/Services/ClubService/ClubService.csproj \
+            --startup-project src/Services/ClubService/ClubService.csproj \
             --configuration Release \
             --no-build
 

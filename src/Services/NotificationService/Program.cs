@@ -25,7 +25,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 });
 builder.Services.AddHostedService<RedisStreamNotificationConsumer>();
 builder.Services.AddClubAccessClient(builder.Configuration);
-builder.Services.AddClubReportJwt(builder.Configuration);
+builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>

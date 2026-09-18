@@ -11,7 +11,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddActivityService(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         services.AddDbContext<ActivityDbContext>(options =>
         {
@@ -23,7 +24,7 @@ public static class ServiceCollectionExtensions
             options.UseSqlServer(connectionString);
         });
 
-        services.AddClubReportJwt(configuration);
+        services.AddClubReportJwt(configuration, environment);
         services.AddClubAccessClient(configuration);
 
         services.AddScoped<MemberActivityStatisticsService>();

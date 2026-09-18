@@ -6,42 +6,30 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("yarp.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"yarp.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
-builder.Services.AddClubReportJwt(builder.Configuration);
+builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        var defaultOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        if (!builder.Environment.IsProduction())
         {
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:5173",
-            "https://fptux-legacy-ui.pages.dev"
-        };
-
-        foreach (var origin in configuredOrigins)
-        {
-            if (!string.IsNullOrWhiteSpace(origin))
-            {
-                defaultOrigins.Add(origin.Trim().TrimEnd('/'));
-            }
+            allowedOrigins = allowedOrigins
+                .Concat([
+                    "http://localhost:3000",
+                    "http://localhost:3001",
+                    "http://localhost:5173",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:5173"
+                ])
+                .ToArray();
         }
 
-        policy.SetIsOriginAllowed(origin =>
-              {
-                  if (string.IsNullOrWhiteSpace(origin)) return false;
-                  if (defaultOrigins.Contains(origin.TrimEnd('/'))) return true;
-
-                  if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
-                  {
-                      return uri.Host == "localhost"
-                          || uri.Host == "127.0.0.1"
-                          || uri.Host.EndsWith(".pages.dev", StringComparison.OrdinalIgnoreCase);
-                  }
-
-                  return false;
-              })
+        policy.WithOrigins(allowedOrigins
+                  .Where(origin => !string.IsNullOrWhiteSpace(origin))
+                  .Select(origin => origin.Trim().TrimEnd('/'))
+                  .Distinct(StringComparer.OrdinalIgnoreCase)
+                  .ToArray())
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

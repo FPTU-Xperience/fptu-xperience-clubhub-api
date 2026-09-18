@@ -5,7 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Đăng ký DbContext, JWT, HttpClient, Redis,
 // Swagger, CORS, HealthCheck và các service.
-builder.Services.AddActivityService(builder.Configuration);
+builder.Services.AddActivityService(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 

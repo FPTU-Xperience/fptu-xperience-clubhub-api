@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQL_PASSWORD:-ClubReportHub!2026}"
+      MSSQL_SA_PASSWORD: "${SQL_PASSWORD:?SQL_PASSWORD is required}"
       MSSQL_PID: "Developer"
       MSSQL_MEMORY_LIMIT_MB: "1536"
     volumes:
@@ -85,18 +85,16 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      Auth__EnableDevLogin: "${ENABLE_DEV_LOGIN:-false}"
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      Cors__AllowedOrigins__0: "${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Jwt__ExpirationMinutes: "120"
       GoogleAuthentication__ClientId: "${GOOGLE_CLIENT_ID:-}"
       GoogleAuthentication__AllowedHostedDomain: "${GOOGLE_ALLOWED_HOSTED_DOMAIN:-}"
       GoogleAuthentication__AllowedEmailDomains: "${GOOGLE_ALLOWED_EMAIL_DOMAINS:-fpt.edu.vn, gmail.com}"
-      BootstrapAdmin__Email: "${DEMO_ADMIN_EMAIL:-admin@fpt.edu.vn}"
-      BootstrapAdmin__FullName: "${DEMO_ADMIN_FULL_NAME:-Nguyễn Thu Hà}"
     deploy:
       resources:
         limits:
@@ -121,10 +119,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Club;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Club;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Services__ActivityService__BaseUrl: "http://activity-service:8080/"
@@ -152,10 +150,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Activity;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Activity;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
@@ -189,10 +187,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
       DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP2UNENCRYPTEDSUPPORT: "1"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Report;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Report;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
@@ -221,10 +219,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Finance;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Finance;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
@@ -254,10 +252,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Notification;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Notification;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
@@ -287,10 +285,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Export;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Export;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
@@ -317,10 +315,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Admin;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Admin;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
     deploy:
       resources:
         limits:
@@ -351,13 +349,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
-      Cors__AllowedOrigins__0: "http://localhost:3000"
-      Cors__AllowedOrigins__1: "http://localhost:3001"
-      Cors__AllowedOrigins__2: "http://localhost:5173"
-      Cors__AllowedOrigins__3: "${FRONTEND_ORIGIN:-https://fptux-legacy-ui.pages.dev}"
+      Cors__AllowedOrigins__0: "${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
-      Jwt__SigningKey: "${JWT_SIGNING_KEY:-replace-with-a-random-secret-key-at-least-32-characters}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
     deploy:
       resources:
         limits:
@@ -400,13 +395,13 @@ services:
       DemoData__StudentEmail: "${DEMO_STUDENT_EMAIL:-se170002@fpt.edu.vn}"
       Redis__ConnectionString: "redis:6379"
       Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
-      ConnectionStrings__Auth: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
-      ConnectionStrings__Club: "Server=sqlserver,1433;Database=ClubReportHub_Club;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
-      ConnectionStrings__Activity: "Server=sqlserver,1433;Database=ClubReportHub_Activity;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
-      ConnectionStrings__Report: "Server=sqlserver,1433;Database=ClubReportHub_Report;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
-      ConnectionStrings__Finance: "Server=sqlserver,1433;Database=ClubReportHub_Finance;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
-      ConnectionStrings__Notification: "Server=sqlserver,1433;Database=ClubReportHub_Notification;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
-      ConnectionStrings__Export: "Server=sqlserver,1433;Database=ClubReportHub_Export;User Id=sa;Password=${SQL_PASSWORD:-ClubReportHub!2026};TrustServerCertificate=True;"
+      ConnectionStrings__Auth: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
+      ConnectionStrings__Club: "Server=sqlserver,1433;Database=ClubReportHub_Club;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
+      ConnectionStrings__Activity: "Server=sqlserver,1433;Database=ClubReportHub_Activity;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
+      ConnectionStrings__Report: "Server=sqlserver,1433;Database=ClubReportHub_Report;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
+      ConnectionStrings__Finance: "Server=sqlserver,1433;Database=ClubReportHub_Finance;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
+      ConnectionStrings__Notification: "Server=sqlserver,1433;Database=ClubReportHub_Notification;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
+      ConnectionStrings__Export: "Server=sqlserver,1433;Database=ClubReportHub_Export;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
     networks:
       - internal-net
 

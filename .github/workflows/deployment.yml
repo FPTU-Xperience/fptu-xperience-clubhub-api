@@ -1,41 +1,128 @@
 name: Deploy to Ubuntu VPC
 
 on:
-  workflow_dispatch
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
-      TARGET_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api
+      SQL_PASSWORD: "Deployment_CI_Only_2026!"
+      JWT_SIGNING_KEY: "deployment-ci-only-signing-key-at-least-32-characters"
+      FRONTEND_ORIGIN: "https://ci.example.invalid"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy source code via SSH
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore ClubReportHub.sln
+
+      - name: Build
+        run: dotnet build ClubReportHub.sln --configuration Release --no-restore -warnaserror
+
+      - name: Test full solution
+        run: dotnet test ClubReportHub.sln --configuration Release --no-build
+
+      - name: Verify EF models match migrations
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.0.18
+          dotnet ef migrations has-pending-model-changes \
+            --project src/Services/AdminService/AdminService.csproj \
+            --startup-project src/Services/AdminService/AdminService.csproj \
+            --configuration Release \
+            --no-build
+          dotnet ef migrations has-pending-model-changes \
+            --project src/Services/ClubService/ClubService.csproj \
+            --startup-project src/Services/ClubService/ClubService.csproj \
+            --configuration Release \
+            --no-build
+
+      - name: Validate Compose
+        run: docker compose config --quiet
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      TARGET_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api
+      RELEASE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}
+    steps:
+      - name: Checkout validated revision
+        uses: actions/checkout@v4
+
+      - name: Copy source into versioned release directory
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           password: ${{ secrets.VPC_PASSWORD }}
           source: "."
-          target: ${{ env.TARGET_DIR }}
-          rm: false 
+          target: ${{ env.RELEASE_DIR }}
+          rm: true
 
-      - name: Execute Docker Compose via SSH
+      - name: Build, start, and verify production stack
         uses: appleboy/ssh-action@v1.0.3
         env:
+          TARGET_ROOT: ${{ env.TARGET_ROOT }}
+          RELEASE_DIR: ${{ env.RELEASE_DIR }}
+          COMPOSE_PROJECT_NAME: fptux-legacy-api
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
           GOOGLE_CLIENT_ID: ${{ secrets.CLUBHUB_GOOGLE_CLIENT_ID }}
-          ENABLE_DEV_LOGIN: "true"
+          GOOGLE_ALLOWED_HOSTED_DOMAIN: ${{ secrets.GOOGLE_ALLOWED_HOSTED_DOMAIN }}
+          GOOGLE_ALLOWED_EMAIL_DOMAINS: ${{ secrets.GOOGLE_ALLOWED_EMAIL_DOMAINS }}
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           password: ${{ secrets.VPC_PASSWORD }}
-          envs: GOOGLE_CLIENT_ID,ENABLE_DEV_LOGIN
+          envs: TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,FRONTEND_ORIGIN,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS
           script: |
-            cd ${{ env.TARGET_DIR }}
-            
-            docker compose down
-            docker compose up -d --build
-            
+            set -Eeuo pipefail
+
+            previous_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
+            rollback() {
+              trap - ERR
+              if [ -n "${previous_release}" ] && [ -f "${previous_release}/docker-compose.yml" ]; then
+                cd "${previous_release}"
+                docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
+              fi
+            }
+            trap rollback ERR
+
+            cd "${RELEASE_DIR}"
+            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
+            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
+
+            gateway_port="${GATEWAY_PORT:-7000}"
+            curl --fail --silent --show-error --retry 12 --retry-delay 5 \
+              "http://127.0.0.1:${gateway_port}/health" >/dev/null
+
+            network_name="${COMPOSE_PROJECT_NAME}_internal-net"
+            for service in auth-service club-service activity-service report-service finance-service notification-service export-service; do
+              docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
+                --fail --silent --show-error --retry 6 --retry-delay 5 \
+                "http://${service}:8080/health" >/dev/null
+            done
+            docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
+              --fail --silent --show-error --retry 6 --retry-delay 5 \
+              "http://admin-service:8080/health/ready" >/dev/null
+
+            ln -sfn "${RELEASE_DIR}" "${TARGET_ROOT}/current"
+            trap - ERR
             docker image prune -f
