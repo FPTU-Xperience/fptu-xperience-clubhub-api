@@ -55,9 +55,12 @@ jobs:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 25m
           envs: TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,FRONTEND_ORIGIN,CORS_ADDITIONAL_ORIGINS,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS
           script: |
             set -Eeuo pipefail
+
+            export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 
             cd "${RELEASE_DIR}"
             docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
@@ -73,6 +76,8 @@ jobs:
               fi
             fi
 
+            docker compose -p "${COMPOSE_PROJECT_NAME}" build
+
             previous_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
             rollback() {
               trap - ERR
@@ -86,7 +91,7 @@ jobs:
             }
             trap rollback ERR
 
-            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
+            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --remove-orphans
 
             gateway_port="${GATEWAY_PORT:-7000}"
             network_name="${COMPOSE_PROJECT_NAME}_internal-net"
