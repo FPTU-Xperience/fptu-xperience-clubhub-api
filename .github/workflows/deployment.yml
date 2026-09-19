@@ -7,7 +7,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      TARGET_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api
+      TARGET_DIR: /${{ secrets.VPC_USERNAME }}/fptux/fptux-clubhub-api
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
