@@ -59,7 +59,6 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
         Console.WriteLine($"Demo reference date: {catalog.ReferenceDate:yyyy-MM-dd}");
         await WaitForServiceHealthAsync(cancellationToken);
         Console.WriteLine("Applying schema upgraders and waiting for all service schemas...");
-        await ClubService.Data.ClubSchemaUpgrader.ApplyAsync(clubDb, cancellationToken);
         await ActivityService.Data.ActivitySchemaUpgrader.ApplyAsync(activityDb, cancellationToken);
         await ReportService.Data.ReportSchemaUpgrader.ApplyAsync(reportDb, cancellationToken);
         await FinanceService.Data.FinanceSchemaUpgrader.ApplyAsync(financeDb, cancellationToken);

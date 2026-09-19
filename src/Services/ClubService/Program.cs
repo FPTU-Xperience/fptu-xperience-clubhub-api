@@ -13,7 +13,7 @@ builder.Services.AddDbContext<ClubDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Authentication & Authorization
-builder.Services.AddClubReportJwt(builder.Configuration);
+builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
 
 // Event Bus (Redis Streams)
 builder.Services.AddRedisStreamEventBus(builder.Configuration);
@@ -104,7 +104,6 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
     await db.ApplyMigrationsWithRetryAsync(logger);
-    await ClubSchemaUpgrader.ApplyAsync(db);
     await ClubSeeder.SeedAsync(db);
 }
 

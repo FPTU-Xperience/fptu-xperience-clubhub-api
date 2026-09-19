@@ -28,7 +28,7 @@ public sealed class KpiServiceImpl : KpiService.KpiServiceBase
         _logger = logger;
     }
 
-    public override async Task<KpiClubResponse> CalculateClubKpi(
+    public override Task<KpiClubResponse> CalculateClubKpi(
         KpiClubRequest request,
         ServerCallContext context)
     {
@@ -77,7 +77,7 @@ public sealed class KpiServiceImpl : KpiService.KpiServiceBase
             rating,
             correlationId);
 
-        return response;
+        return Task.FromResult(response);
     }
 
     /// <summary>

@@ -11,9 +11,12 @@ namespace ClubReportHub.Shared.Auth;
 
 public static class JwtServiceCollectionExtensions
 {
-    public static IServiceCollection AddClubReportJwt(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddClubReportJwt(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
-        services.AddClubReportJwtValidation(configuration);
+        services.AddClubReportJwtValidation(configuration, environment);
         services.AddSingleton<JwtTokenFactory>();
         return services;
     }
@@ -21,7 +24,7 @@ public static class JwtServiceCollectionExtensions
     public static IServiceCollection AddClubReportJwtValidation(
         this IServiceCollection services,
         IConfiguration configuration,
-        IHostEnvironment? environment = null)
+        IHostEnvironment environment)
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
@@ -36,7 +39,7 @@ public static class JwtServiceCollectionExtensions
             throw new InvalidOperationException("JWT SigningKey must contain at least 32 characters.");
         }
 
-        if (environment?.IsProduction() == true
+        if (environment.IsProduction()
             && (jwtOptions.SigningKey.StartsWith("dev-only-", StringComparison.OrdinalIgnoreCase)
                 || jwtOptions.SigningKey.StartsWith("replace-with-", StringComparison.OrdinalIgnoreCase)))
         {
@@ -50,11 +53,7 @@ public static class JwtServiceCollectionExtensions
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                // Require HTTPS in production, allow HTTP in development
-                options.RequireHttpsMetadata = !string.Equals(
-                    configuration.GetValue<string>("Environment"),
-                    "Development",
-                    StringComparison.OrdinalIgnoreCase);
+                options.RequireHttpsMetadata = environment.IsProduction();
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,

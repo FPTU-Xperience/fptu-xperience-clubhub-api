@@ -2,12 +2,16 @@ using AuthService.Models;
 using ClubReportHub.Shared.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace AuthService.Data;
 
 public static class AuthSeeder
 {
-    public static async Task SeedAsync(AuthDbContext db, IConfiguration? configuration = null)
+    public static async Task SeedAsync(
+        AuthDbContext db,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         await EnsureRoleAsync(db, AuthRoles.Admin);
         await EnsureRoleAsync(db, AuthRoles.SystemAdmin);
@@ -17,54 +21,48 @@ public static class AuthSeeder
         await EnsureRoleAsync(db, AuthRoles.ClubMember);
         await db.SaveChangesAsync();
 
-        // The application still keeps every role definition because authorization policies
-        // reference them. Demo accounts, however, are intentionally limited to ADMIN,
-        // CLUB_MANAGER and CLUB_MEMBER. Managers and students are created by DemoDataSeeder.
-        var adminEmail = GetOptionalConfiguration(
-            configuration,
-            "BootstrapAdmin:Email",
-            "admin@fpt.edu.vn");
-        var adminFullName = GetOptionalConfiguration(
-            configuration,
-            "BootstrapAdmin:FullName",
-            "Nguyễn Thu Hà");
-        ValidateBootstrapAdmin(adminEmail, adminFullName);
-
-        await EnsureUserAsync(
-            db,
-            username: adminEmail,
-            fullName: adminFullName,
-            email: adminEmail,
-            roles: [AuthRoles.Admin]);
-
-        if (configuration is not null)
+        // Bootstrap identities are opt-in in every environment. In particular,
+        // Production never falls back to a personal or demo administrator.
+        var adminEmail = configuration["BootstrapAdmin:Email"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(adminEmail))
         {
-            var additionalEmails = configuration.GetSection("PreApprovedAdmins").Get<string[]>()
-                ?? (Environment.GetEnvironmentVariable("PRE_APPROVED_ADMINS")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) 
-                    ?? ["namthse173516@fpt.edu.vn", "namhoang20032710@gmail.com"]);
+            var fullName = configuration["BootstrapAdmin:FullName"]?.Trim();
+            await EnsureBootstrapAdminAsync(db, adminEmail, fullName);
+        }
 
-            foreach (var extraEmail in additionalEmails)
-            {
-                var trimmed = extraEmail.Trim();
-                await EnsureUserAsync(
-                    db,
-                    username: trimmed,
-                    fullName: trimmed.StartsWith("namth", StringComparison.OrdinalIgnoreCase) ? "Hoàng Nam" : "Nam Hoàng",
-                    email: trimmed,
-                    roles: [AuthRoles.Admin]);
-            }
+        var additionalEmails = configuration.GetSection("PreApprovedAdmins").Get<string[]>()
+            ?? (Environment.GetEnvironmentVariable("PRE_APPROVED_ADMINS")?.Split(
+                ',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                ?? []);
+
+        foreach (var extraEmail in additionalEmails
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            await EnsureBootstrapAdminAsync(db, extraEmail, fullName: null);
         }
 
         await db.SaveChangesAsync();
     }
 
-    private static string GetOptionalConfiguration(
-        IConfiguration? configuration,
-        string configKey,
-        string fallback)
+    private static async Task EnsureBootstrapAdminAsync(
+        AuthDbContext db,
+        string email,
+        string? fullName)
     {
-        var value = configuration?[configKey];
-        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var normalizedFullName = string.IsNullOrWhiteSpace(fullName)
+            ? normalizedEmail
+            : fullName.Trim();
+
+        ValidateBootstrapAdmin(normalizedEmail, normalizedFullName);
+        await EnsureUserAsync(
+            db,
+            username: normalizedEmail,
+            fullName: normalizedFullName,
+            email: normalizedEmail,
+            roles: [AuthRoles.Admin]);
     }
 
     private static void ValidateBootstrapAdmin(string email, string fullName)
@@ -97,34 +95,12 @@ public static class AuthSeeder
         string email,
         IReadOnlyCollection<string> roles)
     {
-        var existing = await db.Users.Include(x => x.UserRoles).ThenInclude(x => x.Role)
-            .FirstOrDefaultAsync(x => x.Username == username);
+        var existing = await db.Users
+            .FirstOrDefaultAsync(x => x.Username == username || x.Email == email);
         if (existing is not null)
         {
-            existing.FullName = fullName;
-            existing.Email = email;
-            existing.IsActive = true;
-            existing.IsLocked = false;
-
-            var existingRoleNames = existing.UserRoles.Select(x => x.Role.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var unexpectedRoles = existing.UserRoles
-                .Where(userRole => !roles.Contains(userRole.Role.Name, StringComparer.OrdinalIgnoreCase))
-                .ToArray();
-            if (unexpectedRoles.Length > 0)
-            {
-                db.UserRoles.RemoveRange(unexpectedRoles);
-            }
-
-            var missingRoleNames = roles.Where(role => !existingRoleNames.Contains(role)).ToArray();
-            if (missingRoleNames.Length > 0)
-            {
-                var missingRoles = await db.Roles.Where(x => missingRoleNames.Contains(x.Name)).ToListAsync();
-                foreach (var role in missingRoles)
-                {
-                    db.UserRoles.Add(new UserRole { UserId = existing.Id, RoleId = role.Id });
-                }
-            }
-
+            // Startup seeding must not undo an operator's decision to disable,
+            // lock, rename, or change the roles of an existing account.
             return;
         }
 

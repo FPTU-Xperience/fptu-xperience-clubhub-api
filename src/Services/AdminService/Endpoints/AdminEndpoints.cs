@@ -27,7 +27,7 @@ public static class AdminEndpoints
 
         var admin = api.MapGroup("/admin")
             .WithTags("System Admin")
-            .RequireAuthorization(AdminPolicies.SystemAdminOnly);
+            .RequireAuthorization(AdminPolicies.AdminOnly);
         admin.MapGet("/me", GetCurrentActor)
             .WithName("GetSystemAdminActor")
             .Produces<CurrentActorResponse>();
@@ -51,7 +51,7 @@ public static class AdminEndpoints
     public static IEndpointRouteBuilder MapAdminTestEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/__test/audited-operation", CreateAuditEventAsync)
-            .RequireAuthorization(AdminPolicies.SystemAdminOnly)
+            .RequireAuthorization(AdminPolicies.AdminOnly)
             .ExcludeFromDescription();
         return endpoints;
     }
