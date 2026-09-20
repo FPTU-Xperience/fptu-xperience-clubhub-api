@@ -20,13 +20,15 @@ public static class AuthEndpoints
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
 
+        // The admin UI uses email-based dev login in every deployed environment.
+        auth.MapPost("/dev-login", HandleDevLogin)
+            .AllowAnonymous()
+            .RequireRateLimiting("googleSignInLimit");
+
         var env = app.ServiceProvider.GetRequiredService<IHostEnvironment>();
         if (env.IsDevelopment() || env.IsEnvironment("Testing"))
         {
-            // Development & testing bypass login by email (no Google token required).
-            auth.MapPost("/dev-login", HandleDevLogin)
-                .AllowAnonymous();
-
+            // Keep the test alias limited to non-production environments.
             auth.MapPost("/test-login", HandleDevLogin)
                 .AllowAnonymous();
         }

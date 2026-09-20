@@ -40,11 +40,11 @@ public sealed class SecurityAndSeederRegressionTests
     }
 
     [Fact]
-    public async Task ProductionDoesNotMapDevLoginEvenWhenLegacyFlagIsTrue()
+    public async Task ProductionMapsDevLoginButNotTestLoginAlias()
     {
         var routes = await GetAuthRoutesAsync(Environments.Production, enableDevLogin: true);
 
-        Assert.DoesNotContain("/api/auth/dev-login", routes);
+        Assert.Contains("/api/auth/dev-login", routes);
         Assert.DoesNotContain("/api/auth/test-login", routes);
     }
 
