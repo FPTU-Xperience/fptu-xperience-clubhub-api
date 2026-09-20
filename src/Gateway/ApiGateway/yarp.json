@@ -4,66 +4,79 @@
       "auth": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/auth/{**catch-all}" }
       },
       "users": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/users/{**catch-all}" }
       },
       "roles": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/roles/{**catch-all}" }
       },
       "clubs": {
         "ClusterId": "club-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/clubs/{**catch-all}" }
       },
       "club-activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/clubs/{clubId}/activities" }
       },
       "club-activity-management": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/clubs/{clubId}/activities/{**catch-all}" }
       },
       "activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/activities/{**catch-all}" }
       },
       "reports": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/reports/{**catch-all}" }
       },
       "deadlines": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/deadlines/{**catch-all}" }
       },
       "kpis": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/kpis/{**catch-all}" }
       },
       "finance": {
         "ClusterId": "finance-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/finance/{**catch-all}" }
       },
       "exports": {
         "ClusterId": "export-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/exports/{**catch-all}" }
       },
       "notifications": {
         "ClusterId": "notification-service",
         "AuthorizationPolicy": "Default",
+        "CorsPolicy": "frontend",
         "Match": { "Path": "/api/notifications/{**catch-all}" }
       }
     },
