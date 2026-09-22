@@ -21,4 +21,6 @@ RUN dotnet publish "ReportService.csproj" -c Release -o /app/publish /p:UseAppHo
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN mkdir -p /app/report-uploads /app/report-previews && chown -R $APP_UID:$APP_UID /app/report-uploads /app/report-previews
+USER $APP_UID
 ENTRYPOINT ["dotnet", "ReportService.dll"]

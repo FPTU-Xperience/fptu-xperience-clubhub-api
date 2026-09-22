@@ -1,6 +1,10 @@
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Cors;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
+using ClubReportHub.Shared.Security;
 using ClubReportHub.Shared.Tracing;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
@@ -81,21 +85,29 @@ builder.Services.AddHangfire(config => config
         PrepareSchemaIfNecessary = true,
         QueuePollInterval = TimeSpan.FromSeconds(10)
     }));
-builder.Services.AddHangfireServer();
+var reportWorkerCount = Math.Clamp(builder.Configuration.GetValue<int>("Hangfire:WorkerCount", 2), 1, 8);
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = reportWorkerCount;
+});
 builder.Services.AddScoped<ReportDeadlineJobs>();
 
 // Other services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddHealthChecks();
+// Health Checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ReportDbContext>("report-db", tags: ["ready"])
+    .AddRedisHealthCheck();
 
 // CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? ["http://localhost:3000", "http://localhost:5173"];
+        var allowedOrigins = CorsOriginConfiguration.ResolveAllowedOrigins(
+            builder.Configuration,
+            builder.Environment);
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
@@ -123,6 +135,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseSecurityHeaders();
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -132,8 +145,8 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 });
 
 // Map health and info endpoints
-app.MapHealthChecks("/health");
-app.MapGet("/error", () => Results.Problem("An unexpected error occurred.")).AllowAnonymous();
+app.MapStandardHealthChecks();
+app.MapGlobalErrorEndpoint();
 app.MapGet("/", () => Results.Ok(new { service = "Report Service", status = "running" }));
 
 // Map API endpoints

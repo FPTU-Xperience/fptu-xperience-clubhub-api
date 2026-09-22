@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -94,7 +95,15 @@ public static class ReportFileEndpoints
         var deadline = await db.ReportingDeadlines.FirstOrDefaultAsync(x => x.Period == period, cancellationToken);
         var dueDate = deadline?.DueDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14));
 
-        var savedFile = await ReportExtensions.SaveUploadedReportFileAsync(file, clubId, config, cancellationToken);
+        (string StoredFileName, string StoragePath, string Checksum, long SizeBytes, string OriginalFileName) savedFile;
+        try
+        {
+            savedFile = await ReportExtensions.SaveUploadedReportFileAsync(file, clubId, config, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { message = ex.Message });
+        }
 
         var report = new Report
         {
@@ -128,10 +137,62 @@ public static class ReportFileEndpoints
         await ReportPreviewGenerator.GeneratePreviewAsync(uploadedFile, config, cancellationToken);
         report.UploadedFile = uploadedFile;
         db.Reports.Add(report);
-        await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "Upload", user.GetUserId(), "Report file uploaded as draft.", cancellationToken);
+        await using var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            AuditHelper.AddAudit(db, report.Id, "Upload", user.GetUserId(), "Report file uploaded as draft.");
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+        }
+        catch (DbUpdateException)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            DeleteFileIfPresent(uploadedFile.StoragePath);
+            DeleteFileIfPresent(uploadedFile.PreviewStoragePath);
+            return Results.Conflict(new { message = "A report already exists for this club, period, and tag." });
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            DeleteFileIfPresent(uploadedFile.StoragePath);
+            DeleteFileIfPresent(uploadedFile.PreviewStoragePath);
+            throw;
+        }
 
         return Results.Created($"/api/reports/{report.Id}", ReportMappers.ToResponse(report));
+    }
+
+    private static void DeleteFileIfPresent(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch
+        {
+            // Database rollback is authoritative; stale files can be removed by storage maintenance.
+        }
     }
 
     private static async Task<IResult> GetUploadedFile(
@@ -242,7 +303,8 @@ public static class ReportFileEndpoints
         }
 
         var contentType = uploadedFile.PreviewContentType ?? "application/pdf";
-        var fileName = Path.GetFileName(previewPath);
+        var rawFileName = Path.GetFileName(previewPath);
+        var fileName = ContentDispositionSanitizer.SanitizeFileName(rawFileName, "preview.pdf");
 
         httpContext.Response.Headers.Append("Content-Disposition", $"inline; filename=\"{fileName}\"");
         return Results.File(previewPath, contentType, enableRangeProcessing: true);
@@ -254,6 +316,7 @@ public static class ReportFileEndpoints
         ClaimsPrincipal user,
         HttpContext httpContext,
         ClubAccessClient clubAccess,
+        IConfiguration config,
         CancellationToken cancellationToken)
     {
         var report = await db.Reports
@@ -275,15 +338,25 @@ public static class ReportFileEndpoints
             return Results.NotFound(new { message = "Báo cáo này không có file đính kèm." });
         }
 
-        if (!File.Exists(report.UploadedFile.StoragePath))
+        var storageDir = Path.GetFullPath(config["Uploads:StoragePath"] ?? "report-uploads");
+        var normalizedReportPath = Path.GetFullPath(report.UploadedFile.StoragePath);
+        if (!ReportAttachmentPolicy.IsPathUnderRoot(normalizedReportPath, storageDir))
+        {
+            return Results.BadRequest(new { message = "Invalid report file path." });
+        }
+
+        if (!File.Exists(normalizedReportPath))
         {
             return Results.NotFound(new { message = "Tệp tin vật lý không còn tồn tại trên máy chủ." });
         }
 
+        var safeFileName = ContentDispositionSanitizer.SanitizeFileName(
+            report.UploadedFile.OriginalFileName, "report_document");
+
         return Results.File(
-            report.UploadedFile.StoragePath,
+            normalizedReportPath,
             report.UploadedFile.ContentType,
-            report.UploadedFile.OriginalFileName,
+            safeFileName,
             enableRangeProcessing: true);
     }
 
@@ -336,7 +409,15 @@ public static class ReportFileEndpoints
             return Results.BadRequest(new { message = validation.ErrorMessage });
         }
 
-        var savedFile = await ReportExtensions.SaveUploadedReportFileAsync(file, report.ClubId, config, cancellationToken);
+        (string StoredFileName, string StoragePath, string Checksum, long SizeBytes, string OriginalFileName) savedFile;
+        try
+        {
+            savedFile = await ReportExtensions.SaveUploadedReportFileAsync(file, report.ClubId, config, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { message = ex.Message });
+        }
 
         if (report.UploadedFile is not null)
         {
@@ -360,9 +441,8 @@ public static class ReportFileEndpoints
 
         report.UploadedFile = newUploadedFile;
         report.UpdatedAtUtc = DateTimeOffset.UtcNow;
-
+        AuditHelper.AddAudit(db, report.Id, "ReplaceUploadedFile", user.GetUserId(), "Uploaded report file replaced.");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "ReplaceUploadedFile", user.GetUserId(), "Uploaded report file replaced.", cancellationToken);
 
         return Results.Ok(ReportMappers.ToResponse(report));
     }
@@ -401,8 +481,8 @@ public static class ReportFileEndpoints
         {
             report.UploadedFile.IsActive = false;
             report.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            AuditHelper.AddAudit(db, report.Id, "DeleteUploadedFile", user.GetUserId(), "Uploaded report file deleted.");
             await db.SaveChangesAsync(cancellationToken);
-            await AuditHelper.AddAuditAsync(db, report.Id, "DeleteUploadedFile", user.GetUserId(), "Uploaded report file deleted.", cancellationToken);
         }
 
         return Results.Ok(ReportMappers.ToResponse(report));
@@ -413,6 +493,7 @@ public static class ReportFileEndpoints
         AddAttachmentRequest request,
         ReportDbContext db,
         IOptions<ReportAttachmentOptions> attachmentOptions,
+        IWebHostEnvironment environment,
         ClaimsPrincipal user,
         ClubAccessClient clubAccess,
         HttpContext httpContext,
@@ -453,17 +534,37 @@ public static class ReportFileEndpoints
         }
 
         var safeName = ReportAttachmentPolicy.GetSafeFileName(request.FileName);
+        var storageRoot = ReportAttachmentPolicy.ResolveStorageRoot(attachmentOptions.Value.StoragePath, environment.ContentRootPath);
+        var reportFolder = Path.Combine(storageRoot, report.Id.ToString());
+
+        var normalizedFolder = Path.GetFullPath(reportFolder);
+        if (!ReportAttachmentPolicy.IsPathUnderRoot(normalizedFolder, storageRoot))
+        {
+            return Results.BadRequest(new { message = "Invalid storage path." });
+        }
+
+        Directory.CreateDirectory(reportFolder);
+
+        var storedFileName = ReportAttachmentPolicy.CreateStoredFileName(safeName);
+        var safeFilePath = Path.Combine(reportFolder, storedFileName);
+
+        var normalizedFilePath = Path.GetFullPath(safeFilePath);
+        if (!ReportAttachmentPolicy.IsPathUnderRoot(normalizedFilePath, storageRoot))
+        {
+            return Results.BadRequest(new { message = "Invalid file path." });
+        }
+
         report.Attachments.Add(new ReportAttachment
         {
             ReportDetailId = request.ReportDetailId,
             FileName = safeName,
             ContentType = request.ContentType,
             SizeBytes = request.SizeBytes,
-            StoragePath = request.StoragePath.Trim()
+            StoragePath = normalizedFilePath
         });
         report.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        AuditHelper.AddAudit(db, report.Id, "Attachment", user.GetUserId(), $"Attachment metadata added: {safeName}");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "Attachment", user.GetUserId(), $"Attachment metadata added: {safeName}", cancellationToken);
         return Results.Ok(ReportMappers.ToResponse(report));
     }
 
@@ -557,8 +658,8 @@ public static class ReportFileEndpoints
             StoragePath = filePath
         });
         report.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        AuditHelper.AddAudit(db, report.Id, "AttachmentUpload", user.GetUserId(), $"Evidence uploaded: {safeName}");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "AttachmentUpload", user.GetUserId(), $"Evidence uploaded: {safeName}", cancellationToken);
         return Results.Ok(ReportMappers.ToResponse(report));
     }
 
@@ -566,6 +667,8 @@ public static class ReportFileEndpoints
         int id,
         int attachmentId,
         ReportDbContext db,
+        IOptions<ReportAttachmentOptions> attachmentOptions,
+        IWebHostEnvironment environment,
         ClaimsPrincipal user,
         HttpContext httpContext,
         ClubAccessClient clubAccess,
@@ -586,11 +689,26 @@ public static class ReportFileEndpoints
 
         var attachment = await db.ReportAttachments.AsNoTracking()
             .FirstOrDefaultAsync(x => x.ReportId == id && x.Id == attachmentId, cancellationToken);
-        if (attachment is null || !File.Exists(attachment.StoragePath))
+        if (attachment is null || string.IsNullOrWhiteSpace(attachment.StoragePath))
         {
             return Results.NotFound(new { message = "Attachment file is not available." });
         }
 
-        return Results.File(attachment.StoragePath, attachment.ContentType, attachment.FileName);
+        var storageRoot = ReportAttachmentPolicy.ResolveStorageRoot(attachmentOptions.Value.StoragePath, environment.ContentRootPath);
+        var normalizedAttachmentPath = Path.GetFullPath(attachment.StoragePath);
+        if (!ReportAttachmentPolicy.IsPathUnderRoot(normalizedAttachmentPath, storageRoot))
+        {
+            return Results.BadRequest(new { message = "Invalid attachment path." });
+        }
+
+        if (!File.Exists(normalizedAttachmentPath))
+        {
+            return Results.NotFound(new { message = "Attachment file is not available." });
+        }
+
+        var safeAttachmentName = ContentDispositionSanitizer.SanitizeFileName(
+            attachment.FileName, "attachment");
+
+        return Results.File(normalizedAttachmentPath, attachment.ContentType, safeAttachmentName);
     }
 }

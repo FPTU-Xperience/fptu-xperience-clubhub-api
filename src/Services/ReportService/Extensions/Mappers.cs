@@ -63,7 +63,7 @@ public static class ReportMappers
                 x.FileName,
                 x.ContentType,
                 x.SizeBytes,
-                x.StoragePath,
+                string.Empty,
                 x.UploadedAtUtc)).ToArray(),
             report.Feedback.OrderByDescending(x => x.CreatedAtUtc).Select(x => new ReportFeedbackResponse(
                 x.Id,

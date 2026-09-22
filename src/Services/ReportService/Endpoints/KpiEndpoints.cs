@@ -76,7 +76,7 @@ public static class KpiEndpoints
         }
 
         var vietnamToday = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime);
-        var query = db.Reports.AsNoTracking().Include(x => x.Details).AsQueryable();
+        var query = db.Reports.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(period))
         {
             query = query.Where(x => x.Period == period);
@@ -88,34 +88,53 @@ public static class KpiEndpoints
             query = query.Where(x => visibleClubIds.Contains(x.ClubId));
         }
 
-        var reportsForKpi = await query.ToListAsync();
-        foreach (var report in reportsForKpi)
-        {
-            visibleClubs.TryAdd(report.ClubId, report.ClubName);
-        }
+        // PERF-F02: Aggregate directly in the database instead of loading all Report and Detail entities into RAM
+        var aggregatedReports = await query
+            .Select(r => new
+            {
+                r.ClubId,
+                r.ClubName,
+                IsApproved = r.Status == ReportStatuses.Approved,
+                IsRejected = r.Status == ReportStatuses.Rejected,
+                IsOverdue = (r.Status == ReportStatuses.Draft || r.Status == ReportStatuses.Rejected) && r.DueDate < vietnamToday,
+                ActivityCount = r.Status == ReportStatuses.Approved ? r.Details.Count : 0,
+                ParticipantCount = r.Status == ReportStatuses.Approved ? (r.Details.Sum(d => (int?)d.ParticipantCount) ?? 0) : 0
+            })
+            .GroupBy(x => new { x.ClubId, x.ClubName })
+            .Select(g => new
+            {
+                g.Key.ClubId,
+                g.Key.ClubName,
+                ApprovedReports = g.Count(x => x.IsApproved),
+                RejectedReports = g.Count(x => x.IsRejected),
+                OverdueReports = g.Count(x => x.IsOverdue),
+                Activities = g.Sum(x => x.ActivityCount),
+                Participants = g.Sum(x => x.ParticipantCount)
+            })
+            .ToListAsync(httpCancellationToken);
 
-        var reportsByClub = reportsForKpi
-            .GroupBy(x => x.ClubId)
-            .ToDictionary(x => x.Key, x => x.ToArray());
+        var aggregatedByClub = aggregatedReports.ToDictionary(x => x.ClubId);
+        foreach (var agg in aggregatedReports)
+        {
+            visibleClubs.TryAdd(agg.ClubId, agg.ClubName);
+        }
 
         var clubMetrics = visibleClubs
             .Select(club =>
             {
-                var clubReports = reportsByClub.GetValueOrDefault(club.Key) ?? [];
-                var approved = clubReports.Where(x => x.Status == ReportStatuses.Approved).ToArray();
-                var rejectedCount = clubReports.Count(x => x.Status == ReportStatuses.Rejected);
-                var overdueCount = clubReports.Count(x =>
-                    (x.Status == ReportStatuses.Draft || x.Status == ReportStatuses.Rejected)
-                    && x.DueDate < vietnamToday);
-                var activityCount = approved.Sum(x => x.Details.Count);
-                var participants = approved.Sum(x => x.Details.Sum(d => d.ParticipantCount));
-                var points = approved.Length * 50m + activityCount * 5m + participants * 0.1m - rejectedCount * 10m - overdueCount * 20m;
+                var agg = aggregatedByClub.GetValueOrDefault(club.Key);
+                var approvedCount = agg?.ApprovedReports ?? 0;
+                var rejectedCount = agg?.RejectedReports ?? 0;
+                var overdueCount = agg?.OverdueReports ?? 0;
+                var activityCount = agg?.Activities ?? 0;
+                var participants = agg?.Participants ?? 0;
+                var points = approvedCount * 50m + activityCount * 5m + participants * 0.1m - rejectedCount * 10m - overdueCount * 20m;
                 return new
                 {
                     ClubId = club.Key,
                     ClubName = club.Value,
                     Points = Math.Max(0, decimal.Round(points, 2)),
-                    ApprovedReports = approved.Length,
+                    ApprovedReports = approvedCount,
                     Activities = activityCount,
                     Participants = participants,
                     RejectedReports = rejectedCount,

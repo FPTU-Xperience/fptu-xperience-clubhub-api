@@ -19,10 +19,13 @@ public sealed class ReportDbContext(DbContextOptions<ReportDbContext> options) :
     {
         modelBuilder.Entity<Report>(entity =>
         {
-            entity.HasIndex(x => new { x.ClubId, x.Period, x.Tag });
+            // DATA-F04: At most one report per (ClubId, Period, Tag) for regular reports
+            entity.HasIndex(x => new { x.ClubId, x.Period, x.Tag })
+                .IsUnique()
+                .HasFilter("[ReportType] <> 'FUTURE_EVENT'");
             entity.HasIndex(x => x.Status);
-            entity.HasIndex(x => x.UpdatedAtUtc);
-            entity.HasIndex(x => x.CreatedByUserId);
+            entity.HasIndex(x => x.UpdatedAtUtc).IsDescending().IncludeProperties(x => new { x.ClubId, x.Period, x.Status });
+            entity.HasIndex(x => new { x.CreatedByUserId, x.Status });
             entity.HasIndex(x => x.BudgetProposalId).IsUnique().HasFilter("[BudgetProposalId] IS NOT NULL");
 
             // SeedKey: nullable varchar(50), filtered unique index to prevent duplicate demo reports

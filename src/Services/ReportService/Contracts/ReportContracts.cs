@@ -129,7 +129,7 @@ public sealed record AddAttachmentRequest(
     string FileName,
     string ContentType,
     long SizeBytes,
-    string StoragePath);
+    string? StoragePath = null);
 
 public sealed record ReviewRequest(string? Feedback);
 

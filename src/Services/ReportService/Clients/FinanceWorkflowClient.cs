@@ -1,12 +1,19 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace ReportService.Clients;
 
 public sealed record FinanceWorkflowSnapshot(int Id, int? SourceReportId, decimal RequestedAmount, decimal? ApprovedAmount, string Status);
 
-public sealed class FinanceWorkflowClient(HttpClient httpClient, ILogger<FinanceWorkflowClient> logger)
+public sealed record BudgetProposalDetailSnapshot(int Id, int ClubId, int? SourceReportId, string Status, decimal RequestedAmount, decimal? ApprovedAmount);
+
+public sealed class FinanceWorkflowClient(
+    HttpClient httpClient,
+    ILogger<FinanceWorkflowClient> logger,
+    IConfiguration? config = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -25,6 +32,30 @@ public sealed class FinanceWorkflowClient(HttpClient httpClient, ILogger<Finance
     public Task<FinanceWorkflowSnapshot?> FinalRejectAsync(int proposalId, string? note, string token, CancellationToken ct) =>
         PostAsync(proposalId, "reject", new { approvedAmount = (decimal?)null, note }, token, ct);
 
+    public async Task<BudgetProposalDetailSnapshot?> GetProposalAsync(
+        int proposalId,
+        string bearerToken,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/finance/proposals/{proposalId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        try
+        {
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Getting proposal {ProposalId} failed with {StatusCode}.", proposalId, response.StatusCode);
+                return null;
+            }
+            return await response.Content.ReadFromJsonAsync<BudgetProposalDetailSnapshot>(JsonOptions, cancellationToken);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogWarning(exception, "Failed to get proposal {ProposalId}.", proposalId);
+            return null;
+        }
+    }
+
     private async Task<FinanceWorkflowSnapshot?> PostAsync(
         int proposalId,
         string action,
@@ -35,6 +66,10 @@ public sealed class FinanceWorkflowClient(HttpClient httpClient, ILogger<Finance
         using var request = new HttpRequestMessage(HttpMethod.Post, $"api/finance/proposals/{proposalId}/{action}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
         request.Headers.Add("X-Combined-Report-Workflow", "true");
+
+        var secret = config?["InternalServiceAuth:Secret"] ?? "clubhub-internal-workflow-shared-secret";
+        request.Headers.Add("X-Internal-Workflow-Token", secret);
+
         request.Content = JsonContent.Create(payload);
         try
         {

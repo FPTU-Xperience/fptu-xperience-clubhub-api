@@ -69,6 +69,7 @@ public static class ReportPreviewGenerator
 
         if (ext == ".docx")
         {
+            string? previewPath = null;
             try
             {
                 if (!File.Exists(uploadedFile.StoragePath))
@@ -80,38 +81,52 @@ public static class ReportPreviewGenerator
 
                 var baseName = Path.GetFileNameWithoutExtension(uploadedFile.StoredFileName);
                 var previewFileName = $"preview-{baseName}.pdf";
-                var previewPath = Path.Combine(previewsDir, previewFileName);
+                previewPath = Path.Combine(previewsDir, previewFileName);
 
-                var docxBytes = await File.ReadAllBytesAsync(uploadedFile.StoragePath, cancellationToken);
-                using var memoryStream = new MemoryStream(docxBytes);
-                using var docx = WordprocessingDocument.Open(memoryStream, false);
-
-                var body = docx.MainDocumentPart?.Document?.Body;
+                const int MaxPreviewElements = 200;
                 var elements = new List<(string Type, string Text)>();
 
-                if (body != null)
+                // SEC-F14: Stream directly from FileStream instead of buffering entire byte array into memory
+                await using (var fileStream = new FileStream(uploadedFile.StoragePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
+                using (var docx = WordprocessingDocument.Open(fileStream, false))
                 {
-                    foreach (var element in body.ChildElements)
-                    {
-                        if (element is Paragraph p)
-                        {
-                            var text = p.InnerText?.Trim();
-                            if (!string.IsNullOrEmpty(text))
-                            {
-                                var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
-                                var isHeading = styleId != null && styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase);
-                                elements.Add((isHeading ? "Heading" : "Paragraph", text));
-                            }
-                        }
-                        else if (element is Table t)
-                        {
-                            var rows = t.Elements<TableRow>().Select(r =>
-                                string.Join(" | ", r.Elements<TableCell>().Select(c => c.InnerText?.Trim() ?? ""))
-                            ).Where(rText => !string.IsNullOrWhiteSpace(rText));
+                    var body = docx.MainDocumentPart?.Document?.Body;
 
-                            foreach (var rText in rows)
+                    if (body != null)
+                    {
+                        foreach (var element in body.ChildElements)
+                        {
+                            if (elements.Count >= MaxPreviewElements)
                             {
-                                elements.Add(("TableRow", rText));
+                                elements.Add(("Paragraph", "[Bản xem trước bị giới hạn ở 200 mục đầu tiên để tối ưu hóa bộ nhớ và hiệu năng...]"));
+                                break;
+                            }
+
+                            if (element is Paragraph p)
+                            {
+                                var text = p.InnerText?.Trim();
+                                if (!string.IsNullOrEmpty(text))
+                                {
+                                    var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                                    var isHeading = styleId != null && styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase);
+                                    elements.Add((isHeading ? "Heading" : "Paragraph", text));
+                                }
+                            }
+                            else if (element is Table t)
+                            {
+                                var rows = t.Elements<TableRow>().Select(r =>
+                                    string.Join(" | ", r.Elements<TableCell>().Select(c => c.InnerText?.Trim() ?? ""))
+                                ).Where(rText => !string.IsNullOrWhiteSpace(rText));
+
+                                foreach (var rText in rows)
+                                {
+                                    if (elements.Count >= MaxPreviewElements)
+                                    {
+                                        elements.Add(("Paragraph", "[Bản xem trước bị giới hạn ở 200 mục đầu tiên để tối ưu hóa bộ nhớ và hiệu năng...]"));
+                                        break;
+                                    }
+                                    elements.Add(("TableRow", rText));
+                                }
                             }
                         }
                     }
@@ -172,6 +187,17 @@ public static class ReportPreviewGenerator
             }
             catch (Exception ex)
             {
+                if (!string.IsNullOrEmpty(previewPath) && File.Exists(previewPath))
+                {
+                    try
+                    {
+                        File.Delete(previewPath);
+                    }
+                    catch
+                    {
+                        // Ignore deletion failure during rollback
+                    }
+                }
                 uploadedFile.PreviewStatus = "Failed";
                 uploadedFile.PreviewErrorMessage = ex.Message;
             }

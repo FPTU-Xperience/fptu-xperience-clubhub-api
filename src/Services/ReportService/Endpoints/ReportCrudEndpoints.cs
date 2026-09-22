@@ -80,25 +80,47 @@ public static class ReportCrudEndpoints
         };
 
         db.Reports.Add(report);
-        await db.SaveChangesAsync(cancellationToken);
+        await using var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
 
-        var recipientUserIds = authorAccess.ManagerUserIds
-            .Append(user.GetUserId())
-            .Where(id => id > 0)
-            .Distinct()
-            .ToArray();
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
 
-        db.AddOutboxMessage(new ReportCreatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            report.Id,
-            report.ClubId,
-            report.ClubName,
-            report.Period,
-            report.CreatedByUserId,
-            recipientUserIds), EventRoutingKeys.ReportCreated, httpContext.GetCorrelationId());
+            var recipientUserIds = authorAccess.ManagerUserIds
+                .Append(user.GetUserId())
+                .Where(id => id > 0)
+                .Distinct()
+                .ToArray();
 
-        await AuditHelper.AddAuditAsync(db, report.Id, "Create", user.GetUserId(), "Report draft created.", cancellationToken);
+            db.AddOutboxMessage(new ReportCreatedEvent(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                report.Id,
+                report.ClubId,
+                report.ClubName,
+                report.Period,
+                report.CreatedByUserId,
+                recipientUserIds), EventRoutingKeys.ReportCreated, httpContext.GetCorrelationId());
+
+            AuditHelper.AddAudit(db, report.Id, "Create", user.GetUserId(), "Report draft created.");
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+        }
+        catch (DbUpdateException)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            return Results.Conflict(new { message = "A report already exists for this club, period, and tag." });
+        }
 
         return Results.Created($"/api/reports/{report.Id}", ReportMappers.ToResponse(report));
     }
@@ -140,7 +162,7 @@ public static class ReportCrudEndpoints
         }
 
         if (!isFutureEvent
-            && await db.Reports.AnyAsync(x => x.Id != id && x.ClubId == report.ClubId && x.Period == period && x.Tag == tag))
+            && await db.Reports.AnyAsync(x => x.Id != id && x.ClubId == report.ClubId && x.Period == period && x.Tag == tag, cancellationToken))
         {
             return Results.Conflict(new { message = "Another report already uses this club, period, and tag." });
         }
@@ -173,8 +195,15 @@ public static class ReportCrudEndpoints
         report.Version++;
         db.ReportDetails.RemoveRange(report.Details);
         report.Details = request.Details.Select(detail => ReportExtensions.ToDetail(detail, includeBudget: !isFutureEvent)).ToList();
-        await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "Update", user.GetUserId(), "Report draft updated.", cancellationToken);
+        AuditHelper.AddAudit(db, report.Id, "Update", user.GetUserId(), "Report draft updated.");
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "Another report already uses this club, period, and tag." });
+        }
         return Results.Ok(ReportMappers.ToResponse(report));
     }
 }

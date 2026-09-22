@@ -3,17 +3,20 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ReportService.Data;
 
 #nullable disable
 
-namespace ReportService.Migrations
+namespace ReportService.Data.Migrations
 {
     [DbContext(typeof(ReportDbContext))]
-    partial class ReportDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921214032_AddReportPeriodTagUniqueConstraint")]
+    partial class AddReportPeriodTagUniqueConstraint
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -26,20 +29,6 @@ namespace ReportService.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset?>("ClaimExpiresAtUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset?>("ClaimedAtUtc")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("ClaimedByInstanceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("ConcurrencyToken")
-                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CorrelationId")
@@ -80,8 +69,6 @@ namespace ReportService.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Status", "OccurredAtUtc");
-
-                    b.HasIndex("Status", "ClaimExpiresAtUtc", "OccurredAtUtc");
 
                     b.ToTable("OutboxMessages");
                 });

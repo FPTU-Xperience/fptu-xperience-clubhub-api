@@ -81,6 +81,32 @@ public static class ReportAttachmentPolicy
 
         return Path.GetFullPath(root);
     }
+
+    public static bool IsPathUnderRoot(string candidatePath, string rootPath)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath) || string.IsNullOrWhiteSpace(rootPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullCandidate = Path.GetFullPath(candidatePath);
+            var fullRoot = Path.GetFullPath(rootPath);
+
+            var normalizedRoot = fullRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                                 + Path.DirectorySeparatorChar;
+            var normalizedCandidate = fullCandidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                                      + Path.DirectorySeparatorChar;
+
+            return normalizedCandidate.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(fullCandidate, fullRoot, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
 
 public sealed record AttachmentValidationResult(bool Succeeded, string? ErrorMessage)

@@ -37,15 +37,16 @@ public static class ReportSchemaUpgrader
                 SELECT 1 FROM sys.indexes
                 WHERE object_id = OBJECT_ID(N'[dbo].[Reports]')
                   AND name = N'IX_Reports_ClubId_Period_Tag'
-                  AND is_unique = 1)
+                  AND (is_unique = 0 OR has_filter = 0))
                 DROP INDEX [IX_Reports_ClubId_Period_Tag] ON [dbo].[Reports];
 
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE object_id = OBJECT_ID(N'[dbo].[Reports]')
                   AND name = N'IX_Reports_ClubId_Period_Tag')
-                CREATE INDEX [IX_Reports_ClubId_Period_Tag]
-                    ON [dbo].[Reports] ([ClubId], [Period], [Tag]);
+                EXEC(N'CREATE UNIQUE INDEX [IX_Reports_ClubId_Period_Tag]
+                    ON [dbo].[Reports] ([ClubId], [Period], [Tag])
+                    WHERE [ReportType] <> ''FUTURE_EVENT''');
 
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
@@ -67,10 +68,45 @@ public static class ReportSchemaUpgrader
                     [RetryCount] int NOT NULL DEFAULT 0,
                     [ProcessedAtUtc] datetimeoffset NULL,
                     [ErrorMessage] nvarchar(max) NULL,
-                    [CorrelationId] nvarchar(100) NULL
+                    [CorrelationId] nvarchar(100) NULL,
+                    [ClaimedAtUtc] datetimeoffset NULL,
+                    [ClaimExpiresAtUtc] datetimeoffset NULL,
+                    [ClaimedByInstanceId] nvarchar(100) NULL,
+                    [ConcurrencyToken] uniqueidentifier NOT NULL DEFAULT NEWID()
                 );
                 CREATE INDEX [IX_OutboxMessages_Status_OccurredAtUtc]
                     ON [dbo].[OutboxMessages] ([Status], [OccurredAtUtc]);
+                CREATE INDEX [IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc]
+                    ON [dbo].[OutboxMessages] ([Status], [ClaimExpiresAtUtc], [OccurredAtUtc]);
+            END
+            ELSE
+            BEGIN
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ClaimedAtUtc') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ClaimedAtUtc] datetimeoffset NULL;
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ClaimExpiresAtUtc') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ClaimExpiresAtUtc] datetimeoffset NULL;
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ClaimedByInstanceId') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ClaimedByInstanceId] nvarchar(100) NULL;
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ConcurrencyToken') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ConcurrencyToken] uniqueidentifier NOT NULL DEFAULT NEWID();
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc' AND object_id = OBJECT_ID(N'dbo.OutboxMessages'))
+                    CREATE INDEX [IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc]
+                        ON [dbo].[OutboxMessages] ([Status], [ClaimExpiresAtUtc], [OccurredAtUtc]);
+            END
+
+            IF EXISTS (
+                SELECT 1 FROM sys.indexes i
+                WHERE i.object_id = OBJECT_ID(N'[dbo].[Reports]')
+                  AND i.name = N'IX_Reports_UpdatedAtUtc'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM sys.index_columns ic
+                      WHERE ic.object_id = i.object_id
+                        AND ic.index_id = i.index_id
+                        AND ic.is_included_column = 1
+                  )
+            )
+            BEGIN
+                DROP INDEX [IX_Reports_UpdatedAtUtc] ON [dbo].[Reports];
             END
 
             IF NOT EXISTS (

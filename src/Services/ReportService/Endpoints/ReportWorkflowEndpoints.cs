@@ -116,8 +116,8 @@ public static class ReportWorkflowEndpoints
             isFutureEvent ? "FinanceReview" : "Standard",
             isFutureEvent ? authorAccess.TreasurerUserIds : null), EventRoutingKeys.ReportSubmitted, httpContext.GetCorrelationId());
 
+        AuditHelper.AddAudit(db, report.Id, "Submit", user.GetUserId(), "Report submitted for review.");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "Submit", user.GetUserId(), "Report submitted for review.", cancellationToken);
 
         return Results.Ok(ReportMappers.ToResponse(report));
     }
@@ -127,6 +127,7 @@ public static class ReportWorkflowEndpoints
         LinkFutureEventBudgetRequest request,
         ReportDbContext db,
         ClubAccessClient clubAccess,
+        FinanceWorkflowClient financeWorkflow,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -163,6 +164,22 @@ public static class ReportWorkflowEndpoints
             return Results.Forbid();
         }
 
+        var proposal = await financeWorkflow.GetProposalAsync(request.BudgetProposalId, httpContext.GetBearerToken(), cancellationToken);
+        if (proposal is null)
+        {
+            return Results.BadRequest(new { message = "Budget proposal not found." });
+        }
+
+        if (proposal.ClubId != report.ClubId)
+        {
+            return Results.BadRequest(new { message = "The budget proposal belongs to another club." });
+        }
+
+        if (proposal.SourceReportId.HasValue && proposal.SourceReportId.Value != report.Id)
+        {
+            return Results.BadRequest(new { message = "The budget proposal is not associated with this report." });
+        }
+
         report.BudgetProposalId = request.BudgetProposalId;
         report.BudgetRequestedAmount = request.RequestedAmount;
         report.BudgetApprovedAmount = null;
@@ -184,8 +201,8 @@ public static class ReportWorkflowEndpoints
             "ManagerReview",
             access.ManagerUserIds), EventRoutingKeys.ReportSubmitted, httpContext.GetCorrelationId());
 
+        AuditHelper.AddAudit(db, report.Id, "FinanceLinked", httpContext.User.GetUserId(), "Treasurer submitted the linked event budget.");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "FinanceLinked", httpContext.User.GetUserId(), "Treasurer submitted the linked event budget.", cancellationToken);
 
         return Results.Ok(ReportMappers.ToResponse(report));
     }
@@ -260,8 +277,8 @@ public static class ReportWorkflowEndpoints
             null,
             isFutureEvent ? "FinalReview" : "Standard"), EventRoutingKeys.ReportSubmitted, httpContext.GetCorrelationId());
 
+        AuditHelper.AddAudit(db, report.Id, "ManagerReview", user.GetUserId(), "Report forwarded to Student Affairs for final approval.");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "ManagerReview", user.GetUserId(), "Report forwarded to Student Affairs for final approval.", cancellationToken);
 
         return Results.Ok(ReportMappers.ToResponse(report));
     }
@@ -349,8 +366,8 @@ public static class ReportWorkflowEndpoints
             user.GetUserId(),
             report.CreatedByUserId), EventRoutingKeys.ReportApproved, httpContext.GetCorrelationId());
 
+        AuditHelper.AddAudit(db, report.Id, "Approve", user.GetUserId(), "Report approved.");
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "Approve", user.GetUserId(), "Report approved.", cancellationToken);
 
         return Results.Ok(ReportMappers.ToResponse(report));
     }
@@ -435,8 +452,8 @@ public static class ReportWorkflowEndpoints
             report.CreatedByUserId,
             feedback), EventRoutingKeys.ReportRejected, httpContext.GetCorrelationId());
 
+        AuditHelper.AddAudit(db, report.Id, "Reject", user.GetUserId(), feedback);
         await db.SaveChangesAsync(cancellationToken);
-        await AuditHelper.AddAuditAsync(db, report.Id, "Reject", user.GetUserId(), feedback, cancellationToken);
 
         return Results.Ok(ReportMappers.ToResponse(report));
     }
