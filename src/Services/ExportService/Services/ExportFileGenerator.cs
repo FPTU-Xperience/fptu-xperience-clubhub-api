@@ -56,40 +56,69 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
             _ => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         };
 
-        if (request.ExportType == ExportTypes.Pdf)
+        try
         {
-            GeneratePdf(request, filePath);
+            if (request.ExportType == ExportTypes.Pdf)
+            {
+                GeneratePdf(request, filePath);
+            }
+            else if (request.ExportType == ExportTypes.Docx)
+            {
+                GenerateDocx(request, filePath);
+            }
+            else
+            {
+                GenerateExcel(request, filePath);
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            using var stream = fileInfo.OpenRead();
+            var checksum = Convert.ToHexString(SHA256.HashData(stream));
+            return new GeneratedExportFile(fileName, contentType, filePath, fileInfo.Length, checksum);
         }
-        else if (request.ExportType == ExportTypes.Docx)
+        catch
         {
-            GenerateDocx(request, filePath);
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    File.Delete(filePath);
+                }
+                catch
+                {
+                    // Ignore deletion failure during rollback
+                }
+            }
+            throw;
         }
-        else
+    }
+
+    private static ExportService.Contracts.ReportExportSnapshot? ParseSnapshot(ExportRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SnapshotJson))
         {
-            GenerateExcel(request, filePath);
+            return null;
         }
 
-        var fileInfo = new FileInfo(filePath);
-        using var stream = fileInfo.OpenRead();
-        var checksum = Convert.ToHexString(SHA256.HashData(stream));
-        return new GeneratedExportFile(fileName, contentType, filePath, fileInfo.Length, checksum);
+        try
+        {
+            var snapshot = System.Text.Json.JsonSerializer.Deserialize<ExportService.Contracts.ReportExportSnapshot>(
+                request.SnapshotJson,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            return snapshot ?? throw new InvalidOperationException($"Snapshot JSON cho yêu cầu xuất {request.Id} trả về rỗng (null).");
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new InvalidOperationException($"Dữ liệu snapshot báo cáo cho yêu cầu xuất {request.Id} không hợp lệ: {ex.Message}", ex);
+        }
     }
 
     private static void GeneratePdf(ExportRequest request, string filePath)
     {
         QuestPDF.Settings.License = LicenseType.Community;
-        
-        ExportService.Contracts.ReportExportSnapshot? snapshot = null;
-        if (!string.IsNullOrWhiteSpace(request.SnapshotJson))
-        {
-            try
-            {
-                snapshot = System.Text.Json.JsonSerializer.Deserialize<ExportService.Contracts.ReportExportSnapshot>(
-                    request.SnapshotJson,
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            }
-            catch { }
-        }
+
+        var snapshot = ParseSnapshot(request);
 
         QuestPDF.Fluent.Document.Create(document =>
         {
@@ -98,7 +127,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                 page.Size(PageSizes.A4);
                 page.Margin(40);
                 page.DefaultTextStyle(style => style.FontSize(11));
-                
+
                 if (snapshot != null)
                 {
                     page.Header().Text($"Club Activity Report: {snapshot.ClubName}").SemiBold().FontSize(18).FontColor(Colors.Blue.Darken2);
@@ -111,46 +140,46 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                         {
                             column.Item().Text($"Submitted at: {snapshot.SubmittedAtUtc.Value:yyyy-MM-dd HH:mm:ss} UTC");
                         }
-                        
+
                         column.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
-                        
+
                         if (!string.IsNullOrWhiteSpace(snapshot.ExecutiveSummary))
                         {
                             column.Item().Text("Executive Summary").SemiBold().FontSize(14);
                             column.Item().Text(snapshot.ExecutiveSummary);
                         }
-                        
+
                         if (!string.IsNullOrWhiteSpace(snapshot.Achievements))
                         {
                             column.Item().Text("Achievements").SemiBold().FontSize(14);
                             column.Item().Text(snapshot.Achievements);
                         }
-                        
+
                         if (!string.IsNullOrWhiteSpace(snapshot.Challenges))
                         {
                             column.Item().Text("Challenges").SemiBold().FontSize(14);
                             column.Item().Text(snapshot.Challenges);
                         }
-                        
+
                         if (!string.IsNullOrWhiteSpace(snapshot.Recommendations))
                         {
                             column.Item().Text("Recommendations").SemiBold().FontSize(14);
                             column.Item().Text(snapshot.Recommendations);
                         }
-                        
+
                         if (!string.IsNullOrWhiteSpace(snapshot.NextPeriodPlan))
                         {
                             column.Item().Text("Next Period Plan").SemiBold().FontSize(14);
                             column.Item().Text(snapshot.NextPeriodPlan);
                         }
-                        
+
                         column.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
-                        
+
                         column.Item().Text("Activities Summary").SemiBold().FontSize(14);
                         column.Item().Text($"Total Activities: {snapshot.TotalActivities}");
                         column.Item().Text($"Total Participants: {snapshot.TotalParticipants}");
                         column.Item().Text($"Total Budget Spent: {snapshot.TotalBudgetSpent:C}");
-                        
+
                         if (snapshot.Details != null && snapshot.Details.Count > 0)
                         {
                             column.Item().PaddingTop(10).Table(table =>
@@ -162,7 +191,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                                     columns.RelativeColumn(2);
                                     columns.RelativeColumn(2);
                                 });
-                                
+
                                 table.Header(header =>
                                 {
                                     header.Cell().BorderBottom(1).Padding(2).Text("Activity Name").SemiBold();
@@ -170,7 +199,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                                     header.Cell().BorderBottom(1).Padding(2).Text("Participants").SemiBold();
                                     header.Cell().BorderBottom(1).Padding(2).Text("Budget").SemiBold();
                                 });
-                                
+
                                 foreach (var detail in snapshot.Details)
                                 {
                                     table.Cell().Padding(2).Text(detail.ActivityName);
@@ -180,7 +209,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                                 }
                             });
                         }
-                        
+
                         if (snapshot.Feedback != null && snapshot.Feedback.Count > 0)
                         {
                             column.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -212,7 +241,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                         column.Item().Text($"Created at: {request.CreatedAtUtc:yyyy-MM-dd HH:mm:ss} UTC");
                     });
                 }
-                
+
                 page.Footer().AlignCenter().Text(text =>
                 {
                     text.Span("Page ");
@@ -226,28 +255,24 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
     {
         using var workbook = new XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Export");
-        
-        ExportService.Contracts.ReportExportSnapshot? snapshot = null;
-        if (!string.IsNullOrWhiteSpace(request.SnapshotJson))
-        {
-            try { snapshot = System.Text.Json.JsonSerializer.Deserialize<ExportService.Contracts.ReportExportSnapshot>(request.SnapshotJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }); } catch { }
-        }
+
+        var snapshot = ParseSnapshot(request);
 
         if (snapshot != null)
         {
             worksheet.Cell("A1").Value = $"Club Activity Report: {snapshot.ClubName}";
             worksheet.Range("A1:D1").Merge().Style.Font.SetBold().Font.SetFontSize(16);
-            
+
             worksheet.Cell("A3").Value = "Period:";
             worksheet.Cell("A3").Style.Font.SetBold();
             worksheet.Cell("B3").Value = snapshot.Period;
-            
+
             worksheet.Cell("A4").Value = "Status:";
             worksheet.Cell("A4").Style.Font.SetBold();
             worksheet.Cell("B4").Value = snapshot.Status;
-            
+
             int row = 6;
-            
+
             if (!string.IsNullOrWhiteSpace(snapshot.ExecutiveSummary))
             {
                 worksheet.Cell(row, 1).Value = "Executive Summary";
@@ -255,11 +280,11 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                 worksheet.Cell(row + 1, 1).Value = snapshot.ExecutiveSummary;
                 row += 3;
             }
-            
+
             worksheet.Cell(row, 1).Value = "Activities Summary";
             worksheet.Cell(row, 1).Style.Font.SetBold().Font.SetFontSize(14);
             row++;
-            
+
             worksheet.Cell(row, 1).Value = "Total Activities:";
             worksheet.Cell(row, 2).Value = snapshot.TotalActivities;
             row++;
@@ -269,7 +294,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
             worksheet.Cell(row, 1).Value = "Total Budget Spent:";
             worksheet.Cell(row, 2).Value = snapshot.TotalBudgetSpent;
             row += 2;
-            
+
             if (snapshot.Details != null && snapshot.Details.Count > 0)
             {
                 worksheet.Cell(row, 1).Value = "Activity Name";
@@ -278,7 +303,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                 worksheet.Cell(row, 4).Value = "Budget";
                 worksheet.Range($"A{row}:D{row}").Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.LightGray);
                 row++;
-                
+
                 foreach (var detail in snapshot.Details)
                 {
                     worksheet.Cell(row, 1).Value = detail.ActivityName;
@@ -317,32 +342,28 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
         worksheet.Columns().AdjustToContents();
         workbook.SaveAs(filePath);
     }
-    
+
     private static void GenerateDocx(ExportRequest request, string filePath)
     {
         using var wordDocument = WordprocessingDocument.Create(filePath, WordprocessingDocumentType.Document);
         var mainPart = wordDocument.AddMainDocumentPart();
         mainPart.Document = new DocumentFormat.OpenXml.Wordprocessing.Document();
         var body = mainPart.Document.AppendChild(new Body());
-        
-        ExportService.Contracts.ReportExportSnapshot? snapshot = null;
-        if (!string.IsNullOrWhiteSpace(request.SnapshotJson))
-        {
-            try { snapshot = System.Text.Json.JsonSerializer.Deserialize<ExportService.Contracts.ReportExportSnapshot>(request.SnapshotJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }); } catch { }
-        }
+
+        var snapshot = ParseSnapshot(request);
 
         if (snapshot != null)
         {
             body.AppendChild(new Paragraph(new Run(new Text($"Club Activity Report: {snapshot.ClubName}")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "36" }) }));
             body.AppendChild(new Paragraph(new Run(new Text($"Period: {snapshot.Period}"))));
             body.AppendChild(new Paragraph(new Run(new Text($"Status: {snapshot.Status}"))));
-            
+
             if (!string.IsNullOrWhiteSpace(snapshot.ExecutiveSummary))
             {
                 body.AppendChild(new Paragraph(new Run(new Text("Executive Summary")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "28" }) }));
                 body.AppendChild(new Paragraph(new Run(new Text(snapshot.ExecutiveSummary))));
             }
-            
+
             body.AppendChild(new Paragraph(new Run(new Text("Activities Summary")) { RunProperties = new RunProperties(new Bold(), new FontSize { Val = "28" }) }));
             body.AppendChild(new Paragraph(new Run(new Text($"Total Activities: {snapshot.TotalActivities}"))));
             body.AppendChild(new Paragraph(new Run(new Text($"Total Participants: {snapshot.TotalParticipants}"))));
@@ -379,7 +400,7 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
             body.AppendChild(new Paragraph(new Run(new Text($"Request ID: {request.Id}"))));
             body.AppendChild(new Paragraph(new Run(new Text($"Scope: {request.Scope}"))));
         }
-        
+
         mainPart.Document.Save();
     }
 }

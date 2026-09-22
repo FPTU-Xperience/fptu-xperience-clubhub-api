@@ -1,6 +1,11 @@
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Cors;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
+using ClubReportHub.Shared.Security;
+using ClubReportHub.Shared.Tracing;
 using ExportService.Data;
 using ExportService.Endpoints;
 using ExportService.Services;
@@ -14,14 +19,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ExportDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
+builder.Services.AddClubReportTracing();
 builder.Services.AddRedisStreamEventBus(builder.Configuration);
+builder.Services.AddTransactionalOutbox<ExportDbContext>();
 builder.Services.AddSingleton<ExportFileGenerator>();
 builder.Services.AddScoped<ExportGenerationJob>();
 builder.Services.AddScoped<ExportRetentionJob>();
 builder.Services.AddHttpClient("ReportService", client =>
 {
-    client.BaseAddress = new Uri("http://report-service:8080");
-});
+    var baseUrl = builder.Configuration["Services:ReportService:BaseUrl"] ?? "http://localhost:5103";
+    client.BaseAddress = new Uri(baseUrl);
+}).AddCorrelationIdForwarding().AddStandardResilienceHandler();
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
     .UseSimpleAssemblyNameTypeSerializer()
@@ -33,24 +41,34 @@ builder.Services.AddHangfire(configuration => configuration
             PrepareSchemaIfNecessary = true,
             QueuePollInterval = TimeSpan.FromSeconds(2)
         }));
-builder.Services.AddHangfireServer(options => options.Queues = ["exports", "default"]);
+var exportWorkerCount = Math.Clamp(builder.Configuration.GetValue<int>("Hangfire:WorkerCount", 2), 1, 8);
+builder.Services.AddHangfireServer(options =>
+{
+    options.Queues = ["exports", "default"];
+    options.WorkerCount = exportWorkerCount;
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? ["http://localhost:3000", "http://localhost:5173"];
+        var allowedOrigins = CorsOriginConfiguration.ResolveAllowedOrigins(
+            builder.Configuration,
+            builder.Environment);
         policy.WithOrigins(allowedOrigins)
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ExportDbContext>("export-db", tags: ["ready"])
+    .AddRedisHealthCheck();
 
 var app = builder.Build();
+
+app.UseCorrelationId();
 
 if (app.Environment.IsDevelopment())
 {
@@ -66,12 +84,13 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseSecurityHeaders();
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
-app.MapGet("/error", () => Results.Problem("An unexpected error occurred.")).AllowAnonymous();
+app.MapStandardHealthChecks();
+app.MapGlobalErrorEndpoint();
 app.MapGet("/", () => Results.Ok(new { service = "Export Service", status = "running" }));
 
 app.MapExportEndpoints();
@@ -81,6 +100,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ExportDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
     await db.ApplyMigrationsWithRetryAsync(logger);
+    await ExportSchemaUpgrader.ApplyAsync(db);
 }
 
 var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();

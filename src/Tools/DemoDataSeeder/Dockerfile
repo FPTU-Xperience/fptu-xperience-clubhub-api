@@ -23,4 +23,5 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 ENV DOTNET_gcServer=0
 COPY --from=build /app/publish .
+USER $APP_UID
 ENTRYPOINT ["dotnet", "DemoDataSeeder.dll"]

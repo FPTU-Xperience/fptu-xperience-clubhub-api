@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text.Json;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
+using ClubReportHub.Shared.Security;
 using ExportService.Contracts;
 using ExportService.Data;
 using ExportService.Extensions;
@@ -10,6 +12,7 @@ using ExportService.Models;
 using ExportService.Services;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ExportService.Endpoints;
 
@@ -98,7 +101,6 @@ public static class ExportEndpoints
         ClaimsPrincipal user,
         HttpContext httpContext,
         IHttpClientFactory httpClientFactory,
-        IEventBus eventBus,
         IBackgroundJobClient backgroundJobs,
         CancellationToken cancellationToken)
     {
@@ -162,10 +164,16 @@ public static class ExportEndpoints
             CreatedAtUtc = DateTimeOffset.UtcNow
         };
 
+        IDbContextTransaction? transaction = null;
+        if (db.Database.IsRelational())
+        {
+            transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        }
+
         db.ExportRequests.Add(request);
         await db.SaveChangesAsync(cancellationToken);
 
-        await eventBus.PublishAsync(
+        db.AddOutboxMessage(
             new ExportRequestedEvent(
                 Guid.NewGuid(),
                 DateTimeOffset.UtcNow,
@@ -173,8 +181,14 @@ public static class ExportEndpoints
                 request.ExportType,
                 request.Scope,
                 request.RequestedByUserId),
-            EventRoutingKeys.ExportRequested,
-            cancellationToken);
+            EventRoutingKeys.ExportRequested);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        if (transaction != null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         backgroundJobs.Enqueue<ExportGenerationJob>(
             job => job.GenerateAsync(request.Id, CancellationToken.None));
@@ -231,10 +245,13 @@ public static class ExportEndpoints
             return Results.NotFound(new { message = "Tệp xuất không còn tồn tại hoặc không khả dụng." });
         }
 
+        var safeFileName = ContentDispositionSanitizer.SanitizeFileName(
+            request.File.FileName, "export_data");
+
         return Results.File(
             request.File.FilePath,
             request.File.ContentType,
-            request.File.FileName,
+            safeFileName,
             enableRangeProcessing: true);
     }
 }

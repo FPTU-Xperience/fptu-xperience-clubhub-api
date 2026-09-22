@@ -26,6 +26,8 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 app.MapGrpcService<KpiServiceImpl>();
+app.MapHealthChecks("/health/live");
+app.MapHealthChecks("/health/ready");
 app.MapHealthChecks("/health");
 app.MapGet("/", () => Results.Ok(new { service = "KpiGrpcService", status = "running" }));
 

@@ -1,3 +1,4 @@
+using ClubReportHub.Shared.Data;
 using ExportService.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,7 @@ public sealed class ExportDbContext(DbContextOptions<ExportDbContext> options) :
 {
     public DbSet<ExportRequest> ExportRequests => Set<ExportRequest>();
     public DbSet<ExportFile> ExportFiles => Set<ExportFile>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,5 +36,7 @@ public sealed class ExportDbContext(DbContextOptions<ExportDbContext> options) :
             entity.Property(x => x.FilePath).HasMaxLength(500);
             entity.Property(x => x.Checksum).HasMaxLength(128);
         });
+
+        modelBuilder.ApplyOutboxConfiguration();
     }
 }

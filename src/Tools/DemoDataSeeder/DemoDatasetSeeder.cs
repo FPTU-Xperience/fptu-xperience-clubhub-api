@@ -499,6 +499,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
             membership.PhoneNumber = profile.PhoneNumber;
             membership.Address = profile.Address;
             membership.Role = spec.ClubRole;
+            membership.TreasurerSlot = spec.ClubRole == ClubMemberRoles.Treasurer ? 1 : null;
             membership.Status = spec.Status;
             membership.RequestMessage = spec.RequestMessage;
             membership.PersonalInfo = profile.PersonalInfo;

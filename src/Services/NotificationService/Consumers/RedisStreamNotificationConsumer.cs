@@ -66,12 +66,35 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
             }
         }
 
-        // Phase 2: Main consumption loop — only new messages from here on
+        // Phase 1.5: Startup Catch-up and Recovery
+        // Process any existing unconsumed or abandoned pending messages before switching to new messages
+        try
+        {
+            await CatchUpExistingMessagesAsync(stoppingToken);
+            await RecoverPendingMessagesAsync(stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during startup catch-up/recovery. Continuing to main loop.");
+        }
+
+        // Phase 2: Main consumption loop — read new messages and periodically recover pending
+        var lastPendingCheck = DateTime.UtcNow;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await ReadNewMessagesAsync(stoppingToken);
+
+                if (DateTime.UtcNow - lastPendingCheck >= TimeSpan.FromMilliseconds(_options.PendingRecoveryIntervalMs))
+                {
+                    lastPendingCheck = DateTime.UtcNow;
+                    await RecoverPendingMessagesAsync(stoppingToken);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -105,69 +128,115 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
     }
 
     /// <summary>
-    /// Reads ALL existing messages in the stream (from beginning) during startup.
-    /// This prevents losing messages that were published before the consumer group was created.
-    /// After all existing messages are processed, the consumer switches to '>' (NewMessages).
+    /// Reads unacknowledged messages belonging to this consumer from the stream PEL during startup.
+    /// Uses iterative pagination advancing lastId to prevent recursion and infinite loops.
     /// </summary>
-    private async Task CatchUpExistingMessagesAsync(CancellationToken cancellationToken)
+    internal async Task CatchUpExistingMessagesAsync(CancellationToken cancellationToken)
     {
         try
         {
-            // Read from the beginning of the stream (id "0-0")
-            var entries = await _db.StreamReadGroupAsync(
-                _options.StreamName,
-                _options.ConsumerGroup,
-                _consumerName,
-                StreamPosition.Beginning,
-                count: _options.BatchSize);
-
-            if (entries.Length == 0)
+            RedisValue lastId = "0-0";
+            while (!cancellationToken.IsCancellationRequested)
             {
-                _logger.LogDebug("No existing messages in stream '{StreamName}' during catch-up", _options.StreamName);
-                return;
-            }
+                var entries = await _db.StreamReadGroupAsync(
+                    _options.StreamName,
+                    _options.ConsumerGroup,
+                    _consumerName,
+                    lastId,
+                    count: _options.BatchSize);
 
-            _logger.LogInformation(
-                "Catch-up phase: found {Count} existing messages in stream '{StreamName}'",
-                entries.Length, _options.StreamName);
-
-            var processed = 0;
-            var errors = 0;
-            foreach (var entry in entries)
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-                try
+                if (entries.Length == 0)
                 {
-                    await ProcessMessageAsync(entry, cancellationToken);
-                    processed++;
+                    _logger.LogDebug("No unacknowledged messages in stream '{StreamName}' during catch-up", _options.StreamName);
+                    break;
                 }
-                catch
+
+                _logger.LogInformation(
+                    "Catch-up phase: found {Count} unacknowledged message(s) in stream '{StreamName}'",
+                    entries.Length, _options.StreamName);
+
+                lastId = entries[^1].Id;
+
+                foreach (var entry in entries)
                 {
-                    errors++;
-                    // Continue processing other messages
+                    if (cancellationToken.IsCancellationRequested) break;
+                    try
+                    {
+                        await ProcessMessageAsync(entry, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error processing entry {Id} during catch-up", entry.Id);
+                    }
                 }
-            }
-
-            _logger.LogInformation(
-                "Catch-up phase completed. Processed: {Processed}, Errors: {Errors}",
-                processed, errors);
-
-            // If there are more messages, recursively catch up (paginate)
-            if (processed > 0)
-            {
-                await CatchUpExistingMessagesAsync(cancellationToken);
             }
         }
         catch (RedisServerException ex) when (ex.Message.Contains("NOGROUP", StringComparison.OrdinalIgnoreCase))
         {
-            // Group doesn't exist yet — this shouldn't happen since we create it above,
-            // but handle gracefully
             _logger.LogWarning("Consumer group disappeared during catch-up. Will retry on next loop.");
         }
         catch (RedisException)
         {
-            // Stream might not exist yet — that's fine, no catch-up needed
             _logger.LogDebug("Stream '{StreamName}' does not exist yet, skipping catch-up", _options.StreamName);
+        }
+    }
+
+    /// <summary>
+    /// Recovers abandoned or unacknowledged messages from the consumer group PEL.
+    /// Inspects the group's pending entries list, identifies messages exceeding the idle threshold,
+    /// claims them for this consumer instance, and re-processes them.
+    /// </summary>
+    internal async Task RecoverPendingMessagesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var pending = await _db.StreamPendingMessagesAsync(
+                _options.StreamName,
+                _options.ConsumerGroup,
+                count: _options.BatchSize,
+                consumerName: RedisValue.Null,
+                minId: "-",
+                maxId: "+");
+
+            if (pending.Length == 0) return;
+
+            var eligible = pending
+                .Where(p => p.IdleTimeInMilliseconds >= _options.PendingMessageIdleThresholdMs)
+                .ToArray();
+
+            if (eligible.Length == 0) return;
+
+            var eligibleIds = eligible
+                .Select(p => p.MessageId)
+                .ToArray();
+
+            var claimedEntries = await _db.StreamClaimAsync(
+                _options.StreamName,
+                _options.ConsumerGroup,
+                _consumerName,
+                minIdleTimeInMs: _options.PendingMessageIdleThresholdMs,
+                messageIds: eligibleIds);
+
+            if (claimedEntries.Length > 0)
+            {
+                _logger.LogInformation(
+                    "Claimed {Count} stale pending message(s) from stream '{StreamName}' for consumer '{ConsumerName}'",
+                    claimedEntries.Length, _options.StreamName, _consumerName);
+
+                foreach (var entry in claimedEntries)
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+                    await ProcessMessageAsync(entry, cancellationToken);
+                }
+            }
+        }
+        catch (RedisException ex)
+        {
+            _logger.LogWarning(ex, "Redis error during pending message recovery on stream '{StreamName}'. Will retry on next cycle.", _options.StreamName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during pending message recovery on stream '{StreamName}'", _options.StreamName);
         }
     }
 
@@ -200,7 +269,7 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
             entries.Length, batchStopwatch.ElapsedMilliseconds, _consumerName);
     }
 
-    private async Task ProcessMessageAsync(StreamEntry entry, CancellationToken cancellationToken)
+    internal async Task ProcessMessageAsync(StreamEntry entry, CancellationToken cancellationToken)
     {
         var redisEntryId = entry.Id;
         Guid eventId;
@@ -281,7 +350,7 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
                         _options.StreamName,
                         _options.ConsumerGroup,
                         1,
-                        _consumerName,
+                        RedisValue.Null,
                         redisEntryId,
                         redisEntryId);
 
@@ -308,7 +377,7 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
         }
     }
 
-    private async Task MoveToDeadLetterQueueAsync(
+    internal async Task MoveToDeadLetterQueueAsync(
         StreamEntry entry,
         Guid eventId,
         string routingKey,
@@ -325,7 +394,13 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
             dlqValues.Add(new("originalStream", _options.StreamName));
             dlqValues.Add(new("failedConsumer", _consumerName));
 
-            await _db.StreamAddAsync(_options.DeadLetterStreamName, dlqValues.ToArray());
+            var maxDlqLength = _options.MaxDeadLetterStreamLength > 0 ? _options.MaxDeadLetterStreamLength : (int?)null;
+            await _db.StreamAddAsync(
+                _options.DeadLetterStreamName,
+                dlqValues.ToArray(),
+                maxLength: maxDlqLength,
+                useApproximateMaxLength: _options.UseApproximateTrimming,
+                flags: CommandFlags.None);
 
             // Record in ProcessedEvents to prevent re-execution
             using var scope = _scopeFactory.CreateAsyncScope();
@@ -352,7 +427,7 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
         }
     }
 
-    private async Task AcknowledgeMessageAsync(RedisValue entryId)
+    internal async Task AcknowledgeMessageAsync(RedisValue entryId)
     {
         await _db.StreamAcknowledgeAsync(_options.StreamName, _options.ConsumerGroup, entryId);
     }

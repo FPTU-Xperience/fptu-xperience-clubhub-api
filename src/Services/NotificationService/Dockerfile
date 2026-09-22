@@ -21,4 +21,5 @@ RUN dotnet publish "NotificationService.csproj" -c Release -o /app/publish /p:Us
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+USER $APP_UID
 ENTRYPOINT ["dotnet", "NotificationService.dll"]

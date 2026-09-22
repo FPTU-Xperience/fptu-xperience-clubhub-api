@@ -1,3 +1,4 @@
+using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
 using ExportService.Data;
@@ -10,7 +11,6 @@ namespace ExportService.Services;
 public sealed class ExportGenerationJob(
     ExportDbContext db,
     ExportFileGenerator generator,
-    IEventBus eventBus,
     IConfiguration configuration,
     ILogger<ExportGenerationJob> logger)
 {
@@ -49,37 +49,42 @@ public sealed class ExportGenerationJob(
             request.File.IsAvailable = true;
             request.Status = ExportStatuses.Completed;
             request.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+            db.AddOutboxMessage(
+                new ExportCompletedEvent(
+                    Guid.NewGuid(),
+                    DateTimeOffset.UtcNow,
+                    request.Id,
+                    request.ExportType,
+                    request.File.FileName,
+                    request.RequestedByUserId),
+                EventRoutingKeys.ExportCompleted);
+
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Failed to generate export request {ExportRequestId}.", requestId);
             request.Status = ExportStatuses.Failed;
-            request.ErrorMessage = "Không thể tạo tệp xuất. Hệ thống sẽ tự động thử lại.";
+            request.ErrorMessage = exception is InvalidOperationException
+                ? exception.Message
+                : "Không thể tạo tệp xuất. Hệ thống sẽ tự động thử lại.";
             request.CompletedAtUtc = DateTimeOffset.UtcNow;
+
+            if (request.File?.FilePath != null && File.Exists(request.File.FilePath))
+            {
+                try
+                {
+                    File.Delete(request.File.FilePath);
+                }
+                catch
+                {
+                    // Ignore deletion failure during rollback
+                }
+            }
+
             await db.SaveChangesAsync(CancellationToken.None);
             throw;
-        }
-
-        try
-        {
-            await eventBus.PublishAsync(
-                new ExportCompletedEvent(
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    request.Id,
-                    request.ExportType,
-                    request.File!.FileName,
-                    request.RequestedByUserId),
-                EventRoutingKeys.ExportCompleted,
-                cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(
-                exception,
-                "Export {ExportRequestId} completed but its notification event could not be published.",
-                requestId);
         }
     }
 }

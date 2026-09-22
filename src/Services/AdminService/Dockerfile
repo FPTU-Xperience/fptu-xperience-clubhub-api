@@ -21,4 +21,5 @@ RUN dotnet publish "AdminService.csproj" -c Release -o /app/publish /p:UseAppHos
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+USER $APP_UID
 ENTRYPOINT ["dotnet", "AdminService.dll"]

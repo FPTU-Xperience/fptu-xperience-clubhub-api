@@ -21,4 +21,6 @@ RUN dotnet publish "ExportService.csproj" -c Release -o /app/publish /p:UseAppHo
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN mkdir -p /app/exports && chown -R $APP_UID:$APP_UID /app/exports
+USER $APP_UID
 ENTRYPOINT ["dotnet", "ExportService.dll"]

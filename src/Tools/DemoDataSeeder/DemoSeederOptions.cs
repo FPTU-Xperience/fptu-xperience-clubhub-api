@@ -68,6 +68,28 @@ public sealed record DemoSeederOptions(
             ExportConnectionString: GetRequired("ConnectionStrings__Export"));
 
         ValidateIdentityOverrides(options.IdentityOverrides);
+
+        if (options.ResetAll)
+        {
+            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                ?? "Development";
+
+            if (string.Equals(env, "Production", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(env, "Staging", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Destructive database reset (DemoData__ResetAll=true) is strictly forbidden in Production or Staging environments.");
+            }
+
+            var confirm = GetBoolean("DemoData__ConfirmDestructiveReset");
+            if (!confirm)
+            {
+                throw new InvalidOperationException(
+                    "Destructive database reset requires explicit confirmation. Set DemoData__ConfirmDestructiveReset=true along with DemoData__ResetAll=true.");
+            }
+        }
+
         return options;
     }
 

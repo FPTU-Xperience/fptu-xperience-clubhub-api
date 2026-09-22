@@ -8,6 +8,8 @@ using AdminService.OpenApi;
 using AdminService.Security;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Health;
+using ClubReportHub.Shared.Security;
 using ClubReportHub.Shared.Tracing;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -71,15 +73,12 @@ if (app.Environment.IsDevelopment()
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "Admin API v1"));
 }
 
+app.UseSecurityHeaders();
 app.UseAuthentication();
 app.UseMiddleware<StructuredRequestLoggingMiddleware>();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-app.MapHealthChecks("/health/ready", new HealthCheckOptions
-{
-    Predicate = registration => registration.Tags.Contains("ready")
-}).AllowAnonymous();
+app.MapStandardHealthChecks();
 app.MapGet("/", () => Results.Ok(new
 {
     service = "FPTU Xperience Admin Service",
