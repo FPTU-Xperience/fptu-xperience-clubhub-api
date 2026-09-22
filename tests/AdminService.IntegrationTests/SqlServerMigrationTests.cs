@@ -9,17 +9,44 @@ namespace AdminService.IntegrationTests;
 
 public sealed class SqlServerMigrationTests
 {
-    [Fact]
+    /// <summary>
+    /// Environment variable carrying the base SQL Server connection string used to
+    /// provision a throwaway database for this migration test.
+    /// </summary>
+    internal const string ConnectionStringVariable = "ADMIN_SERVICE_TEST_CONNECTION_STRING";
+
+    /// <summary>
+    /// <see cref="ConnectionStringVariable"/> is deliberately absent from local
+    /// development machines but is always provided by the CI job. A missing value is
+    /// therefore reported as an explicit, visible skip rather than a silent
+    /// green-pass (TEST-F04), and a missing value under CI is a hard failure.
+    /// </summary>
+    internal static bool IsRunningInContinuousIntegration =>
+        string.Equals(
+            Environment.GetEnvironmentVariable("CI"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    [SkippableFact]
     public async Task EmptySqlServerDatabase_MigratesAndApplicationBecomesReady()
     {
         var baseConnectionString = Environment.GetEnvironmentVariable(
-            "ADMIN_SERVICE_TEST_CONNECTION_STRING");
+            ConnectionStringVariable);
+
+        // TEST-F04: never pass silently. Under CI the connection string is mandatory, so a
+        // missing value is a hard failure. Outside CI the absence is expected on a developer
+        // machine, and the test is reported as an explicit, visible skip carrying the reason
+        // instead of a silent green pass.
         if (string.IsNullOrWhiteSpace(baseConnectionString))
         {
             Assert.False(
-                string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase),
-                "ADMIN_SERVICE_TEST_CONNECTION_STRING must be configured in CI.");
-            return;
+                IsRunningInContinuousIntegration,
+                $"{ConnectionStringVariable} must be configured in CI.");
+
+            Skip.If(
+                true,
+                $"{ConnectionStringVariable} is not configured; SQL Server-backed migration "
+                + "validation was skipped. Export it to run this test locally.");
         }
 
         var connection = new SqlConnectionStringBuilder(baseConnectionString)

@@ -7,19 +7,40 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <!-- SEC-F12: pin vulnerable transitive packages pulled in through the referenced
+         services. System.IO.Packaging 6.0.0 arrives via DocumentFormat.OpenXml; the
+         SQLite native provider is pulled to the fixed 3.x line (SQLite >= 3.50.2) by
+         bundle_e_sqlite3 rather than a manual lib pin. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageReference Include="System.IO.Packaging" Version="8.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="8.0.18" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.18" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.18" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\AuthService\AuthService.csproj" />
     <ProjectReference Include="..\..\src\Services\ClubService\ClubService.csproj" />
+    <ProjectReference Include="..\..\src\Services\ReportService\ReportService.csproj">
+      <ExcludeAssets>native</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\Services\FinanceService\FinanceService.csproj" />
+    <ProjectReference Include="..\..\src\Services\ActivityService\ActivityService.csproj" />
+    <ProjectReference Include="..\..\src\Services\NotificationService\NotificationService.csproj" />
+    <ProjectReference Include="..\..\src\Services\ExportService\ExportService.csproj" />
+    <ProjectReference Include="..\..\src\Gateway\ApiGateway\ApiGateway.csproj" />
     <ProjectReference Include="..\..\src\Shared\ClubReportHub.Shared\ClubReportHub.Shared.csproj" />
+    <ProjectReference Include="..\..\src\Tools\DemoDataSeeder\DemoDataSeeder.csproj" />
   </ItemGroup>
 </Project>

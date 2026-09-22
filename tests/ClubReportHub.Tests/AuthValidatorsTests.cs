@@ -1,4 +1,4 @@
-﻿using AuthService.Contracts;
+using AuthService.Contracts;
 using AuthService.Validators;
 using Xunit;
 

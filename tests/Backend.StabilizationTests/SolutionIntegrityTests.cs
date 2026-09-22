@@ -3,16 +3,29 @@ namespace Backend.StabilizationTests;
 public sealed class SolutionIntegrityTests
 {
     [Fact]
-    public void SolutionContainsRealAdminProjectsAndNoMissingLegacyTestProject()
+    public void SolutionContainsRealAdminProjectsAndAllTestProjects()
     {
         var root = FindRepositoryRoot();
         var solution = File.ReadAllText(Path.Combine(root, "ClubReportHub.sln"));
 
-        Assert.DoesNotContain("tests\\ClubReportHub.Tests\\ClubReportHub.Tests.csproj", solution);
-        Assert.Contains("src\\Services\\AdminService\\AdminService.csproj", solution);
-        Assert.Contains(
-            "tests\\AdminService.IntegrationTests\\AdminService.IntegrationTests.csproj",
-            solution);
+        // TEST-F03: every test project must be part of the solution so that
+        // `dotnet test ClubReportHub.sln` (and therefore CI) executes it.
+        Assert.True(
+            solution.Contains("tests\\ClubReportHub.Tests\\ClubReportHub.Tests.csproj") ||
+            solution.Contains("tests/ClubReportHub.Tests/ClubReportHub.Tests.csproj"),
+            "ClubReportHub.Tests.csproj must be part of ClubReportHub.sln");
+        Assert.True(
+            solution.Contains("tests\\Backend.StabilizationTests\\Backend.StabilizationTests.csproj") ||
+            solution.Contains("tests/Backend.StabilizationTests/Backend.StabilizationTests.csproj"),
+            "Backend.StabilizationTests.csproj must be part of ClubReportHub.sln");
+        Assert.True(
+            solution.Contains("src\\Services\\AdminService\\AdminService.csproj") ||
+            solution.Contains("src/Services/AdminService/AdminService.csproj"),
+            "AdminService.csproj must be part of ClubReportHub.sln");
+        Assert.True(
+            solution.Contains("tests\\AdminService.IntegrationTests\\AdminService.IntegrationTests.csproj") ||
+            solution.Contains("tests/AdminService.IntegrationTests/AdminService.IntegrationTests.csproj"),
+            "AdminService.IntegrationTests.csproj must be part of ClubReportHub.sln");
         Assert.True(File.Exists(Path.Combine(
             root,
             "src",
