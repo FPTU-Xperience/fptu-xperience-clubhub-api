@@ -1,6 +1,10 @@
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Cors;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
+using ClubReportHub.Shared.Security;
 using ClubReportHub.Shared.Tracing;
 using FinanceService.Clients;
 using FinanceService.Data;
@@ -35,15 +39,17 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? ["http://localhost:3000", "http://localhost:5173"];
+        var allowedOrigins = CorsOriginConfiguration.ResolveAllowedOrigins(
+            builder.Configuration,
+            builder.Environment);
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<FinanceDbContext>("finance-db", tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -64,12 +70,13 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseSecurityHeaders();
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
-app.MapGet("/error", () => Results.Problem("An unexpected error occurred.")).AllowAnonymous();
+app.MapStandardHealthChecks();
+app.MapGlobalErrorEndpoint();
 app.MapGet("/", () => Results.Ok(new { service = "Finance Service", status = "running" }));
 
 app.MapFinanceEndpoints();
@@ -78,7 +85,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<FinanceDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
-    await db.EnsureCreatedWithRetryAsync(logger);
+    await db.ApplyMigrationsWithRetryAsync(logger);
     await FinanceSchemaUpgrader.ApplyAsync(db);
     await FinanceSeeder.SeedAsync(db);
 }

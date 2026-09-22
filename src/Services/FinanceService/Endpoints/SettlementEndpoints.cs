@@ -121,16 +121,27 @@ public static class SettlementEndpoints
             TotalSpent = request.TotalSpent,
             ReceiptUrl = request.ReceiptUrl.Trim()
         };
-        proposal.Settlements.Add(settlement);
-        db.FinanceTransactions.Add(new FinanceTransaction
+        proposal.Version++;
+
+        try
         {
-            ClubId = proposal.ClubId,
-            Amount = request.TotalSpent,
-            Type = TransactionTypes.SettlementSubmitted,
-            Description = $"Đã nộp quyết toán cho {proposal.Title}",
-            ReferenceId = proposal.Id
-        });
-        await db.SaveChangesAsync();
+            await db.SaveChangesAsync(cancellationToken);
+            proposal.Settlements.Add(settlement);
+            db.FinanceTransactions.Add(new FinanceTransaction
+            {
+                ClubId = proposal.ClubId,
+                Amount = request.TotalSpent,
+                Type = TransactionTypes.SettlementSubmitted,
+                Description = $"Đã nộp quyết toán cho {proposal.Title}",
+                ReferenceId = proposal.Id
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "This proposal already has an active settlement." });
+        }
+
         return Results.Ok(FinanceMappers.ToBudgetProposalResponse(proposal));
     }
 

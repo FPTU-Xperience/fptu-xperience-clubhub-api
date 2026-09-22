@@ -44,12 +44,20 @@ public static class FinanceSchemaUpgrader
                 EXEC(N'CREATE INDEX [IX_BudgetProposals_ProposedByUserId]
                     ON [dbo].[BudgetProposals] ([ProposedByUserId])');
 
+            IF EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE object_id = OBJECT_ID(N'[dbo].[Settlements]')
+                  AND name = N'IX_Settlements_BudgetProposalId'
+                  AND is_unique = 0)
+                DROP INDEX [IX_Settlements_BudgetProposalId] ON [dbo].[Settlements];
+
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE object_id = OBJECT_ID(N'[dbo].[Settlements]')
                   AND name = N'IX_Settlements_BudgetProposalId')
-                EXEC(N'CREATE INDEX [IX_Settlements_BudgetProposalId]
-                    ON [dbo].[Settlements] ([BudgetProposalId])');
+                EXEC(N'CREATE UNIQUE INDEX [IX_Settlements_BudgetProposalId]
+                    ON [dbo].[Settlements] ([BudgetProposalId])
+                    WHERE [Status] = ''Submitted'' OR [Status] = ''Approved''');
 
             IF OBJECT_ID(N'dbo.OutboxMessages', N'U') IS NULL
             BEGIN
@@ -63,10 +71,30 @@ public static class FinanceSchemaUpgrader
                     [RetryCount] int NOT NULL DEFAULT 0,
                     [ProcessedAtUtc] datetimeoffset NULL,
                     [ErrorMessage] nvarchar(max) NULL,
-                    [CorrelationId] nvarchar(100) NULL
+                    [CorrelationId] nvarchar(100) NULL,
+                    [ClaimedAtUtc] datetimeoffset NULL,
+                    [ClaimExpiresAtUtc] datetimeoffset NULL,
+                    [ClaimedByInstanceId] nvarchar(100) NULL,
+                    [ConcurrencyToken] uniqueidentifier NOT NULL DEFAULT NEWID()
                 );
                 CREATE INDEX [IX_OutboxMessages_Status_OccurredAtUtc]
                     ON [dbo].[OutboxMessages] ([Status], [OccurredAtUtc]);
+                CREATE INDEX [IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc]
+                    ON [dbo].[OutboxMessages] ([Status], [ClaimExpiresAtUtc], [OccurredAtUtc]);
+            END
+            ELSE
+            BEGIN
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ClaimedAtUtc') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ClaimedAtUtc] datetimeoffset NULL;
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ClaimExpiresAtUtc') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ClaimExpiresAtUtc] datetimeoffset NULL;
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ClaimedByInstanceId') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ClaimedByInstanceId] nvarchar(100) NULL;
+                IF COL_LENGTH(N'dbo.OutboxMessages', N'ConcurrencyToken') IS NULL
+                    ALTER TABLE [dbo].[OutboxMessages] ADD [ConcurrencyToken] uniqueidentifier NOT NULL DEFAULT NEWID();
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc' AND object_id = OBJECT_ID(N'dbo.OutboxMessages'))
+                    CREATE INDEX [IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc]
+                        ON [dbo].[OutboxMessages] ([Status], [ClaimExpiresAtUtc], [OccurredAtUtc]);
             END
             """;
 

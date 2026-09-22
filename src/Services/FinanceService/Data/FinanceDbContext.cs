@@ -36,7 +36,10 @@ public sealed class FinanceDbContext(DbContextOptions<FinanceDbContext> options)
 
         modelBuilder.Entity<Settlement>(entity =>
         {
-            entity.HasIndex(x => x.BudgetProposalId);
+            // DATA-F02: At most one active settlement (Submitted or Approved) per budget proposal
+            entity.HasIndex(x => x.BudgetProposalId)
+                .IsUnique()
+                .HasFilter("[Status] = 'Submitted' OR [Status] = 'Approved'");
             entity.HasIndex(x => x.Status);
             entity.Property(x => x.TotalSpent).HasPrecision(18, 2);
             entity.Property(x => x.ReceiptUrl).HasMaxLength(500);

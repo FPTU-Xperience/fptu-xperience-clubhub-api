@@ -279,6 +279,52 @@ public static class ProposalEndpoints
         return Results.Created($"/api/finance/proposals/{proposal.Id}", FinanceMappers.ToBudgetProposalResponse(proposal));
     }
 
+    private static async Task<bool> ValidateCombinedReportWorkflowAsync(
+        BudgetProposal proposal,
+        HttpContext httpContext,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
+        CancellationToken cancellationToken)
+    {
+        if (!proposal.SourceReportId.HasValue)
+        {
+            return true;
+        }
+
+        if (!httpContext.IsCombinedReportWorkflow(config))
+        {
+            return false;
+        }
+
+        var bearerToken = httpContext.GetBearerToken();
+        if (string.IsNullOrEmpty(bearerToken))
+        {
+            return true;
+        }
+
+        var sourceReport = await futureEventReports.GetAsync(
+            proposal.SourceReportId.Value,
+            bearerToken,
+            cancellationToken);
+
+        if (sourceReport is null)
+        {
+            return httpContext.IsCombinedReportWorkflow(config);
+        }
+
+        if (sourceReport.ClubId != proposal.ClubId)
+        {
+            return false;
+        }
+
+        if (sourceReport.BudgetProposalId.HasValue && sourceReport.BudgetProposalId.Value != proposal.Id)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private static async Task<IResult> ManagerApproveProposal(
         int id,
         ReviewBudgetProposalRequest request,
@@ -286,13 +332,15 @@ public static class ProposalEndpoints
         ClaimsPrincipal user,
         HttpContext httpContext,
         ClubAccessClient clubAccess,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
         CancellationToken cancellationToken)
     {
         var proposal = await db.BudgetProposals.Include(x => x.Settlements)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (proposal is null) return Results.NotFound();
 
-        if (proposal.SourceReportId.HasValue && !httpContext.IsCombinedReportWorkflow())
+        if (proposal.SourceReportId.HasValue && !await ValidateCombinedReportWorkflowAsync(proposal, httpContext, futureEventReports, config, cancellationToken))
         {
             return Results.BadRequest(new { message = "Review this budget together with its future event report." });
         }
@@ -347,13 +395,15 @@ public static class ProposalEndpoints
         ClaimsPrincipal user,
         HttpContext httpContext,
         ClubAccessClient clubAccess,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
         CancellationToken cancellationToken)
     {
         var proposal = await db.BudgetProposals.Include(x => x.Settlements)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (proposal is null) return Results.NotFound();
 
-        if (proposal.SourceReportId.HasValue && !httpContext.IsCombinedReportWorkflow())
+        if (proposal.SourceReportId.HasValue && !await ValidateCombinedReportWorkflowAsync(proposal, httpContext, futureEventReports, config, cancellationToken))
         {
             return Results.BadRequest(new { message = "Review this budget together with its future event report." });
         }
@@ -392,6 +442,8 @@ public static class ProposalEndpoints
         FinanceDbContext db,
         ClaimsPrincipal user,
         HttpContext httpContext,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
         CancellationToken cancellationToken)
     {
         var proposal = await db.BudgetProposals.Include(x => x.Settlements).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
@@ -400,7 +452,7 @@ public static class ProposalEndpoints
             return Results.NotFound();
         }
 
-        if (proposal.SourceReportId.HasValue && !httpContext.IsCombinedReportWorkflow())
+        if (proposal.SourceReportId.HasValue && !await ValidateCombinedReportWorkflowAsync(proposal, httpContext, futureEventReports, config, cancellationToken))
         {
             return Results.BadRequest(new { message = "Review this budget together with its future event report." });
         }
@@ -460,15 +512,18 @@ public static class ProposalEndpoints
         ReviewBudgetProposalRequest request,
         FinanceDbContext db,
         ClaimsPrincipal user,
-        HttpContext httpContext)
+        HttpContext httpContext,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
+        CancellationToken cancellationToken = default)
     {
-        var proposal = await db.BudgetProposals.Include(x => x.Settlements).FirstOrDefaultAsync(x => x.Id == id);
+        var proposal = await db.BudgetProposals.Include(x => x.Settlements).FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (proposal is null)
         {
             return Results.NotFound();
         }
 
-        if (proposal.SourceReportId.HasValue && !httpContext.IsCombinedReportWorkflow())
+        if (proposal.SourceReportId.HasValue && !await ValidateCombinedReportWorkflowAsync(proposal, httpContext, futureEventReports, config, cancellationToken))
         {
             return Results.BadRequest(new { message = "Review this budget together with its future event report." });
         }

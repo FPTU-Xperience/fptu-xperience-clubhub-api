@@ -10,11 +10,32 @@ public static class FinanceExtensions
         user.IsInRole(AuthRoles.Admin)
         || user.IsInRole(AuthRoles.StudentAffairsAdmin);
 
-    public static bool IsCombinedReportWorkflow(this HttpContext httpContext) =>
-        string.Equals(
+    public static bool IsCombinedReportWorkflow(this HttpContext httpContext, IConfiguration? config = null)
+    {
+        var hasHeader = string.Equals(
             httpContext.Request.Headers["X-Combined-Report-Workflow"].ToString(),
             "true",
             StringComparison.OrdinalIgnoreCase);
+
+        if (!hasHeader)
+        {
+            return false;
+        }
+
+        var expectedSecret = config?["InternalServiceAuth:Secret"]
+            ?? config?["Security:InternalWorkflowToken"]
+            ?? "clubhub-internal-workflow-shared-secret";
+        var receivedSecret = httpContext.Request.Headers["X-Internal-Workflow-Token"].ToString();
+
+        if (string.IsNullOrEmpty(receivedSecret))
+        {
+            return false;
+        }
+
+        var expectedBytes = System.Text.Encoding.UTF8.GetBytes(expectedSecret);
+        var receivedBytes = System.Text.Encoding.UTF8.GetBytes(receivedSecret);
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(expectedBytes, receivedBytes);
+    }
 
     public static async Task<HashSet<int>> GetFinanceClubIdsAsync(
         this ClubAccessClient clubAccess,
