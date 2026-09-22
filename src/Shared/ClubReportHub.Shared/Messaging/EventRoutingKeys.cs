@@ -16,4 +16,5 @@ public static class EventRoutingKeys
     public const string ExportRequested = "export.requested";
     public const string ExportCompleted = "export.completed";
     public const string ReportDeadlineReminder = "report.deadline.reminder";
+    public const string ClubAccessInvalidated = "club.access.invalidated";
 }

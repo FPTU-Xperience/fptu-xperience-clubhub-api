@@ -209,3 +209,13 @@ public sealed record ReportDeadlineReminderEvent(
 {
     string? ICorrelatedEvent.Period => Period;
 }
+
+public sealed record ClubAccessInvalidatedEvent(
+    Guid EventId,
+    DateTimeOffset OccurredAtUtc,
+    int ClubId,
+    IReadOnlyCollection<int> UserIds)
+    : IntegrationEvent(EventId, OccurredAtUtc), ICorrelatedEvent
+{
+    string? ICorrelatedEvent.ClubId => ClubId.ToString();
+}

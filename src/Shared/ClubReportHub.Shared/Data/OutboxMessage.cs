@@ -26,6 +26,10 @@ public sealed class OutboxMessage
     public DateTimeOffset? ProcessedAtUtc { get; set; }
     public string? ErrorMessage { get; set; }
     public string? CorrelationId { get; set; }
+    public DateTimeOffset? ClaimedAtUtc { get; set; }
+    public DateTimeOffset? ClaimExpiresAtUtc { get; set; }
+    public string? ClaimedByInstanceId { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
 
     public static OutboxMessage FromEvent<TEvent>(TEvent integrationEvent, string routingKey, string? correlationId = null)
         where TEvent : IntegrationEvent
@@ -41,7 +45,8 @@ public sealed class OutboxMessage
             EventTypeName = eventType.AssemblyQualifiedName ?? eventType.FullName ?? eventType.Name,
             Payload = JsonSerializer.Serialize(integrationEvent, eventType, JsonOptions),
             Status = OutboxMessageStatus.Pending,
-            CorrelationId = resolvedCorrelationId
+            CorrelationId = resolvedCorrelationId,
+            ConcurrencyToken = Guid.NewGuid()
         };
     }
 }
@@ -69,10 +74,13 @@ public static class OutboxModelBuilderExtensions
         {
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => new { x.Status, x.OccurredAtUtc });
+            entity.HasIndex(x => new { x.Status, x.ClaimExpiresAtUtc, x.OccurredAtUtc });
             entity.Property(x => x.EventType).HasMaxLength(100);
             entity.Property(x => x.EventTypeName).HasMaxLength(300);
             entity.Property(x => x.Status).HasMaxLength(50);
             entity.Property(x => x.CorrelationId).HasMaxLength(100);
+            entity.Property(x => x.ClaimedByInstanceId).HasMaxLength(100);
+            entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken();
         });
 
         return modelBuilder;

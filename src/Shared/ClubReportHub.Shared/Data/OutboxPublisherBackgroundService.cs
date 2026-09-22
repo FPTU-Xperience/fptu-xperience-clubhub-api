@@ -19,6 +19,7 @@ public sealed class OutboxPublisherBackgroundService<TDbContext>(
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly OutboxOptions _options = options.Value;
+    private readonly string _instanceId = Guid.NewGuid().ToString("N");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -49,23 +50,52 @@ public sealed class OutboxPublisherBackgroundService<TDbContext>(
         logger.LogInformation("Outbox publisher background service stopped for {DbContextType}.", typeof(TDbContext).Name);
     }
 
-    private async Task<int> ProcessPendingMessagesAsync(CancellationToken cancellationToken)
+    internal async Task<int> ProcessPendingMessagesAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        var pendingMessages = await db.Set<OutboxMessage>()
-            .Where(x => x.Status == OutboxMessageStatus.Pending)
+        var nowUtc = DateTimeOffset.UtcNow;
+        var candidates = await db.Set<OutboxMessage>()
+            .Where(x => x.Status == OutboxMessageStatus.Pending
+                     || (x.Status == OutboxMessageStatus.Processing && x.ClaimExpiresAtUtc.HasValue && x.ClaimExpiresAtUtc.Value <= nowUtc))
             .OrderBy(x => x.OccurredAtUtc)
             .Take(_options.BatchSize)
             .ToListAsync(cancellationToken);
 
-        if (pendingMessages.Count == 0)
+        if (candidates.Count == 0)
         {
             return 0;
         }
 
-        foreach (var message in pendingMessages)
+        // Claim candidates atomically with optimistic concurrency check
+        var claimedMessages = new List<OutboxMessage>();
+        foreach (var message in candidates)
+        {
+            message.Status = OutboxMessageStatus.Processing;
+            message.ClaimedAtUtc = nowUtc;
+            message.ClaimExpiresAtUtc = nowUtc.Add(_options.ClaimDuration);
+            message.ClaimedByInstanceId = _instanceId;
+            message.ConcurrencyToken = Guid.NewGuid();
+
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+                claimedMessages.Add(message);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Another worker instance claimed this message concurrently - detach and skip
+                db.Entry(message).State = EntityState.Detached;
+            }
+        }
+
+        if (claimedMessages.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var message in claimedMessages)
         {
             using var logScope = logger.BeginScope(new Dictionary<string, object>
             {
@@ -95,7 +125,9 @@ public sealed class OutboxPublisherBackgroundService<TDbContext>(
 
                 message.Status = OutboxMessageStatus.Published;
                 message.ProcessedAtUtc = DateTimeOffset.UtcNow;
+                message.ClaimExpiresAtUtc = null;
                 message.ErrorMessage = null;
+                message.ConcurrencyToken = Guid.NewGuid();
 
                 logger.LogInformation(
                     "Published outbox event {EventId} ({EventType}) for {DbContextType}.",
@@ -105,26 +137,39 @@ public sealed class OutboxPublisherBackgroundService<TDbContext>(
             {
                 message.RetryCount++;
                 message.ErrorMessage = ex.Message;
+                message.ConcurrencyToken = Guid.NewGuid();
 
                 if (message.RetryCount >= _options.MaxRetries)
                 {
                     message.Status = OutboxMessageStatus.Failed;
+                    message.ClaimExpiresAtUtc = null;
                     logger.LogError(ex,
                         "Outbox event {EventId} ({EventType}) reached max retries ({MaxRetries}) and is marked Failed.",
                         message.Id, message.EventType, _options.MaxRetries);
                 }
                 else
                 {
+                    // Release back to Pending for subsequent retry after backoff
+                    message.Status = OutboxMessageStatus.Pending;
+                    message.ClaimExpiresAtUtc = null;
                     logger.LogWarning(ex,
                         "Failed to publish outbox event {EventId} ({EventType}), attempt {Attempt}/{MaxRetries}.",
                         message.Id, message.EventType, message.RetryCount, _options.MaxRetries);
                 }
             }
 
-            await db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                logger.LogWarning("Concurrency conflict while updating published state for outbox message {EventId}. Skipping.", message.Id);
+                db.Entry(message).State = EntityState.Detached;
+            }
         }
 
-        return pendingMessages.Count;
+        return claimedMessages.Count;
     }
 
     private static Type? ResolveEventType(string eventTypeName)

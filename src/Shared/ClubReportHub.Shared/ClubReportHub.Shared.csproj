@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -13,10 +13,16 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.18" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.1.6" />
+    <!-- SEC-F12: pin vulnerable transitive System.Formats.Asn1 5.0.0 arriving via Microsoft.Data.SqlClient. -->
+    <PackageReference Include="System.Formats.Asn1" Version="8.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.18" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.18" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.22" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Backend.StabilizationTests" />
+  </ItemGroup>
 </Project>

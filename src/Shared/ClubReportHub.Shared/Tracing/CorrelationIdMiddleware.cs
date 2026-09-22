@@ -14,6 +14,7 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<Correl
         var correlationId = IsValid(requested) ? requested! : Guid.NewGuid().ToString("N");
 
         context.Items[CorrelationIdConstants.ItemKey] = correlationId;
+        context.Request.Headers[CorrelationIdConstants.HeaderName] = correlationId;
 
         context.Response.OnStarting(() =>
         {

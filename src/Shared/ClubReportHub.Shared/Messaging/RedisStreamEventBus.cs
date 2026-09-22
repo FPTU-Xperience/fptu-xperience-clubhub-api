@@ -72,9 +72,12 @@ public sealed class RedisStreamEventBus(
 
                 var values = valuesList.ToArray();
 
+                var maxLength = _options.MaxStreamLength > 0 ? _options.MaxStreamLength : (int?)null;
                 var redisEntryId = await _db.StreamAddAsync(
                     _options.StreamName,
                     values,
+                    maxLength: maxLength,
+                    useApproximateMaxLength: _options.UseApproximateTrimming,
                     flags: CommandFlags.None);
 
                 logger.LogInformation(

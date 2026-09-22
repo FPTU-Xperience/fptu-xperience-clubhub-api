@@ -50,4 +50,54 @@ public sealed class RedisStreamOptions
     /// Name of the Redis stream used for dead-lettered events that failed processing.
     /// </summary>
     public string DeadLetterStreamName { get; init; } = "clubreporthub-events-dlq";
+
+    /// <summary>
+    /// Maximum length of the Redis stream. When new messages are published via XADD,
+    /// the stream will be approximately trimmed to this length using MAXLEN ~ N.
+    /// Default is 10,000 entries (approx. 20-30 MB under typical event payload sizes).
+    /// </summary>
+    public int MaxStreamLength { get; init; } = 10000;
+
+    /// <summary>
+    /// Maximum length of the Redis dead-letter queue stream. When dead-letter messages
+    /// are published via XADD, the stream will be approximately trimmed to this length.
+    /// Default is 5,000 entries.
+    /// </summary>
+    public int MaxDeadLetterStreamLength { get; init; } = 5000;
+
+    /// <summary>
+    /// Whether to use approximate trimming (MAXLEN ~ N) for zero-cost O(1) listpack node trimming.
+    /// Default is true.
+    /// </summary>
+    public bool UseApproximateTrimming { get; init; } = true;
+
+    /// <summary>
+    /// Socket keep-alive interval in seconds.
+    /// Default is 60 seconds.
+    /// </summary>
+    public int KeepAliveSeconds { get; init; } = 60;
+
+    /// <summary>
+    /// Connection timeout in milliseconds.
+    /// Default is 5,000 milliseconds.
+    /// </summary>
+    public int ConnectTimeoutMs { get; init; } = 5000;
+
+    /// <summary>
+    /// Synchronous operation timeout in milliseconds.
+    /// Default is 5,000 milliseconds.
+    /// </summary>
+    public int SyncTimeoutMs { get; init; } = 5000;
+
+    /// <summary>
+    /// Interval in milliseconds between checks for stale pending messages across the consumer group.
+    /// Default is 5,000 milliseconds (5 seconds).
+    /// </summary>
+    public int PendingRecoveryIntervalMs { get; init; } = 5000;
+
+    /// <summary>
+    /// Minimum idle duration in milliseconds before a pending unacknowledged message is considered abandoned or eligible for retry.
+    /// Default is 10,000 milliseconds (10 seconds).
+    /// </summary>
+    public int PendingMessageIdleThresholdMs { get; init; } = 10000;
 }

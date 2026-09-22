@@ -18,8 +18,11 @@ public static class RedisStreamServiceCollectionExtensions
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RedisStreamOptions>>().Value;
             var config = ConfigurationOptions.Parse(options.ConnectionString);
             config.AbortOnConnectFail = false;
-            config.ConnectRetry = 3;
-            config.ConnectTimeout = 5000;
+            config.ConnectRetry = options.MaxRetries > 0 ? options.MaxRetries : 3;
+            config.ConnectTimeout = options.ConnectTimeoutMs;
+            config.SyncTimeout = options.SyncTimeoutMs;
+            config.KeepAlive = options.KeepAliveSeconds;
+            config.ClientName = "ClubReportHub";
             return ConnectionMultiplexer.Connect(config);
         });
         services.AddHttpContextAccessor();

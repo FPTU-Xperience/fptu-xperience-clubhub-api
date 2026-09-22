@@ -67,7 +67,7 @@ public static class JwtServiceCollectionExtensions
                 };
                 options.Events = new JwtBearerEvents
                 {
-                    OnTokenValidated = context =>
+                    OnTokenValidated = async context =>
                     {
                         var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
                             ?? context.Principal?.FindFirstValue("sub");
@@ -79,9 +79,22 @@ public static class JwtServiceCollectionExtensions
                             || userId <= 0)
                         {
                             context.Fail("The token does not contain a valid AuthService user identifier.");
+                            return;
                         }
 
-                        return Task.CompletedTask;
+                        var validator = context.HttpContext.RequestServices.GetService<IUserSecurityStampValidator>();
+                        if (validator is not null)
+                        {
+                            var isValid = await validator.ValidateSecurityStampAsync(
+                                userId,
+                                context.Principal!,
+                                context.HttpContext.RequestAborted);
+
+                            if (!isValid)
+                            {
+                                context.Fail("The token is no longer valid due to security stamp or account status changes.");
+                            }
+                        }
                     }
                 };
             });

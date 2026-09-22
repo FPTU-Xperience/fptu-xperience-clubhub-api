@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Polly.CircuitBreaker;
 using Polly.RateLimiting;
 using Polly.Timeout;
+using ClubReportHub.Shared.Tracing;
 
 namespace ClubReportHub.Shared.Auth;
 
@@ -32,7 +34,15 @@ public sealed class ClubAccessClient(
     IMemoryCache cache,
     ILogger<ClubAccessClient> logger)
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+    // Reduced TTLs for authorization freshness (SEC-F07)
+    private static readonly TimeSpan ActiveSlidingExpiration = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan ActiveAbsoluteExpiration = TimeSpan.FromMinutes(3);
+    // Negative caching duration for users without club access (PERF-F04)
+    private static readonly TimeSpan NegativeCacheDuration = TimeSpan.FromMinutes(1);
+
+    // Cache stampede protection (PERF-F04)
+    private readonly ConcurrentDictionary<int, SemaphoreSlim> _userLocks = new();
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -40,7 +50,8 @@ public sealed class ClubAccessClient(
 
     public async Task<IReadOnlyList<ClubAccessSnapshot>> GetMyAccessAsync(
         string bearerToken,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool bypassCache = false)
     {
         if (string.IsNullOrWhiteSpace(bearerToken))
         {
@@ -54,42 +65,76 @@ public sealed class ClubAccessClient(
             return [];
         }
 
-        var cacheKey = $"ClubAccess_{userId}";
+        var cacheKey = GetCacheKey(userId);
 
-        // Try to get from cache first
-        if (cache.TryGetValue(cacheKey, out IReadOnlyList<ClubAccessSnapshot>? cachedAccess) && cachedAccess is not null)
+        // Try to get from cache first (if not bypassing cache)
+        if (!bypassCache && cache.TryGetValue(cacheKey, out IReadOnlyList<ClubAccessSnapshot>? cachedAccess) && cachedAccess is not null)
         {
             return cachedAccess;
         }
 
-        // Fetch from API
-        var access = await FetchAccessFromApiAsync(bearerToken, cancellationToken);
-
-        // Cache the result with sliding expiration
-        if (access.Count > 0)
+        // Stampede protection: lock per userId
+        var userLock = _userLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+        await userLock.WaitAsync(cancellationToken);
+        try
         {
-            var cacheOptions = new MemoryCacheEntryOptions()
-                .SetSlidingExpiration(CacheDuration)
-                .SetAbsoluteExpiration(TimeSpan.FromMinutes(15))
-                .SetSize(1)
-                .SetPriority(CacheItemPriority.Normal);
-            cache.Set(cacheKey, access, cacheOptions);
-        }
+            // Double-checked locking
+            if (!bypassCache && cache.TryGetValue(cacheKey, out cachedAccess) && cachedAccess is not null)
+            {
+                return cachedAccess;
+            }
 
-        return access;
+            // Fetch from API
+            var access = await FetchAccessFromApiAsync(bearerToken, cancellationToken);
+
+            if (access.Count > 0)
+            {
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetSlidingExpiration(ActiveSlidingExpiration)
+                    .SetAbsoluteExpiration(ActiveAbsoluteExpiration)
+                    .SetSize(1)
+                    .SetPriority(CacheItemPriority.Normal);
+                cache.Set(cacheKey, access, cacheOptions);
+            }
+            else
+            {
+                // PERF-F04: Negative caching for users with no club access
+                var negativeOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(NegativeCacheDuration)
+                    .SetSize(1)
+                    .SetPriority(CacheItemPriority.Low);
+                cache.Set(cacheKey, access, negativeOptions);
+            }
+
+            return access;
+        }
+        finally
+        {
+            userLock.Release();
+        }
     }
 
     public void InvalidateCache(int userId)
     {
-        var cacheKey = $"ClubAccess_{userId}";
-        cache.Remove(cacheKey);
+        cache.Remove(GetCacheKey(userId));
+        // Also remove legacy key format for backward compatibility
+        cache.Remove($"ClubAccess_{userId}");
+    }
+
+    public void InvalidateUsers(IEnumerable<int> userIds)
+    {
+        foreach (var userId in userIds)
+        {
+            InvalidateCache(userId);
+        }
     }
 
     public void InvalidateCacheForAllUsers()
     {
-        // In production, you might want to use Redis or a distributed cache
-        // For IMemoryCache, we rely on TTL expiration
+        // For distributed deployment, events trigger per-user eviction
     }
+
+    private static string GetCacheKey(int userId) => $"club_access:user:{userId}";
 
     private async Task<IReadOnlyList<ClubAccessSnapshot>> FetchAccessFromApiAsync(
         string bearerToken,
@@ -143,9 +188,18 @@ public sealed class ClubAccessClient(
             padded = padded.Replace('-', '+').Replace('_', '/');
             var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded));
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("sub", out var subElement))
+
+            if (doc.RootElement.TryGetProperty("sub", out var subElement) && int.TryParse(subElement.GetString(), out var subId))
             {
-                return int.TryParse(subElement.GetString(), out var userId) ? userId : 0;
+                return subId;
+            }
+            if (doc.RootElement.TryGetProperty("nameid", out var nameidElement) && int.TryParse(nameidElement.GetString(), out var nameId))
+            {
+                return nameId;
+            }
+            if (doc.RootElement.TryGetProperty("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", out var uriElement) && int.TryParse(uriElement.GetString(), out var uriId))
+            {
+                return uriId;
             }
             return 0;
         }
@@ -172,7 +226,7 @@ public static class ClubAccessServiceCollectionExtensions
             var baseUrl = configuration["Services:ClubService:BaseUrl"] ?? "http://localhost:5102";
             client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(10);
-        }).AddStandardResilienceHandler();
+        }).AddCorrelationIdForwarding().AddStandardResilienceHandler();
 
         return services;
     }

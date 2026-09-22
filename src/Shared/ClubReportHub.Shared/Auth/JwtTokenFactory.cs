@@ -10,7 +10,7 @@ public sealed class JwtTokenFactory(IOptions<JwtOptions> options)
 {
     private readonly JwtOptions _options = options.Value;
 
-    public TokenResult CreateToken(int userId, string username, string fullName, IEnumerable<string> roles)
+    public TokenResult CreateToken(int userId, string username, string fullName, IEnumerable<string> roles, int securityVersion = 1)
     {
         var now = DateTimeOffset.UtcNow;
         var expires = now.AddMinutes(_options.ExpirationMinutes);
@@ -20,7 +20,8 @@ public sealed class JwtTokenFactory(IOptions<JwtOptions> options)
             new(JwtRegisteredClaimNames.UniqueName, username),
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, fullName),
-            new("username", username)
+            new("username", username),
+            new("ver", securityVersion.ToString())
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
