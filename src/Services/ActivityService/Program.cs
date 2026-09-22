@@ -1,4 +1,4 @@
-﻿using ActivityService.Endpoints;
+using ActivityService.Endpoints;
 using ActivityService.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);

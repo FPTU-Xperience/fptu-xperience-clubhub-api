@@ -4,9 +4,11 @@ using ActivityService.Data;
 using ActivityService.Infrastructure;
 using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using static ActivityService.Endpoints.ActivityEndpointHelpers;
 
 namespace ActivityService.Endpoints;
@@ -147,7 +149,6 @@ public static class ActivityEndpoints
             ClaimsPrincipal user,
             HttpContext httpContext,
             ClubAccessClient clubAccess,
-            IEventBus eventBus,
             CancellationToken cancellationToken) =>
         {
             var validationError = ValidateCreateRequest(
@@ -186,9 +187,32 @@ public static class ActivityEndpoints
                 CreatedByUserId = user.GetUserId()
             };
 
+            IDbContextTransaction? transaction = null;
+            if (db.Database.IsRelational())
+            {
+                transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            }
+
             db.Activities.Add(activity);
             await db.SaveChangesAsync(cancellationToken);
-            await PublishActivityCreatedAsync(activity, eventBus, cancellationToken);
+
+            db.AddOutboxMessage(
+                new ActivityCreatedEvent(
+                    Guid.NewGuid(),
+                    DateTimeOffset.UtcNow,
+                    activity.Id,
+                    activity.ClubId,
+                    activity.ClubName,
+                    activity.Title,
+                    activity.StartTimeUtc),
+                EventRoutingKeys.ActivityCreated);
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (transaction != null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
 
             return Results.Created($"/api/activities/{activity.Id}", ToResponse(activity));
         })
@@ -202,7 +226,8 @@ public static class ActivityEndpoints
             CreateActivityFromApprovedReportRequest request,
             ActivityDbContext db,
             ClaimsPrincipal user,
-            IEventBus eventBus,
+            ReportVerificationClient reportClient,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             if (request.ReportId <= 0 || request.ReportDetailId <= 0 || request.ClubId <= 0)
@@ -215,6 +240,27 @@ public static class ActivityEndpoints
                 || string.IsNullOrWhiteSpace(request.Location))
             {
                 return Results.BadRequest(new { message = "Title, description, and location are required." });
+            }
+
+            var report = await reportClient.GetReportAsync(request.ReportId, httpContext.GetBearerToken(), cancellationToken);
+            if (report is null)
+            {
+                return Results.BadRequest(new { message = "Report not found." });
+            }
+
+            if (report.ClubId != request.ClubId)
+            {
+                return Results.BadRequest(new { message = "The report belongs to another club." });
+            }
+
+            if (!string.Equals(report.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.BadRequest(new { message = "Only approved reports can be published as activities." });
+            }
+
+            if (!report.Details.Any(d => d.Id == request.ReportDetailId))
+            {
+                return Results.BadRequest(new { message = "The report detail does not belong to the specified report." });
             }
 
             var existing = await db.Activities
@@ -245,9 +291,32 @@ public static class ActivityEndpoints
                 CreatedByUserId = user.GetUserId()
             };
 
+            IDbContextTransaction? transaction = null;
+            if (db.Database.IsRelational())
+            {
+                transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            }
+
             db.Activities.Add(activity);
             await db.SaveChangesAsync(cancellationToken);
-            await PublishActivityCreatedAsync(activity, eventBus, cancellationToken);
+
+            db.AddOutboxMessage(
+                new ActivityCreatedEvent(
+                    Guid.NewGuid(),
+                    DateTimeOffset.UtcNow,
+                    activity.Id,
+                    activity.ClubId,
+                    activity.ClubName,
+                    activity.Title,
+                    activity.StartTimeUtc),
+                EventRoutingKeys.ActivityCreated);
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (transaction != null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
 
             return Results.Created($"/api/activities/{activity.Id}", ToResponse(activity));
         })
@@ -272,20 +341,4 @@ public static class ActivityEndpoints
         if (endTimeUtc <= startTimeUtc) return "End time must be later than start time.";
         return null;
     }
-
-    private static Task PublishActivityCreatedAsync(
-        ClubActivity activity,
-        IEventBus eventBus,
-        CancellationToken cancellationToken) =>
-        eventBus.PublishAsync(
-            new ActivityCreatedEvent(
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                activity.Id,
-                activity.ClubId,
-                activity.ClubName,
-                activity.Title,
-                activity.StartTimeUtc),
-            EventRoutingKeys.ActivityCreated,
-            cancellationToken);
 }

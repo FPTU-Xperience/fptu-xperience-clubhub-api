@@ -1,4 +1,5 @@
 using ActivityService.Models;
+using ClubReportHub.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace ActivityService.Data;
@@ -8,6 +9,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     public DbSet<ClubActivity> Activities => Set<ClubActivity>();
     public DbSet<ActivityParticipant> ActivityParticipants => Set<ActivityParticipant>();
     public DbSet<ActivityAttendance> ActivityAttendances => Set<ActivityAttendance>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -15,7 +17,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
         {
             entity.HasIndex(x => x.SourceReportId).IsUnique().HasFilter("[SourceReportId] IS NOT NULL");
             entity.HasIndex(x => new { x.ClubId, x.StartTimeUtc });
-            entity.HasIndex(x => x.StartTimeUtc);
+            entity.HasIndex(x => x.StartTimeUtc).IncludeProperties(x => new { x.ClubId, x.Title, x.Status });
             entity.HasIndex(x => x.Status);
             entity.Property(x => x.ClubName).HasMaxLength(200);
             entity.Property(x => x.Title).HasMaxLength(200);
@@ -36,7 +38,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
         modelBuilder.Entity<ActivityParticipant>(entity =>
         {
             entity.HasIndex(x => new { x.ActivityId, x.UserId }).IsUnique();
-            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.UserId).IncludeProperties(x => new { x.ActivityId, x.AttendanceStatus });
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.AttendanceStatus).HasMaxLength(40);
         });
@@ -44,12 +46,14 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
         modelBuilder.Entity<ActivityAttendance>(entity =>
         {
             entity.HasIndex(x => new { x.ActivityId, x.UserId, x.AttendanceDate }).IsUnique();
-            entity.HasIndex(x => new { x.UserId, x.AttendanceDate });
+            entity.HasIndex(x => new { x.UserId, x.AttendanceDate }).IncludeProperties(x => new { x.ActivityId, x.Status });
             entity.HasIndex(x => new { x.ActivityId, x.Status });
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.AttendanceDate).HasColumnType("date");
             entity.Property(x => x.Status).HasMaxLength(40);
             entity.Property(x => x.Note).HasMaxLength(1000);
         });
+
+        modelBuilder.ApplyOutboxConfiguration();
     }
 }

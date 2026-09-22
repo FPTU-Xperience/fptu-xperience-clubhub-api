@@ -1,8 +1,11 @@
-﻿using ActivityService.Data;
+using ActivityService.Data;
 using ActivityService.Infrastructure;
 using ActivityService.Services;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
+using ClubReportHub.Shared.Tracing;
 using Microsoft.EntityFrameworkCore;
 
 namespace ActivityService.Extensions;
@@ -25,6 +28,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddClubReportJwt(configuration, environment);
+        services.AddClubReportTracing();
         services.AddClubAccessClient(configuration);
 
         services.AddScoped<MemberActivityStatisticsService>();
@@ -37,9 +41,20 @@ public static class ServiceCollectionExtensions
 
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = TimeSpan.FromSeconds(15);
-        });
+        }).AddCorrelationIdForwarding().AddStandardResilienceHandler();
+
+        services.AddHttpClient<ReportVerificationClient>(client =>
+        {
+            var baseUrl =
+                configuration["Services:ReportService:BaseUrl"]
+                ?? "http://localhost:5103/";
+
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(15);
+        }).AddCorrelationIdForwarding().AddStandardResilienceHandler();
 
         services.AddRedisStreamEventBus(configuration);
+        services.AddTransactionalOutbox<ActivityDbContext>();
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
@@ -48,13 +63,9 @@ public static class ServiceCollectionExtensions
         {
             options.AddPolicy("frontend", policy =>
             {
-                var allowedOrigins = configuration
-                    .GetSection("Cors:AllowedOrigins")
-                    .Get<string[]>()
-                    ?? [
-                        "http://localhost:3000",
-                        "http://localhost:5173"
-                    ];
+                var allowedOrigins = ClubReportHub.Shared.Cors.CorsOriginConfiguration.ResolveAllowedOrigins(
+                    configuration,
+                    environment);
 
                 policy
                     .WithOrigins(allowedOrigins)
@@ -64,7 +75,9 @@ public static class ServiceCollectionExtensions
             });
         });
 
-        services.AddHealthChecks();
+        services.AddHealthChecks()
+            .AddDbContextCheck<ActivityDbContext>("activity-db", tags: ["ready"])
+            .AddRedisHealthCheck();
 
         return services;
     }

@@ -1,4 +1,4 @@
-﻿using ActivityService.Data;
+using ActivityService.Data;
 using ClubReportHub.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,7 +19,7 @@ public static class DatabaseInitializationExtensions
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("DatabaseStartup");
 
-        await db.EnsureCreatedWithRetryAsync(logger);
+        await db.ApplyMigrationsWithRetryAsync(logger);
 
         await ActivitySchemaUpgrader.ApplyAsync(db);
 

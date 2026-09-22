@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using ActivityService.Contracts;
 using ActivityService.Infrastructure;
 using ActivityService.Models;
@@ -91,11 +91,13 @@ internal static class ActivityEndpointHelpers
         int clubId,
         ClubAccessClient clubAccess,
         HttpContext httpContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool bypassCache = false)
     {
         var access = await clubAccess.GetMyAccessAsync(
             httpContext.GetBearerToken(),
-            cancellationToken);
+            cancellationToken,
+            bypassCache);
 
         return access.Any(
             x => x.ClubId == clubId && x.CanManage);
@@ -106,14 +108,16 @@ internal static class ActivityEndpointHelpers
         ClaimsPrincipal user,
         ClubAccessClient clubAccess,
         HttpContext httpContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool bypassCache = false)
     {
         return CanReviewAllActivities(user)
             || await CanManageClubAsync(
                 clubId,
                 clubAccess,
                 httpContext,
-                cancellationToken);
+                cancellationToken,
+                bypassCache);
     }
 
     internal static string? ValidateAttendance(

@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using ActivityService.Contracts;
 using ActivityService.Infrastructure;
 using ActivityService.Services;
@@ -18,6 +18,7 @@ public static class MemberStatisticsEndpoints
                 int clubId,
                 MemberStatisticsQuery request,
                 MemberActivityStatisticsService statistics,
+                ClubMemberRosterClient rosterClient,
                 ClaimsPrincipal user,
                 HttpContext httpContext,
                 ClubAccessClient clubAccess,
@@ -47,9 +48,42 @@ public static class MemberStatisticsEndpoints
                     });
                 }
 
+                if (request.Members.Count == 0)
+                {
+                    return Results.Ok(Array.Empty<MemberStatisticsResponse>());
+                }
+
+                // SEC-F11: Resolve requested members from authoritative ClubService source of truth
+                var requestedUserIds = request.Members.Select(x => x.UserId).Distinct().ToArray();
+                IReadOnlyCollection<ClubMemberRosterItem> resolvedMembers;
+                try
+                {
+                    resolvedMembers = await rosterClient.ResolveByUserIdsAsync(
+                        clubId,
+                        requestedUserIds,
+                        httpContext.GetBearerToken(),
+                        cancellationToken);
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+                {
+                    return Results.Problem(
+                        $"Unable to communicate with Club Service to verify members: {ex.Message}",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+
+                // Reject/omit non-members and use server-authoritative JoinedAtUtc instead of client date
+                var authoritativeInputs = resolvedMembers
+                    .Select(m => new MemberStatisticsInput(m.UserId, m.JoinedAtUtc))
+                    .ToArray();
+
+                if (authoritativeInputs.Length == 0)
+                {
+                    return Results.Ok(Array.Empty<MemberStatisticsResponse>());
+                }
+
                 var result = await statistics.GetBatchAsync(
                     clubId,
-                    request.Members,
+                    authoritativeInputs,
                     DateTimeOffset.UtcNow,
                     cancellationToken);
 
@@ -65,6 +99,7 @@ public static class MemberStatisticsEndpoints
                 int clubId,
                 MemberStatisticsDetailQuery request,
                 MemberActivityStatisticsService statistics,
+                ClubMemberRosterClient rosterClient,
                 ClaimsPrincipal user,
                 HttpContext httpContext,
                 ClubAccessClient clubAccess,
@@ -94,9 +129,38 @@ public static class MemberStatisticsEndpoints
                     });
                 }
 
+                // SEC-F11: Verify that request.UserId is an active member of clubId in ClubService
+                IReadOnlyCollection<ClubMemberRosterItem> resolvedMembers;
+                try
+                {
+                    resolvedMembers = await rosterClient.ResolveByUserIdsAsync(
+                        clubId,
+                        [request.UserId],
+                        httpContext.GetBearerToken(),
+                        cancellationToken);
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+                {
+                    return Results.Problem(
+                        $"Unable to communicate with Club Service to verify member: {ex.Message}",
+                        statusCode: StatusCodes.Status503ServiceUnavailable);
+                }
+
+                var resolvedMember = resolvedMembers.FirstOrDefault(x => x.UserId == request.UserId);
+                if (resolvedMember is null)
+                {
+                    return Results.NotFound(new
+                    {
+                        message = "Member not found in this club or not an active member."
+                    });
+                }
+
+                // Use authoritative JoinedAtUtc from ClubService instead of client-supplied date
+                var authoritativeQuery = request with { JoinedAtUtc = resolvedMember.JoinedAtUtc };
+
                 var result = await statistics.GetDetailAsync(
                     clubId,
-                    request,
+                    authoritativeQuery,
                     DateTimeOffset.UtcNow,
                     cancellationToken);
 

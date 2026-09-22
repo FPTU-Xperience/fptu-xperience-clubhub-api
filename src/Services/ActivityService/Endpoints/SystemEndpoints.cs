@@ -1,16 +1,16 @@
-﻿namespace ActivityService.Endpoints;
+using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Health;
+
+namespace ActivityService.Endpoints;
 
 public static class SystemEndpoints
 {
     public static IEndpointRouteBuilder MapSystemEndpoints(
         this IEndpointRouteBuilder app)
     {
-        app.MapHealthChecks("/health");
+        app.MapStandardHealthChecks();
 
-        app.MapGet("/error", () =>
-                Results.Problem(
-                    "An unexpected error occurred."))
-            .AllowAnonymous();
+        app.MapGlobalErrorEndpoint();
 
         app.MapGet("/", () =>
             Results.Ok(new

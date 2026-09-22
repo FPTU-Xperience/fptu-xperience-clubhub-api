@@ -1,3 +1,6 @@
+using ClubReportHub.Shared.Security;
+using ClubReportHub.Shared.Tracing;
+
 namespace ActivityService.Extensions;
 
 public static class ApplicationPipelineExtensions
@@ -5,6 +8,8 @@ public static class ApplicationPipelineExtensions
     public static WebApplication UseActivityServicePipeline(
         this WebApplication app)
     {
+        app.UseCorrelationId();
+
         if (app.Environment.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
@@ -20,6 +25,7 @@ public static class ApplicationPipelineExtensions
             app.UseSwaggerUI();
         }
 
+        app.UseSecurityHeaders();
         app.UseCors("frontend");
 
         app.UseAuthentication();

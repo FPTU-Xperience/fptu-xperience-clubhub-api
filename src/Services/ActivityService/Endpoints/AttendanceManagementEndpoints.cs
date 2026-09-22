@@ -1,4 +1,4 @@
-﻿using ActivityService.Contracts;
+using ActivityService.Contracts;
 using ActivityService.Data;
 using ActivityService.Infrastructure;
 using ActivityService.Models;
@@ -32,8 +32,8 @@ public static class AttendanceManagementEndpoints
                 int clubId,
                 int activityId,
                 string? search,
-                int page,
-                int pageSize,
+                int? page,
+                int? pageSize,
                 ActivityDbContext db,
                 ClubMemberRosterClient rosterClient,
                 ClaimsPrincipal user,
@@ -69,8 +69,8 @@ public static class AttendanceManagementEndpoints
                     });
                 }
 
-                page = Math.Max(1, page);
-                pageSize = Math.Clamp(pageSize, 1, 100);
+                var actualPage = Math.Max(1, page ?? 1);
+                var actualPageSize = Math.Clamp(pageSize ?? 20, 1, 100);
 
                 ClubMemberRosterPage roster;
 
@@ -80,8 +80,8 @@ public static class AttendanceManagementEndpoints
                         clubId,
                         activity.StartTimeUtc,
                         search,
-                        page,
-                        pageSize,
+                        actualPage,
+                        actualPageSize,
                         httpContext.GetBearerToken(),
                         cancellationToken);
                 }

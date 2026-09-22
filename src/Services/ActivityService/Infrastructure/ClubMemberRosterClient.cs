@@ -6,7 +6,10 @@ namespace ActivityService.Infrastructure;
 
 public sealed record ClubMemberRosterItem(int Id, int UserId, string FullName, string Email, string PhoneNumber, string Role, string Status, DateTimeOffset JoinedAtUtc);
 public sealed record ClubMemberRosterPage(IReadOnlyCollection<ClubMemberRosterItem> Items, int Page, int PageSize, int TotalItems, int TotalPages);
-public sealed record ResolveRosterRequest(IReadOnlyCollection<int> MemberIds, DateTimeOffset? JoinedOnOrBefore);
+public sealed record ResolveRosterRequest(
+    IReadOnlyCollection<int>? MemberIds = null,
+    DateTimeOffset? JoinedOnOrBefore = null,
+    IReadOnlyCollection<int>? UserIds = null);
 
 public sealed class ClubMemberRosterClient(HttpClient httpClient)
 {
@@ -38,6 +41,24 @@ public sealed class ClubMemberRosterClient(HttpClient httpClient)
         using var request = new HttpRequestMessage(HttpMethod.Post, $"api/clubs/{clubId}/member-roster/resolve")
         {
             Content = JsonContent.Create(new ResolveRosterRequest(memberIds, joinedOnOrBefore))
+        };
+        SetBearer(request, bearerToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<IReadOnlyCollection<ClubMemberRosterItem>>(cancellationToken: cancellationToken) ?? [];
+    }
+
+    public async Task<IReadOnlyCollection<ClubMemberRosterItem>> ResolveByUserIdsAsync(
+        int clubId,
+        IReadOnlyCollection<int> userIds,
+        string? bearerToken,
+        CancellationToken cancellationToken)
+    {
+        if (userIds.Count == 0) return [];
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"api/clubs/{clubId}/member-roster/resolve")
+        {
+            Content = JsonContent.Create(new ResolveRosterRequest(null, null, userIds))
         };
         SetBearer(request, bearerToken);
         using var response = await httpClient.SendAsync(request, cancellationToken);
