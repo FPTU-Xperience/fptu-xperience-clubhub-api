@@ -1,4 +1,5 @@
-﻿using ClubService.Models;
+using ClubReportHub.Shared.Data;
+using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Data;
@@ -11,6 +12,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
     public DbSet<ClubCreationApplication> ClubCreationApplications => Set<ClubCreationApplication>();
     public DbSet<ClubDisbandRequest> ClubDisbandRequests => Set<ClubDisbandRequest>();
     public DbSet<ClubOwnershipTransfer> ClubOwnershipTransfers => Set<ClubOwnershipTransfer>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,6 +29,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.Property(x => x.ContactPhone).HasMaxLength(40);
             entity.Property(x => x.ScheduleLabel).HasMaxLength(500);
             entity.Property(x => x.IsRecruiting).HasDefaultValue(false);
+            entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken();
             entity.HasMany(x => x.Memberships)
                 .WithOne(x => x.Club)
                 .HasForeignKey(x => x.ClubId)
@@ -36,6 +39,13 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
         modelBuilder.Entity<ClubManagerAssignment>(entity =>
         {
             entity.HasIndex(x => new { x.ClubId, x.ManagerUserId, x.IsActive });
+            // DATA-F05: One active manager per club AND one active club per manager
+            entity.HasIndex(x => x.ClubId)
+                .IsUnique()
+                .HasFilter("[IsActive] = 1");
+            entity.HasIndex(x => x.ManagerUserId)
+                .IsUnique()
+                .HasFilter("[IsActive] = 1");
             entity.Property(x => x.ManagerName).HasMaxLength(200);
             entity.HasOne(x => x.Club)
                 .WithMany(x => x.ManagerAssignments)
@@ -50,6 +60,11 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.HasIndex(x => new { x.ClubId, x.Role, x.Status });
             entity.HasIndex(x => new { x.ClubId, x.IsDeleted, x.Status });
             entity.HasIndex(x => new { x.ClubId, x.ReviewedAtUtc });
+            // DATA-F01: Maximum 2 treasurers per club enforced via unique slot indexing (1 or 2)
+            entity.HasIndex(x => new { x.ClubId, x.TreasurerSlot })
+                .IsUnique()
+                .HasFilter("[TreasurerSlot] IS NOT NULL");
+            entity.ToTable(t => t.HasCheckConstraint("CK_ClubMemberships_TreasurerSlot", "[TreasurerSlot] IS NULL OR [TreasurerSlot] IN (1, 2)"));
             entity.HasQueryFilter(x => !x.IsDeleted);
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.Gender).HasMaxLength(20);
@@ -103,16 +118,24 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
         modelBuilder.Entity<ClubDisbandRequest>(entity =>
         {
-            entity.HasIndex(x => x.ClubId);
+            // DATA-F06: At most one pending disband request per club
+            entity.HasIndex(x => x.ClubId)
+                .IsUnique()
+                .HasFilter("[Status] = 'Pending'");
             entity.HasIndex(x => x.Status);
             entity.Property(x => x.Status).HasMaxLength(40);
         });
 
         modelBuilder.Entity<ClubOwnershipTransfer>(entity =>
         {
-            entity.HasIndex(x => x.ClubId);
+            // DATA-F06: At most one pending ownership transfer request per club
+            entity.HasIndex(x => x.ClubId)
+                .IsUnique()
+                .HasFilter("[Status] = 'Pending'");
             entity.HasIndex(x => x.Status);
             entity.Property(x => x.Status).HasMaxLength(40);
         });
+
+        modelBuilder.ApplyOutboxConfiguration();
     }
 }

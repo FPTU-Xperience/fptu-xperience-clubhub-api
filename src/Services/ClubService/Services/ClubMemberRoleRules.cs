@@ -34,6 +34,9 @@ public static class ClubMemberRoleRules
         membership.Role = ClubMemberRoles.Treasurer;
     }
 
-    public static void ApplyMemberRole(ClubMembership membership) =>
+    public static void ApplyMemberRole(ClubMembership membership)
+    {
         membership.Role = ClubMemberRoles.Member;
+        membership.TreasurerSlot = null;
+    }
 }

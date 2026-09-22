@@ -22,7 +22,7 @@ public static class AuthorizationExtensions
         int userId,
         CancellationToken cancellationToken = default)
     {
-        return await db.ClubManagerAssignments
+        return await db.ClubManagerAssignments.AsNoTracking()
             .AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == userId && x.IsActive, cancellationToken);
     }
 
@@ -46,7 +46,7 @@ public static class AuthorizationExtensions
         int userId,
         CancellationToken cancellationToken = default)
     {
-        return await db.ClubManagerAssignments
+        return await db.ClubManagerAssignments.AsNoTracking()
             .AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == userId && x.IsActive, cancellationToken);
     }
 }

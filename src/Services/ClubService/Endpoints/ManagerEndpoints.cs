@@ -1,9 +1,14 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Events;
+using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
 using ClubService.Data;
+using ClubService.Mappers;
 using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ClubService.Endpoints;
 
@@ -25,12 +30,14 @@ public static class ManagerEndpoints
     private static async Task<IResult> AssignManager(
         int id,
         AssignManagerRequest request,
-        ClubDbContext db)
+        ClubDbContext db,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
         var club = await db.Clubs
             .Include(x => x.ManagerAssignments)
             .Include(x => x.Memberships)
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (club is null)
         {
@@ -38,11 +45,30 @@ public static class ManagerEndpoints
         }
 
         var managesAnotherClub = await db.ClubManagerAssignments
-            .AnyAsync(x => x.ManagerUserId == request.ManagerUserId && x.ClubId != id && x.IsActive);
+            .AsNoTracking()
+            .AnyAsync(x => x.ManagerUserId == request.ManagerUserId && x.ClubId != id && x.IsActive, cancellationToken);
 
         if (managesAnotherClub)
         {
             return Results.Conflict(new { message = "Each club owner can manage one club only." });
+        }
+
+        var affectedUserIds = club.ManagerAssignments
+            .Where(x => x.IsActive)
+            .Select(x => x.ManagerUserId)
+            .Append(request.ManagerUserId)
+            .Distinct()
+            .ToArray();
+
+        club.ConcurrencyToken = Guid.NewGuid();
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "Each club owner can manage one club only and each club can have only one active owner." });
         }
 
         foreach (var assignment in club.ManagerAssignments.Where(x => x.IsActive))
@@ -79,13 +105,27 @@ public static class ManagerEndpoints
             existingMembership.ReviewedAtUtc = DateTimeOffset.UtcNow;
         }
 
-        await db.SaveChangesAsync();
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            id,
+            affectedUserIds), EventRoutingKeys.ClubAccessInvalidated);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "Each club owner can manage one club only and each club can have only one active owner." });
+        }
 
         var updated = await db.Clubs
+            .AsNoTracking()
             .Include(x => x.ManagerAssignments)
             .Include(x => x.Memberships)
-            .FirstAsync(x => x.Id == id);
+            .FirstAsync(x => x.Id == id, cancellationToken);
 
-        return Results.Ok(updated);
+        return Results.Ok(ClubMappers.ToResponse(updated));
     }
 }

@@ -1,11 +1,15 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Events;
+using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
 using ClubService.Data;
 using ClubService.Extensions;
 using ClubService.Mappers;
 using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ClubService.Endpoints;
 
@@ -73,6 +77,7 @@ public static class TransferEndpoints
             return Results.Forbid();
 
         var members = await db.ClubMemberships
+            .AsNoTracking()
             .Where(x => x.ClubId == clubId && x.Status == ClubMembershipStatuses.Approved)
             .OrderBy(x => x.FullName)
             .Select(x => new ClubMemberForTransferResponse(
@@ -124,7 +129,7 @@ public static class TransferEndpoints
             .AnyAsync(x => x.ClubId == clubId && x.Status == ClubOwnershipTransferStatuses.Pending, ct);
 
         if (existingRequest)
-            return Results.BadRequest(new { message = "A pending transfer request already exists for this club" });
+            return Results.Conflict(new { message = "A pending transfer request already exists for this club" });
 
         var transferRequest = new ClubOwnershipTransfer
         {
@@ -138,8 +143,18 @@ public static class TransferEndpoints
             RequestedAtUtc = DateTimeOffset.UtcNow
         };
 
-        db.ClubOwnershipTransfers.Add(transferRequest);
-        await db.SaveChangesAsync(ct);
+        club.ConcurrencyToken = Guid.NewGuid();
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            db.ClubOwnershipTransfers.Add(transferRequest);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "A pending transfer request already exists for this club" });
+        }
 
         return Results.Created(
             $"/api/clubs/transfer-requests/{transferRequest.Id}",
@@ -188,6 +203,7 @@ public static class TransferEndpoints
             return Results.Forbid();
 
         var requests = await db.ClubOwnershipTransfers
+            .AsNoTracking()
             .Include(x => x.Club)
             .OrderByDescending(x => x.RequestedAtUtc)
             .Select(x => ClubMappers.ToTransferRequestResponse(x, x.Club.Name))
@@ -228,6 +244,14 @@ public static class TransferEndpoints
         transferRequest.ReviewedAtUtc = DateTimeOffset.UtcNow;
         transferRequest.ExecutedAtUtc = DateTimeOffset.UtcNow;
 
+        var newOwnerManagesAnotherClub = await db.ClubManagerAssignments
+            .AnyAsync(x => x.ManagerUserId == transferRequest.NewOwnerUserId && x.ClubId != transferRequest.ClubId && x.IsActive, ct);
+
+        if (newOwnerManagesAnotherClub)
+        {
+            return Results.Conflict(new { message = "The new owner is already an active manager of another club." });
+        }
+
         // Deactivate current owner
         var currentAssignment = await db.ClubManagerAssignments
             .FirstOrDefaultAsync(x => x.ClubId == transferRequest.ClubId && x.IsActive, ct);
@@ -248,8 +272,22 @@ public static class TransferEndpoints
             IsActive = true
         };
         db.ClubManagerAssignments.Add(newAssignment);
+        transferRequest.Club.ConcurrencyToken = Guid.NewGuid();
 
-        await db.SaveChangesAsync(ct);
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            transferRequest.ClubId,
+            [transferRequest.CurrentOwnerUserId, transferRequest.NewOwnerUserId]), EventRoutingKeys.ClubAccessInvalidated);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "Club manager assignment conflict: each club can only have one active manager and each manager can only manage one club." });
+        }
 
         logger.LogInformation(
             "Club {ClubId} ownership transferred from {OldOwner} to {NewOwner} by admin {AdminId}",
@@ -258,6 +296,7 @@ public static class TransferEndpoints
 
         return Results.Ok(ClubMappers.ToTransferRequestResponse(transferRequest, transferRequest.Club.Name));
     }
+
 
     /// <summary>
     /// Admin: Reject a transfer request.

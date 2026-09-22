@@ -13,6 +13,7 @@ public sealed class ClubMembership
     public string PhoneNumber { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
     public string Role { get; set; } = ClubMemberRoles.Member;
+    public int? TreasurerSlot { get; set; }
     public string Status { get; set; } = ClubMembershipStatuses.Pending;
     public string? RequestMessage { get; set; }
     public string PersonalInfo { get; set; } = string.Empty;

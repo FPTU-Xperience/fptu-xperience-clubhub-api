@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Events;
+using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
 using ClubService.Data;
 using ClubService.Extensions;
@@ -54,10 +57,9 @@ public static class MemberManagementEndpoints
         string? role,
         string? sortBy,
         string? sortDirection,
-        int page,
-        int pageSize,
+        int? page,
+        int? pageSize,
         ClubDbContext db,
-        ActivityStatisticsClient statisticsClient,
         ClaimsPrincipal user,
         HttpContext httpContext,
         CancellationToken cancellationToken)
@@ -68,8 +70,8 @@ public static class MemberManagementEndpoints
         if (!await db.Clubs.AnyAsync(x => x.Id == clubId, cancellationToken))
             return Results.NotFound(new { message = "Club not found." });
 
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        var actualPage = Math.Max(1, page ?? 1);
+        var actualPageSize = Math.Clamp(pageSize ?? 10, 1, 100);
 
         var query = ClubMemberQuery.ApplyFilters(
             db.ClubMemberships.AsNoTracking().Where(x => x.ClubId == clubId),
@@ -77,7 +79,7 @@ public static class MemberManagementEndpoints
         query = ClubMemberQuery.ApplySort(query, sortBy, sortDirection);
 
         var totalItems = await query.CountAsync(cancellationToken);
-        var memberships = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        var memberships = await query.Skip((actualPage - 1) * actualPageSize).Take(actualPageSize).ToListAsync(cancellationToken);
 
         var memberUserIds = memberships.Select(x => x.UserId).ToArray();
         var activeManagerUserIds = await db.ClubManagerAssignments.AsNoTracking()
@@ -86,20 +88,23 @@ public static class MemberManagementEndpoints
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        var statisticsClient = httpContext.RequestServices.GetService<ActivityStatisticsClient>();
         IReadOnlyDictionary<int, ActivityMemberStatistics> statistics;
         try
         {
-            statistics = await statisticsClient.GetBatchAsync(
-                clubId,
-                memberships.Select(x => new ActivityMemberInput(x.UserId, x.ReviewedAtUtc ?? x.RequestedAtUtc)).ToArray(),
-                httpContext.GetBearerToken(),
-                cancellationToken);
+            statistics = statisticsClient is not null
+                ? await statisticsClient.GetBatchAsync(
+                    clubId,
+                    memberships.Select(x => new ActivityMemberInput(x.UserId, x.ReviewedAtUtc ?? x.RequestedAtUtc)).ToArray(),
+                    httpContext.GetBearerToken(),
+                    cancellationToken)
+                : new Dictionary<int, ActivityMemberStatistics>();
         }
-        catch (HttpRequestException exception)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            return Results.Problem(
-                $"Activity statistics are temporarily unavailable: {exception.Message}",
-                statusCode: StatusCodes.Status503ServiceUnavailable);
+            var logger = httpContext.RequestServices.GetService<ILogger<ActivityStatisticsClient>>();
+            logger?.LogWarning(exception, "Activity statistics are temporarily unavailable for club {ClubId}. Falling back to default statistics.", clubId);
+            statistics = new Dictionary<int, ActivityMemberStatistics>();
         }
 
         var items = memberships.Select(x =>
@@ -114,17 +119,16 @@ public static class MemberManagementEndpoints
         }).ToArray();
 
         return Results.Ok(new PagedClubMembersResponse(
-            items, page, pageSize, totalItems,
-            totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)pageSize)));
+            items, actualPage, actualPageSize, totalItems,
+            totalItems == 0 ? 0 : (int)Math.Ceiling(totalItems / (double)actualPageSize)));
     }
 
     private static async Task<IResult> GetMemberDetails(
         int clubId,
         int memberId,
-        int historyPage,
-        int historyPageSize,
+        int? historyPage,
+        int? historyPageSize,
         ClubDbContext db,
-        ActivityStatisticsClient statisticsClient,
         ClaimsPrincipal user,
         HttpContext httpContext,
         CancellationToken cancellationToken)
@@ -139,27 +143,30 @@ public static class MemberManagementEndpoints
         if (membership is null)
             return Results.NotFound(new { message = "Member not found in this club." });
 
-        historyPage = Math.Max(1, historyPage);
-        historyPageSize = Math.Clamp(historyPageSize, 1, 100);
+        var actualHistoryPage = Math.Max(1, historyPage ?? 1);
+        var actualHistoryPageSize = Math.Clamp(historyPageSize ?? 10, 1, 100);
 
+        var statisticsClient = httpContext.RequestServices.GetService<ActivityStatisticsClient>();
         ActivityStatisticsDetail detail;
         try
         {
-            detail = await statisticsClient.GetDetailAsync(
-                clubId,
-                new ActivityStatisticsDetailQuery(
-                    membership.UserId,
-                    membership.ReviewedAtUtc ?? membership.RequestedAtUtc,
-                    historyPage,
-                    historyPageSize),
-                httpContext.GetBearerToken(),
-                cancellationToken);
+            detail = statisticsClient is not null
+                ? await statisticsClient.GetDetailAsync(
+                    clubId,
+                    new ActivityStatisticsDetailQuery(
+                        membership.UserId,
+                        membership.ReviewedAtUtc ?? membership.RequestedAtUtc,
+                        actualHistoryPage,
+                        actualHistoryPageSize),
+                    httpContext.GetBearerToken(),
+                    cancellationToken)
+                : new ActivityStatisticsDetail(new ActivityMemberStatistics(membership.UserId, 0, 0, 0), Array.Empty<ActivityHistoryItem>(), actualHistoryPage, actualHistoryPageSize, 0, 0);
         }
-        catch (HttpRequestException exception)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            return Results.Problem(
-                $"Activity statistics are temporarily unavailable: {exception.Message}",
-                statusCode: StatusCodes.Status503ServiceUnavailable);
+            var logger = httpContext.RequestServices.GetService<ILogger<ActivityStatisticsClient>>();
+            logger?.LogWarning(exception, "Activity statistics detail is temporarily unavailable for member {MemberId} in club {ClubId}. Falling back to default statistics.", memberId, clubId);
+            detail = new ActivityStatisticsDetail(new ActivityMemberStatistics(membership.UserId, 0, 0, 0), Array.Empty<ActivityHistoryItem>(), actualHistoryPage, actualHistoryPageSize, 0, 0);
         }
 
         return Results.Ok(new ClubMemberDetailResponse(
@@ -171,7 +178,10 @@ public static class MemberManagementEndpoints
                 detail.Statistics.ParticipationRate),
             detail.Items.Select(x => new MemberActivityHistoryItemResponse(
                 x.ActivityId, x.Title, x.StartTimeUtc, x.ActivityStatus, x.AttendanceStatus)).ToArray(),
-            detail.Page, detail.PageSize, detail.TotalItems, detail.TotalPages));
+            actualHistoryPage,
+            actualHistoryPageSize,
+            detail.TotalItems,
+            detail.TotalPages));
     }
 
     private static async Task<IResult> RemoveMember(
@@ -179,6 +189,7 @@ public static class MemberManagementEndpoints
         int memberId,
         ClubDbContext db,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         ILogger<Program> logger,
         CancellationToken cancellationToken)
     {
@@ -202,6 +213,13 @@ public static class MemberManagementEndpoints
         membership.DeletedAtUtc = DateTimeOffset.UtcNow;
         membership.DeletedByUserId = user.GetUserId();
         membership.Status = ClubMembershipStatuses.Inactive;
+        membership.TreasurerSlot = null;
+
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            clubId,
+            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
 
         await db.SaveChangesAsync(cancellationToken);
 
@@ -265,19 +283,40 @@ public static class MemberManagementEndpoints
         if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
             return Results.Forbid();
 
-        if (request.MemberIds is null
-            || request.MemberIds.Count is < 1 or > 500
-            || request.MemberIds.Distinct().Count() != request.MemberIds.Count)
+        var memberIds = request.MemberIds?.Where(id => id > 0).Distinct().ToArray() ?? [];
+        var userIds = request.UserIds?.Where(id => id > 0).Distinct().ToArray() ?? [];
+
+        if (memberIds.Length == 0 && userIds.Length == 0)
         {
-            return Results.BadRequest(new { message = "Provide between 1 and 500 unique member IDs." });
+            return Results.BadRequest(new { message = "Provide between 1 and 500 unique member IDs or user IDs." });
+        }
+
+        if (memberIds.Length > 500 || userIds.Length > 500)
+        {
+            return Results.BadRequest(new { message = "Cannot query more than 500 IDs at once." });
         }
 
         var cutoff = request.JoinedOnOrBefore ?? DateTimeOffset.MaxValue;
-        var rows = await db.ClubMemberships.AsNoTracking()
+        var query = db.ClubMemberships.AsNoTracking()
             .Where(x => x.ClubId == clubId
-                && request.MemberIds.Contains(x.Id)
                 && x.Status == ClubMembershipStatuses.Approved
-                && (x.ReviewedAtUtc ?? x.RequestedAtUtc) <= cutoff)
+                && (x.ReviewedAtUtc ?? x.RequestedAtUtc) <= cutoff);
+
+        // SEC-F11: Filter exclusively by active approved club memberships
+        if (memberIds.Length > 0 && userIds.Length > 0)
+        {
+            query = query.Where(x => memberIds.Contains(x.Id) || userIds.Contains(x.UserId));
+        }
+        else if (memberIds.Length > 0)
+        {
+            query = query.Where(x => memberIds.Contains(x.Id));
+        }
+        else
+        {
+            query = query.Where(x => userIds.Contains(x.UserId));
+        }
+
+        var rows = await query
             .OrderBy(x => x.FullName)
             .Select(x => new ClubMemberRosterItemResponse(
                 x.Id, x.UserId, x.FullName, x.Email, x.PhoneNumber,

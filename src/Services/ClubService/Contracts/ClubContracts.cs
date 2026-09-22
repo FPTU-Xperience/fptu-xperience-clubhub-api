@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace ClubService.Contracts;
 
@@ -293,4 +293,7 @@ public sealed record MemberActivityHistoryItemResponse(int ActivityId, string Ti
 public sealed record ClubMemberDetailResponse(ClubMembershipResponse Member, DateTimeOffset JoinedAtUtc, MemberParticipationResponse Participation, IReadOnlyCollection<MemberActivityHistoryItemResponse> ActivityHistory, int HistoryPage, int HistoryPageSize, int HistoryTotalItems, int HistoryTotalPages);
 public sealed record ClubMemberRosterItemResponse(int Id, int UserId, string FullName, string Email, string PhoneNumber, string Role, string Status, DateTimeOffset JoinedAtUtc);
 public sealed record PagedClubMemberRosterResponse(IReadOnlyCollection<ClubMemberRosterItemResponse> Items, int Page, int PageSize, int TotalItems, int TotalPages);
-public sealed record ResolveClubMemberRosterRequest(IReadOnlyCollection<int> MemberIds, DateTimeOffset? JoinedOnOrBefore);
+public sealed record ResolveClubMemberRosterRequest(
+    IReadOnlyCollection<int>? MemberIds = null,
+    DateTimeOffset? JoinedOnOrBefore = null,
+    IReadOnlyCollection<int>? UserIds = null);

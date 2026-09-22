@@ -1,4 +1,6 @@
-﻿namespace ClubService.Models;
+using System.ComponentModel.DataAnnotations;
+
+namespace ClubService.Models;
 
 public sealed class Club
 {
@@ -13,6 +15,8 @@ public sealed class Club
     public string? ScheduleLabel { get; set; }
     public bool IsRecruiting { get; set; } = false;
     public bool IsActive { get; set; } = true;
+    [ConcurrencyCheck]
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? DeletedAtUtc { get; set; }
     public int? DeletedByUserId { get; set; }

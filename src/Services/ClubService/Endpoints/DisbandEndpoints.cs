@@ -80,7 +80,7 @@ public static class DisbandEndpoints
             .AnyAsync(x => x.ClubId == clubId && x.Status == ClubDisbandStatuses.Pending, ct);
 
         if (existingRequest)
-            return Results.BadRequest(new { message = "A pending disband request already exists for this club" });
+            return Results.Conflict(new { message = "A pending disband request already exists for this club" });
 
         var disbandRequest = new ClubDisbandRequest
         {
@@ -92,8 +92,18 @@ public static class DisbandEndpoints
             RequestedAtUtc = DateTimeOffset.UtcNow
         };
 
-        db.ClubDisbandRequests.Add(disbandRequest);
-        await db.SaveChangesAsync(ct);
+        club.ConcurrencyToken = Guid.NewGuid();
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            db.ClubDisbandRequests.Add(disbandRequest);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "A pending disband request already exists for this club" });
+        }
 
         return Results.Created(
             $"/api/clubs/disband-requests/{disbandRequest.Id}",
@@ -142,6 +152,7 @@ public static class DisbandEndpoints
             return Results.Forbid();
 
         var requests = await db.ClubDisbandRequests
+            .AsNoTracking()
             .Include(x => x.Club)
             .OrderByDescending(x => x.RequestedAtUtc)
             .Select(x => ClubMappers.ToDisbandRequestResponse(x, x.Club.Name))

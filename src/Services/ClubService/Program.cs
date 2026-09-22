@@ -1,6 +1,11 @@
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Cors;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
+using ClubReportHub.Shared.Security;
+using ClubReportHub.Shared.Tracing;
 using ClubService.Data;
 using ClubService.Endpoints;
 using ClubService.Infrastructure;
@@ -14,16 +19,18 @@ builder.Services.AddDbContext<ClubDbContext>(options =>
 
 // Authentication & Authorization
 builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
+builder.Services.AddClubReportTracing();
 
 // Event Bus (Redis Streams)
 builder.Services.AddRedisStreamEventBus(builder.Configuration);
+builder.Services.AddTransactionalOutbox<ClubDbContext>();
 
 // HTTP Client for Activity Service
 builder.Services.AddHttpClient<ActivityStatisticsClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Services:ActivityService:BaseUrl"] ?? "http://localhost:5106/");
     client.Timeout = TimeSpan.FromSeconds(15);
-});
+}).AddCorrelationIdForwarding().AddStandardResilienceHandler();
 
 // API Documentation
 builder.Services.AddEndpointsApiExplorer();
@@ -34,8 +41,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? ["http://localhost:3000", "http://localhost:5173"];
+        var allowedOrigins = CorsOriginConfiguration.ResolveAllowedOrigins(
+            builder.Configuration,
+            builder.Environment);
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
@@ -44,13 +52,17 @@ builder.Services.AddCors(options =>
 });
 
 // Health Checks
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ClubDbContext>("club-db", tags: ["ready"])
+    .AddRedisHealthCheck();
 
 var app = builder.Build();
 
 // ============================================================================
 // Pipeline Configuration
 // ============================================================================
+
+app.UseCorrelationId();
 
 if (app.Environment.IsDevelopment())
 {
@@ -67,6 +79,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwaggerUI();
 }
 
+app.UseSecurityHeaders();
+
 // CORS
 app.UseCors("frontend");
 
@@ -75,10 +89,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Health Check
-app.MapHealthChecks("/health");
+app.MapStandardHealthChecks();
 
 // Error Endpoint
-app.MapGet("/error", () => Results.Problem("An unexpected error occurred.")).AllowAnonymous();
+app.MapGlobalErrorEndpoint();
 
 // Root Endpoint
 app.MapGet("/", () => Results.Ok(new { service = "Club Service", status = "running" }));
@@ -104,6 +118,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
     await db.ApplyMigrationsWithRetryAsync(logger);
+    await ClubSchemaUpgrader.ApplyAsync(db);
     await ClubSeeder.SeedAsync(db);
 }
 

@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Events;
+using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
 using ClubService.Data;
 using ClubService.Extensions;
@@ -7,6 +10,7 @@ using ClubService.Mappers;
 using ClubService.Models;
 using ClubService.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace ClubService.Endpoints;
@@ -59,12 +63,13 @@ public static class MembershipEndpoints
         int id,
         JoinClubRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var club = await db.Clubs
             .Include(x => x.ManagerAssignments)
             .Include(x => x.Memberships)
-            .FirstOrDefaultAsync(x => x.Id == id && x.IsActive);
+            .FirstOrDefaultAsync(x => x.Id == id && x.IsActive, cancellationToken);
 
         if (club is null)
         {
@@ -84,7 +89,7 @@ public static class MembershipEndpoints
         }
 
         var existing = await db.ClubMemberships.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(x => x.ClubId == id && x.UserId == userId);
+            .FirstOrDefaultAsync(x => x.ClubId == id && x.UserId == userId, cancellationToken);
 
         if (existing is not null)
         {
@@ -95,12 +100,13 @@ public static class MembershipEndpoints
                 existing.DeletedByUserId = null;
                 existing.Status = ClubMembershipStatuses.Pending;
                 existing.Role = ClubMemberRoles.Member;
+                existing.TreasurerSlot = null;
                 ClubMappers.ApplyJoinRequest(existing, request);
                 existing.ReviewNote = null;
                 existing.RequestedAtUtc = DateTimeOffset.UtcNow;
                 existing.ReviewedAtUtc = null;
                 existing.ReviewedByUserId = null;
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(cancellationToken);
                 return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
             }
 
@@ -117,7 +123,7 @@ public static class MembershipEndpoints
 
         ClubMappers.ApplyJoinRequest(membership, request);
         db.ClubMemberships.Add(membership);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
 
         membership.Club = club;
         return Results.Created($"/api/clubs/memberships/{membership.Id}", ClubMappers.ToMembershipResponse(membership));
@@ -126,19 +132,21 @@ public static class MembershipEndpoints
     private static async Task<IResult> GetClubMemberships(
         int id,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(id, user.GetUserId()))
+        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(id, user.GetUserId(), cancellationToken))
         {
             return Results.Forbid();
         }
 
         var memberships = await db.ClubMemberships
+            .AsNoTracking()
             .Include(x => x.Club)
             .Where(x => x.ClubId == id)
             .OrderBy(x => x.Status)
             .ThenBy(x => x.FullName)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Results.Ok(memberships.Select(ClubMappers.ToMembershipResponse));
     }
@@ -147,7 +155,9 @@ public static class MembershipEndpoints
         int membershipId,
         ReviewClubMembershipRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
         if (request.Note?.Trim().Length > 1000)
         {
@@ -156,14 +166,14 @@ public static class MembershipEndpoints
 
         var membership = await db.ClubMemberships
             .Include(x => x.Club)
-            .FirstOrDefaultAsync(x => x.Id == membershipId);
+            .FirstOrDefaultAsync(x => x.Id == membershipId, cancellationToken);
 
         if (membership is null)
         {
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId()))
+        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
         {
             return Results.Forbid();
         }
@@ -179,7 +189,14 @@ public static class MembershipEndpoints
         membership.ReviewedAtUtc = DateTimeOffset.UtcNow;
         membership.ReviewedByUserId = user.GetUserId();
 
-        await db.SaveChangesAsync();
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            membership.ClubId,
+            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+
+        await db.SaveChangesAsync(cancellationToken);
+
         return Results.Ok(ClubMappers.ToMembershipResponse(membership));
     }
 
@@ -187,7 +204,9 @@ public static class MembershipEndpoints
         int membershipId,
         ReviewClubMembershipRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
         if (request.Note?.Trim().Length > 1000)
         {
@@ -196,14 +215,14 @@ public static class MembershipEndpoints
 
         var membership = await db.ClubMemberships
             .Include(x => x.Club)
-            .FirstOrDefaultAsync(x => x.Id == membershipId);
+            .FirstOrDefaultAsync(x => x.Id == membershipId, cancellationToken);
 
         if (membership is null)
         {
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId()))
+        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
         {
             return Results.Forbid();
         }
@@ -215,28 +234,39 @@ public static class MembershipEndpoints
 
         membership.Status = ClubMembershipStatuses.Rejected;
         membership.Role = ClubMemberRoles.Member;
+        membership.TreasurerSlot = null;
         membership.ReviewNote = request.Note?.Trim();
         membership.ReviewedAtUtc = DateTimeOffset.UtcNow;
         membership.ReviewedByUserId = user.GetUserId();
 
-        await db.SaveChangesAsync();
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            membership.ClubId,
+            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+
+        await db.SaveChangesAsync(cancellationToken);
+
         return Results.Ok(ClubMappers.ToMembershipResponse(membership));
     }
+
 
     private static async Task<IResult> AssignTreasurer(
         int id,
         AssignTreasurerRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(id, user.GetUserId()))
+        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(id, user.GetUserId(), cancellationToken))
         {
             return Results.Forbid();
         }
 
         var club = await db.Clubs
             .Include(x => x.Memberships)
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (club is null)
         {
@@ -250,22 +280,61 @@ public static class MembershipEndpoints
         }
 
         var isActiveManager = await db.ClubManagerAssignments.AsNoTracking()
-            .AnyAsync(x => x.ClubId == id && x.ManagerUserId == membership.UserId && x.IsActive);
+            .AnyAsync(x => x.ClubId == id && x.ManagerUserId == membership.UserId && x.IsActive, cancellationToken);
 
-        var treasurerCount = club.Memberships.Count(x => x.Role == ClubMemberRoles.Treasurer && x.Status == ClubMembershipStatuses.Approved);
+        var activeTreasurers = club.Memberships
+            .Where(x => x.Role == ClubMemberRoles.Treasurer && x.Status == ClubMembershipStatuses.Approved && !x.IsDeleted)
+            .ToList();
 
         var assignmentError = ClubMemberRoleRules.ValidateTreasurerAssignment(
             isActiveManager,
             membership.Role == ClubMemberRoles.Treasurer,
-            treasurerCount);
+            activeTreasurers.Count);
 
         if (assignmentError is not null)
         {
             return Results.Conflict(new { message = assignmentError });
         }
 
+        // Determine free slot (1 or 2)
+        if (membership.Role != ClubMemberRoles.Treasurer || !membership.TreasurerSlot.HasValue)
+        {
+            var occupiedSlots = activeTreasurers
+                .Where(x => x.Id != membership.Id && x.TreasurerSlot.HasValue)
+                .Select(x => x.TreasurerSlot!.Value)
+                .ToHashSet();
+
+            if (!occupiedSlots.Contains(1))
+            {
+                membership.TreasurerSlot = 1;
+            }
+            else if (!occupiedSlots.Contains(2))
+            {
+                membership.TreasurerSlot = 2;
+            }
+            else
+            {
+                return Results.Conflict(new { message = "A club can have at most two treasurers." });
+            }
+        }
+
         ClubMemberRoleRules.ApplyTreasurerRole(membership, request.MemberName);
-        await db.SaveChangesAsync();
+        club.ConcurrencyToken = Guid.NewGuid();
+
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            id,
+            [request.MemberUserId]), EventRoutingKeys.ClubAccessInvalidated);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "A club can have at most two treasurers." });
+        }
 
         membership.Club = club;
         return Results.Ok(ClubMappers.ToMembershipResponse(membership));
@@ -274,24 +343,33 @@ public static class MembershipEndpoints
     private static async Task<IResult> RemoveTreasurerRole(
         int membershipId,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
         var membership = await db.ClubMemberships
             .Include(x => x.Club)
-            .FirstOrDefaultAsync(x => x.Id == membershipId);
+            .FirstOrDefaultAsync(x => x.Id == membershipId, cancellationToken);
 
         if (membership is null)
         {
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId()))
+        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
         {
             return Results.Forbid();
         }
 
         ClubMemberRoleRules.ApplyMemberRole(membership);
-        await db.SaveChangesAsync();
+        membership.Club.ConcurrencyToken = Guid.NewGuid();
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            membership.ClubId,
+            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+
+        await db.SaveChangesAsync(cancellationToken);
 
         return Results.Ok(ClubMappers.ToMembershipResponse(membership));
     }
@@ -299,18 +377,20 @@ public static class MembershipEndpoints
     private static async Task<IResult> RemoveMembership(
         int membershipId,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
     {
         var membership = await db.ClubMemberships
             .Include(x => x.Club)
-            .FirstOrDefaultAsync(x => x.Id == membershipId);
+            .FirstOrDefaultAsync(x => x.Id == membershipId, cancellationToken);
 
         if (membership is null)
         {
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId()))
+        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
         {
             return Results.Forbid();
         }
@@ -319,8 +399,17 @@ public static class MembershipEndpoints
         membership.DeletedAtUtc = DateTimeOffset.UtcNow;
         membership.DeletedByUserId = user.GetUserId();
         membership.Status = ClubMembershipStatuses.Inactive;
+        membership.TreasurerSlot = null;
+        membership.Club.ConcurrencyToken = Guid.NewGuid();
 
-        await db.SaveChangesAsync();
+        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            membership.ClubId,
+            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+
+        await db.SaveChangesAsync(cancellationToken);
+
         return Results.NoContent();
     }
 }

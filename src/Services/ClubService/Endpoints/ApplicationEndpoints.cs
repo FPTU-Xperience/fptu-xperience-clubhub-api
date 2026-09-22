@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
@@ -8,6 +9,7 @@ using ClubService.Extensions;
 using ClubService.Mappers;
 using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ClubService.Endpoints;
 
@@ -61,24 +63,27 @@ public static class ApplicationEndpoints
             .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
     }
 
-    private static async Task<IResult> GetAllApplications(ClubDbContext db)
+    private static async Task<IResult> GetAllApplications(ClubDbContext db, CancellationToken cancellationToken)
     {
         var applications = await db.ClubCreationApplications
+            .AsNoTracking()
             .OrderByDescending(x => x.SubmittedAtUtc)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Results.Ok(applications.Select(ClubMappers.ToApplicationResponse));
     }
 
     private static async Task<IResult> GetMyApplications(
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var userId = user.GetUserId();
         var applications = await db.ClubCreationApplications
+            .AsNoTracking()
             .Where(x => x.RequesterUserId == userId)
             .OrderByDescending(x => x.SubmittedAtUtc)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Results.Ok(applications.Select(ClubMappers.ToApplicationResponse));
     }
@@ -86,7 +91,8 @@ public static class ApplicationEndpoints
     private static async Task<IResult> SubmitApplication(
         CreateClubApplicationRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var userId = user.GetUserId();
         var code = ValidationExtensions.NormalizeOrGenerateClubCode(request.Code, userId);
@@ -97,17 +103,17 @@ public static class ApplicationEndpoints
             return Results.BadRequest(new { message = validationError });
         }
 
-        if (await db.ClubManagerAssignments.AnyAsync(x => x.ManagerUserId == userId && x.IsActive))
+        if (await db.ClubManagerAssignments.AsNoTracking().AnyAsync(x => x.ManagerUserId == userId && x.IsActive, cancellationToken))
         {
             return Results.Conflict(new { message = "Each club owner can manage one club only." });
         }
 
-        if (await db.Clubs.AnyAsync(x => x.Code == code))
+        if (await db.Clubs.AnyAsync(x => x.Code == code, cancellationToken))
         {
             return Results.Conflict(new { message = "Club code already exists." });
         }
 
-        if (await db.ClubCreationApplications.AnyAsync(x => x.RequesterUserId == userId && x.Status == ClubApplicationStatuses.Submitted))
+        if (await db.ClubCreationApplications.AnyAsync(x => x.RequesterUserId == userId && x.Status == ClubApplicationStatuses.Submitted, cancellationToken))
         {
             return Results.Conflict(new { message = "You already have a pending club creation application." });
         }
@@ -116,7 +122,7 @@ public static class ApplicationEndpoints
         ClubMappers.ApplyClubApplicationRequest(application, request, code);
 
         db.ClubCreationApplications.Add(application);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
 
         return Results.Created($"/api/clubs/applications/{application.Id}", ClubMappers.ToApplicationResponse(application));
     }
@@ -125,9 +131,10 @@ public static class ApplicationEndpoints
         int applicationId,
         CreateClubApplicationRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
-        var application = await db.ClubCreationApplications.FirstOrDefaultAsync(x => x.Id == applicationId);
+        var application = await db.ClubCreationApplications.FirstOrDefaultAsync(x => x.Id == applicationId, cancellationToken);
         if (application is null)
         {
             return Results.NotFound();
@@ -153,7 +160,7 @@ public static class ApplicationEndpoints
             return Results.BadRequest(new { message = validationError });
         }
 
-        if (await db.Clubs.AnyAsync(x => x.Code == code))
+        if (await db.Clubs.AnyAsync(x => x.Code == code, cancellationToken))
         {
             return Results.Conflict(new { message = "The club code already exists." });
         }
@@ -167,7 +174,7 @@ public static class ApplicationEndpoints
         application.ReviewedByUserId = null;
         application.SubmittedAtUtc = DateTimeOffset.UtcNow;
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 
@@ -176,7 +183,6 @@ public static class ApplicationEndpoints
         ReviewClubApplicationRequest request,
         ClaimsPrincipal user,
         ClubDbContext db,
-        IEventBus eventBus,
         CancellationToken cancellationToken)
     {
         var validationError = ValidationExtensions.ValidateReviewContent(
@@ -243,8 +249,21 @@ public static class ApplicationEndpoints
             ReviewedByUserId = user.GetUserId()
         });
 
+        IDbContextTransaction? transaction = null;
+        if (db.Database.IsRelational())
+        {
+            transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        }
+
         db.Clubs.Add(club);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "Club creation conflict: club code or active manager assignment already exists." });
+        }
 
         application.Status = ClubApplicationStatuses.Approved;
         application.ReviewNote = request.Note?.Trim();
@@ -253,14 +272,20 @@ public static class ApplicationEndpoints
         application.CreatedClubId = club.Id;
         application.ReviewedAtUtc = DateTimeOffset.UtcNow;
         application.ReviewedByUserId = user.GetUserId();
-        await db.SaveChangesAsync(cancellationToken);
 
-        await eventBus.PublishAsync(new ClubCreatedEvent(
+        db.AddOutboxMessage(new ClubCreatedEvent(
             Guid.NewGuid(),
             DateTimeOffset.UtcNow,
             club.Id,
             club.Code,
-            club.Name), EventRoutingKeys.ClubCreated, cancellationToken);
+            club.Name), EventRoutingKeys.ClubCreated);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        if (transaction != null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
@@ -269,7 +294,8 @@ public static class ApplicationEndpoints
         int applicationId,
         ReviewClubApplicationRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Note))
         {
@@ -283,7 +309,7 @@ public static class ApplicationEndpoints
             return Results.BadRequest(new { message = validationError });
         }
 
-        var application = await db.ClubCreationApplications.FirstOrDefaultAsync(x => x.Id == applicationId);
+        var application = await db.ClubCreationApplications.FirstOrDefaultAsync(x => x.Id == applicationId, cancellationToken);
         if (application is null)
         {
             return Results.NotFound();
@@ -301,7 +327,7 @@ public static class ApplicationEndpoints
         application.ReviewedAtUtc = DateTimeOffset.UtcNow;
         application.ReviewedByUserId = user.GetUserId();
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 
@@ -309,7 +335,8 @@ public static class ApplicationEndpoints
         int applicationId,
         ReviewClubApplicationRequest request,
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Note))
         {
@@ -323,7 +350,7 @@ public static class ApplicationEndpoints
             return Results.BadRequest(new { message = validationError });
         }
 
-        var application = await db.ClubCreationApplications.FirstOrDefaultAsync(x => x.Id == applicationId);
+        var application = await db.ClubCreationApplications.FirstOrDefaultAsync(x => x.Id == applicationId, cancellationToken);
         if (application is null)
         {
             return Results.NotFound();
@@ -341,7 +368,7 @@ public static class ApplicationEndpoints
         application.ReviewedAtUtc = DateTimeOffset.UtcNow;
         application.ReviewedByUserId = user.GetUserId();
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 }

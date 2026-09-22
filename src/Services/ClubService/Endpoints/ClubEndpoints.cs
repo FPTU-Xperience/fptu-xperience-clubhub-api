@@ -1,5 +1,6 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
@@ -8,6 +9,7 @@ using ClubService.Extensions;
 using ClubService.Mappers;
 using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace ClubService.Endpoints;
 
@@ -80,7 +82,8 @@ public static class ClubEndpoints
         bool? active,
         bool? recruiting,
         ClubDbContext db,
-        ClaimsPrincipal user)
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
     {
         var query = db.Clubs
             .AsNoTracking()
@@ -117,14 +120,15 @@ public static class ClubEndpoints
             query = query.Where(x => x.IsRecruiting == recruiting);
         }
 
-        var result = await query.OrderBy(x => x.Name).ToListAsync();
+        var result = await query.OrderBy(x => x.Name).ToListAsync(cancellationToken);
 
         return Results.Ok(result.Select(ClubMappers.ToDirectoryResponse));
     }
 
     private static async Task<IResult> GetManagedClubs(
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var userId = user.GetUserId();
         var clubs = await db.Clubs
@@ -134,14 +138,15 @@ public static class ClubEndpoints
             .AsSplitQuery()
             .Where(x => x.ManagerAssignments.Any(m => m.ManagerUserId == userId && m.IsActive))
             .OrderBy(x => x.Name)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Results.Ok(clubs.Select(ClubMappers.ToResponse));
     }
 
     private static async Task<IResult> GetMemberships(
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var userId = user.GetUserId();
         var memberships = await db.ClubMemberships
@@ -149,14 +154,15 @@ public static class ClubEndpoints
             .Include(x => x.Club)
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.RequestedAtUtc)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Results.Ok(memberships.Select(ClubMappers.ToMembershipResponse));
     }
 
     private static async Task<IResult> GetAccessSummary(
         ClaimsPrincipal user,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var userId = user.GetUserId();
 
@@ -164,13 +170,13 @@ public static class ClubEndpoints
             .AsNoTracking()
             .Where(x => x.ManagerUserId == userId && x.IsActive)
             .Select(x => new { x.ClubId, x.Club.Name })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var memberships = await db.ClubMemberships
             .AsNoTracking()
             .Where(x => x.UserId == userId && x.Status == ClubMembershipStatuses.Approved)
             .Select(x => new { x.ClubId, x.Club.Name, x.Role })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var clubIds = managedClubs.Select(x => x.ClubId)
             .Concat(memberships.Select(x => x.ClubId))
@@ -182,13 +188,13 @@ public static class ClubEndpoints
             .AsNoTracking()
             .Where(x => clubIds.Contains(x.ClubId) && x.IsActive)
             .Select(x => new { x.ClubId, x.ManagerUserId })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var approvedMembers = await db.ClubMemberships
             .AsNoTracking()
             .Where(x => clubIds.Contains(x.ClubId) && x.Status == ClubMembershipStatuses.Approved)
             .Select(x => new { x.ClubId, x.UserId, x.Role })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         var access = clubIds.Select(clubId =>
         {
@@ -215,14 +221,15 @@ public static class ClubEndpoints
     private static async Task<IResult> GetClubById(
         int id,
         ClubDbContext db,
-        ClaimsPrincipal user)
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
     {
         var club = await db.Clubs
             .AsNoTracking()
             .Include(x => x.ManagerAssignments)
             .Include(x => x.Memberships)
             .AsSplitQuery()
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (club is null)
         {
@@ -244,7 +251,8 @@ public static class ClubEndpoints
     private static async Task<IResult> GetClubsForManager(
         int managerUserId,
         ClubDbContext db,
-        ClaimsPrincipal user)
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
     {
         if (!user.IsStudentAffairsAdministrator() && managerUserId != user.GetUserId())
         {
@@ -258,7 +266,7 @@ public static class ClubEndpoints
             .AsSplitQuery()
             .Where(x => x.ManagerAssignments.Any(m => m.ManagerUserId == managerUserId && m.IsActive))
             .OrderBy(x => x.Name)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Results.Ok(clubs.Select(ClubMappers.ToResponse));
     }
@@ -266,7 +274,6 @@ public static class ClubEndpoints
     private static async Task<IResult> CreateClub(
         CreateClubRequest request,
         ClubDbContext db,
-        IEventBus eventBus,
         CancellationToken cancellationToken)
     {
         var code = request.Code.Trim().ToUpperInvariant();
@@ -288,15 +295,28 @@ public static class ClubEndpoints
             IsRecruiting = request.IsRecruiting
         };
 
+        IDbContextTransaction? transaction = null;
+        if (db.Database.IsRelational())
+        {
+            transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        }
+
         db.Clubs.Add(club);
         await db.SaveChangesAsync(cancellationToken);
 
-        await eventBus.PublishAsync(new ClubCreatedEvent(
+        db.AddOutboxMessage(new ClubCreatedEvent(
             Guid.NewGuid(),
             DateTimeOffset.UtcNow,
             club.Id,
             club.Code,
-            club.Name), EventRoutingKeys.ClubCreated, cancellationToken);
+            club.Name), EventRoutingKeys.ClubCreated);
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        if (transaction != null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return Results.Created($"/api/clubs/{club.Id}", ClubMappers.ToResponse(club));
     }
@@ -304,12 +324,13 @@ public static class ClubEndpoints
     private static async Task<IResult> UpdateClub(
         int id,
         UpdateClubRequest request,
-        ClubDbContext db)
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
         var club = await db.Clubs
             .Include(x => x.ManagerAssignments)
             .Include(x => x.Memberships)
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (club is null)
         {
@@ -340,18 +361,19 @@ public static class ClubEndpoints
             club.DeletedByUserId = null;
         }
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
         return Results.Ok(ClubMappers.ToResponse(club));
     }
 
     private static async Task<IResult> DeleteClub(
         int id,
         ClubDbContext db,
-        ClaimsPrincipal user)
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
     {
         var club = await db.Clubs
             .Include(x => x.ManagerAssignments)
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         if (club is null)
         {
@@ -373,7 +395,7 @@ public static class ClubEndpoints
             assignment.EndedAtUtc = DateTimeOffset.UtcNow;
         }
 
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken);
         return Results.NoContent();
     }
 
