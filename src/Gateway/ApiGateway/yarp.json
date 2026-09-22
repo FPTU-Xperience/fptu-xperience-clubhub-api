@@ -1,84 +1,144 @@
 {
   "ReverseProxy": {
     "Routes": {
-      "auth": {
+      "auth-google": {
+        "Order": 1,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "auth-login",
+        "Match": { "Path": "/api/auth/google" }
+      },
+      "auth-dev-login": {
+        "Order": 1,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "auth-login",
+        "Match": { "Path": "/api/auth/dev-login" }
+      },
+      "auth-refresh": {
+        "Order": 1,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "auth-refresh",
+        "Match": { "Path": "/api/auth/refresh" }
+      },
+      "auth": {
+        "Order": 10,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/auth/{**catch-all}" }
       },
       "users": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/users/{**catch-all}" }
       },
       "roles": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/roles/{**catch-all}" }
       },
       "clubs": {
         "ClusterId": "club-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/clubs/{**catch-all}" }
       },
       "club-activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/clubs/{clubId}/activities" }
       },
       "club-activity-management": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/clubs/{clubId}/activities/{**catch-all}" }
       },
       "activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/activities/{**catch-all}" }
       },
-      "reports": {
+      "report-upload": {
+        "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "upload",
+        "Match": { "Path": "/api/reports/upload" }
+      },
+      "report-file-replace": {
+        "Order": 1,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "upload",
+        "Match": { "Path": "/api/reports/{reportId}/uploaded-file" }
+      },
+      "report-attachment-upload": {
+        "Order": 1,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "upload",
+        "Match": { "Path": "/api/reports/{id}/attachments/upload" }
+      },
+      "reports": {
+        "Order": 10,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/reports/{**catch-all}" }
       },
       "deadlines": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/deadlines/{**catch-all}" }
       },
       "kpis": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/kpis/{**catch-all}" }
       },
       "finance": {
         "ClusterId": "finance-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/finance/{**catch-all}" }
       },
       "exports": {
         "ClusterId": "export-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "export",
         "Match": { "Path": "/api/exports/{**catch-all}" }
       },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/admin/{**catch-all}" }
       },
       "student-affairs-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/student-affairs/{**catch-all}" }
       },
       "backoffice-me-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/me" }
       },
       "notifications": {
         "ClusterId": "notification-service",
         "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/notifications/{**catch-all}" }
       }
     },
