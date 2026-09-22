@@ -33,6 +33,8 @@ jobs:
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
           password: ${{ secrets.VPC_PASSWORD }}
           source: "."
           target: ${{ env.RELEASE_DIR }}
@@ -54,6 +56,8 @@ jobs:
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
           password: ${{ secrets.VPC_PASSWORD }}
           command_timeout: 25m
           envs: TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,FRONTEND_ORIGIN,CORS_ADDITIONAL_ORIGINS,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS
@@ -170,3 +174,9 @@ jobs:
             ln -sfn "${RELEASE_DIR}" "${TARGET_ROOT}/current"
             trap - ERR
             docker image prune -f
+
+            # Retain only the 5 most recent release directories to prevent disk exhaustion (OPS-F03)
+            if [ -d "${TARGET_ROOT}/releases" ]; then
+              echo "Pruning old releases in ${TARGET_ROOT}/releases, keeping latest 5..."
+              find "${TARGET_ROOT}/releases" -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +6 | xargs -r rm -rf
+            fi

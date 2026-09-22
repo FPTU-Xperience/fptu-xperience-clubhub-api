@@ -63,30 +63,65 @@ jobs:
       - name: Build
         run: dotnet build ClubReportHub.sln --configuration Release --no-restore -warnaserror
 
-      - name: Test full solution
-        run: dotnet test ClubReportHub.sln --configuration Release --no-build --logger "trx;LogFileName=backend-tests.trx"
+      - name: Test full solution (TEST-F01, TEST-F02, TEST-F03, TEST-F04, TEST-F06)
+        run: |
+          dotnet test ClubReportHub.sln \
+            --configuration Release \
+            --no-build \
+            --logger "trx" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults
 
-      - name: Upload test results
+      - name: Upload test results and coverage (TEST-F06)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-test-results
-          path: "**/TestResults/*.trx"
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
           if-no-files-found: ignore
 
-      - name: Verify EF models match migrations
+      - name: Verify EF models match migrations (TEST-F05)
         run: |
           dotnet tool install --global dotnet-ef --version 8.0.18
-          dotnet ef migrations has-pending-model-changes \
-            --project src/Services/AdminService/AdminService.csproj \
-            --startup-project src/Services/AdminService/AdminService.csproj \
-            --configuration Release \
-            --no-build
-          dotnet ef migrations has-pending-model-changes \
-            --project src/Services/ClubService/ClubService.csproj \
-            --startup-project src/Services/ClubService/ClubService.csproj \
-            --configuration Release \
-            --no-build
+          for project in \
+            src/Services/AdminService/AdminService.csproj \
+            src/Services/AuthService/AuthService.csproj \
+            src/Services/ClubService/ClubService.csproj \
+            src/Services/ActivityService/ActivityService.csproj \
+            src/Services/ReportService/ReportService.csproj \
+            src/Services/FinanceService/FinanceService.csproj \
+            src/Services/ExportService/ExportService.csproj \
+            src/Services/NotificationService/NotificationService.csproj; do
+            dotnet ef migrations has-pending-model-changes \
+              --project "$project" \
+              --startup-project "$project" \
+              --configuration Release \
+              --no-build
+          done
+
+      - name: Scan for vulnerable dependencies (SEC-F12)
+        run: |
+          # Hard gate: any vulnerable package (direct or transitive) fails the build.
+          # The solution is currently clean; regressions must be fixed by pinning the
+          # offending package, not by relaxing this check.
+          set -o pipefail
+          if ! dotnet list ClubReportHub.sln package --vulnerable --include-transitive | tee vulnerable.txt; then
+            echo "::error::Dependency vulnerability scan failed to run — treat as a gate failure."
+            exit 1
+          fi
+
+          # A missing scan result must never read as a clean scan.
+          if ! grep -q "vulnerable packages" vulnerable.txt; then
+            echo "::error::Scan produced no per-project verdict — refusing to pass silently."
+            exit 1
+          fi
+
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable packages detected — pin the offending package before merging."
+            exit 1
+          fi
 
       - name: Validate Compose
         run: docker compose config --quiet
