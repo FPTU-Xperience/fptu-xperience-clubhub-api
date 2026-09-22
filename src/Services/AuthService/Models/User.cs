@@ -12,6 +12,7 @@ public sealed class User
     public string? GoogleSubject { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsLocked { get; set; }
+    public int SecurityVersion { get; set; } = 1;
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public ICollection<UserRole> UserRoles { get; set; } = [];
 }

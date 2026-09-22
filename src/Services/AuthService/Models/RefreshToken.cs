@@ -5,6 +5,7 @@ public sealed class RefreshToken
     public int Id { get; set; }
     public int UserId { get; set; }
     public string Token { get; set; } = string.Empty;
+    public string? RawToken { get; set; }
     public string FamilyId { get; set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAtUtc { get; set; }

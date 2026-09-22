@@ -3,6 +3,8 @@ using AuthService.Data;
 using AuthService.Services;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Cors;
+using ClubReportHub.Shared.RateLimiting;
+using ClubReportHub.Shared.Tracing;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,12 +17,17 @@ public static class AuthServiceCollectionExtensions
         IConfiguration configuration,
         IHostEnvironment environment)
     {
+        services.ConfigureTrustedForwardedHeaders(configuration);
+
         // Database
         services.AddDbContext<AuthDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
         // JWT Authentication
         services.AddClubReportJwt(configuration, environment);
+        services.AddClubReportTracing();
+        services.AddMemoryCache();
+        services.AddScoped<IUserSecurityStampValidator, AuthDbContextSecurityStampValidator>();
 
         // Google proves identity; the local database allow-list decides whether
         // that identity is permitted to receive this application's JWT.
@@ -36,12 +43,12 @@ public static class AuthServiceCollectionExtensions
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = RateLimitingExtensions.CreateRateLimitRejectedHandler();
 
-            // Allow a campus-wide login burst. The old limit of five requests
-            // per IP incorrectly blocked students behind one NAT/proxy.
+            // Allow a campus-wide login burst.
             options.AddPolicy("googleSignInLimit", context =>
                 RateLimitPartition.GetSlidingWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    partitionKey: RateLimitingExtensions.ResolveClientKey(context),
                     factory: _ => new SlidingWindowRateLimiterOptions
                     {
                         PermitLimit = 1200,
@@ -54,10 +61,10 @@ public static class AuthServiceCollectionExtensions
             // Refresh token limit
             options.AddPolicy("refreshLimit", context =>
                 RateLimitPartition.GetSlidingWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    partitionKey: RateLimitingExtensions.ResolveClientKey(context),
                     factory: _ => new SlidingWindowRateLimiterOptions
                     {
-                        PermitLimit = 10,
+                        PermitLimit = 30,
                         Window = TimeSpan.FromMinutes(1),
                         SegmentsPerWindow = 5,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
@@ -84,7 +91,8 @@ public static class AuthServiceCollectionExtensions
         });
 
         // Health Checks
-        services.AddHealthChecks();
+        services.AddHealthChecks()
+            .AddDbContextCheck<AuthDbContext>("auth-db", tags: ["ready"]);
 
         return services;
     }

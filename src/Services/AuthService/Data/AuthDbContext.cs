@@ -23,6 +23,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.Email).HasMaxLength(200);
             entity.Property(x => x.GoogleSubject).HasMaxLength(255);
+            entity.Property(x => x.SecurityVersion).HasDefaultValue(1);
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -43,12 +44,14 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Ignore(x => x.IsExpired);
             entity.Ignore(x => x.IsRevoked);
             entity.Ignore(x => x.IsActive);
+            entity.Ignore(x => x.RawToken);
             entity.HasIndex(x => x.Token).IsUnique();
             entity.HasIndex(x => new { x.UserId, x.ExpiresAtUtc, x.RevokedAtUtc });
             entity.Property(x => x.Token).HasMaxLength(500);
             entity.Property(x => x.FamilyId).HasMaxLength(100);
             entity.Property(x => x.RevokedByIp).HasMaxLength(50);
             entity.Property(x => x.ReplacedByToken).HasMaxLength(500);
+            entity.Property(x => x.RevokedAtUtc).IsConcurrencyToken();
             entity.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }

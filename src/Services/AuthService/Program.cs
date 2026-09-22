@@ -2,6 +2,10 @@ using AuthService.Data;
 using AuthService.Endpoints;
 using AuthService.Extensions;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Health;
+using ClubReportHub.Shared.Security;
+using ClubReportHub.Shared.Tracing;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +17,8 @@ var app = builder.Build();
 // ============================================================================
 // Pipeline Configuration
 // ============================================================================
+
+app.UseCorrelationId();
 
 if (app.Environment.IsDevelopment())
 {
@@ -28,6 +34,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseForwardedHeaders();
+app.UseSecurityHeaders();
 app.UseCors("frontend");
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -37,8 +45,8 @@ app.UseAuthorization();
 // Health & Info Endpoints
 // ============================================================================
 
-app.MapHealthChecks("/health");
-app.MapGet("/error", () => Results.Problem("An unexpected error occurred.")).AllowAnonymous();
+app.MapStandardHealthChecks();
+app.MapGlobalErrorEndpoint();
 app.MapGet("/", () => Results.Ok(new { service = "Auth Service", status = "running" }));
 
 // ============================================================================

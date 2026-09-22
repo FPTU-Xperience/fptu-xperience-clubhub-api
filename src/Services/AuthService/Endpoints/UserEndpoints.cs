@@ -6,6 +6,7 @@ using AuthService.Services;
 using AuthService.Validators;
 using ClubReportHub.Shared.Auth;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace AuthService.Endpoints;
 
@@ -71,8 +72,11 @@ public static class UserEndpoints
     private static async Task<IResult> HandleCreateUser(
         CreateUserRequest request,
         AuthDbContext db,
-        ClaimsPrincipal actor)
+        ClaimsPrincipal actor,
+        ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("AuthService.UserManagement");
+
         // Validate input
         var validation = AuthValidators.ValidateCreateUser(request);
         if (!validation.IsValid)
@@ -131,6 +135,9 @@ public static class UserEndpoints
             new UserRole { UserId = user.Id, RoleId = role.Id }));
         await db.SaveChangesAsync();
 
+        logger.LogInformation("User created: {Username}, Email: {Email}, Roles: {Roles}, ActorId: {ActorId}",
+            user.Username, user.Email, string.Join(",", roles.Select(r => r.Name)), actor.GetUserId());
+
         return Results.Created($"/api/users/{user.Id}", ToSummary(user, roles.Select(x => x.Name)));
     }
 
@@ -139,8 +146,12 @@ public static class UserEndpoints
         UpdateUserRequest request,
         AuthDbContext db,
         ClaimsPrincipal actor,
-        RefreshTokenService refreshTokenService)
+        RefreshTokenService refreshTokenService,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("AuthService.UserManagement");
+
         // Validate input
         var validation = AuthValidators.ValidateUpdateUser(request);
         if (!validation.IsValid)
@@ -238,13 +249,26 @@ public static class UserEndpoints
 
         await db.SaveChangesAsync();
 
-        // Revoke tokens if status changed
-        if (!request.IsActive ||
+        var statusOrRoleChanged = !request.IsActive ||
             emailChanged ||
-            !string.Equals(currentRoleName, requestedRoleName, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(currentRoleName, requestedRoleName, StringComparison.OrdinalIgnoreCase);
+
+        if (statusOrRoleChanged)
+        {
+            user.SecurityVersion++;
+            cache.Remove($"sec_stamp:user:{user.Id}");
+        }
+
+        await db.SaveChangesAsync();
+
+        // Revoke tokens if status changed
+        if (statusOrRoleChanged)
         {
             await refreshTokenService.RevokeForUserAsync(user.Id);
         }
+
+        logger.LogInformation("User updated: {UserId}, Email: {Email}, Roles: {Roles}, Active: {IsActive}, ActorId: {ActorId}",
+            user.Id, user.Email, requestedRoleName, user.IsActive, actor.GetUserId());
 
         return Results.Ok(ToSummary(user, roles.Select(x => x.Name)));
     }
@@ -253,8 +277,12 @@ public static class UserEndpoints
         int id,
         AuthDbContext db,
         ClaimsPrincipal actor,
-        RefreshTokenService refreshTokenService)
+        RefreshTokenService refreshTokenService,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("AuthService.UserManagement");
+
         // Find user
         var user = await db.Users
             .Include(x => x.UserRoles)
@@ -294,8 +322,12 @@ public static class UserEndpoints
         }
 
         user.IsLocked = true;
+        user.SecurityVersion++;
         await db.SaveChangesAsync();
+        cache.Remove($"sec_stamp:user:{user.Id}");
         await refreshTokenService.RevokeForUserAsync(user.Id);
+
+        logger.LogInformation("User locked: {UserId}, ActorId: {ActorId}", user.Id, actor.GetUserId());
 
         return Results.NoContent();
     }
@@ -303,8 +335,12 @@ public static class UserEndpoints
     private static async Task<IResult> HandleUnlockUser(
         int id,
         AuthDbContext db,
-        ClaimsPrincipal actor)
+        ClaimsPrincipal actor,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("AuthService.UserManagement");
+
         // Find user
         var user = await db.Users
             .Include(x => x.UserRoles)
@@ -330,7 +366,11 @@ public static class UserEndpoints
         }
 
         user.IsLocked = false;
+        user.SecurityVersion++;
         await db.SaveChangesAsync();
+        cache.Remove($"sec_stamp:user:{user.Id}");
+
+        logger.LogInformation("User unlocked: {UserId}, ActorId: {ActorId}", user.Id, actor.GetUserId());
 
         return Results.NoContent();
     }
