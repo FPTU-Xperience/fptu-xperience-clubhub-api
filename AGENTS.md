@@ -42,22 +42,3 @@ This project is indexed by GitNexus as **fptu-xperience-clubhub-api** (2396 symb
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-## Antigravity / Gemini Delegation
-
-Antigravity CLI (`agy`) is available through `scripts/run-gemini-task.ps1`.
-The wrapper is the canonical way to call Gemini from this repository.
-
-- By default, use the wrapper without `-NewSession` so the active Gemini conversation is continued.
-- Use `-NewSession` only when switching to an unrelated feature or when the existing context is no longer useful.
-- Every delegated prompt must state the goal, the exact directory or files in scope, and an explicit stop condition.
-- Delegate only bounded, heavy work such as multi-file code generation, broad refactoring, or iterative compile-fix work.
-- Run simple inspection and verification yourself: `git status`, `git diff`, directory listing, config reads, `dotnet build`, `dotnet test`, and `dotnet run`.
-- Do not include secrets in prompts. Preserve unrelated user changes. Review the diff and run relevant checks after Gemini edits.
-
-Examples:
-
-```powershell
-powershell -File ./scripts/run-gemini-task.ps1 "Generate DTOs for ClubService. Only write files inside src/Services/ClubService/Contracts/. Stop immediately once the DTOs compile. Do not modify other files."
-powershell -File ./scripts/run-gemini-task.ps1 "Start a fresh task: refactor the report workflow only inside src/Services/ReportService/. Stop after the requested files are updated and do not change tests or configuration." -NewSession
-```
