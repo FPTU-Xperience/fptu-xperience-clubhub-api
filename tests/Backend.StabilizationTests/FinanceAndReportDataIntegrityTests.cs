@@ -124,35 +124,51 @@ public sealed class FinanceAndReportDataIntegrityTests
     {
         const int clubId = 11;
         const int managerUserId = 102;
-        await using var app = await CreateFinanceTestAppAsync(clubId, managerUserId);
-        var proposalId = await SeedBudgetProposalAsync(app, clubId, managerUserId, 10_000_000m);
+        var databasePath = Path.Combine(Path.GetTempPath(), $"clubhub-settlement-concurrency-{Guid.NewGuid():N}.db");
+        var app = await CreateFinanceTestAppAsync(
+            clubId,
+            managerUserId,
+            options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
 
-        using var clientA = app.GetTestClient();
-        clientA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(managerUserId, AuthRoles.ClubManager));
+        try
+        {
+            var proposalId = await SeedBudgetProposalAsync(app, clubId, managerUserId, 10_000_000m);
 
-        using var clientB = app.GetTestClient();
-        clientB.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(managerUserId, AuthRoles.ClubManager));
+            using var clientA = app.GetTestClient();
+            clientA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(managerUserId, AuthRoles.ClubManager));
 
-        var taskA = clientA.PostAsJsonAsync($"/api/finance/proposals/{proposalId}/settlements",
-            new CreateSettlementRequest(4_000_000m, "https://storage.example.com/receiptA.pdf"));
-        var taskB = clientB.PostAsJsonAsync($"/api/finance/proposals/{proposalId}/settlements",
-            new CreateSettlementRequest(5_000_000m, "https://storage.example.com/receiptB.pdf"));
+            using var clientB = app.GetTestClient();
+            clientB.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(managerUserId, AuthRoles.ClubManager));
 
-        var responses = await Task.WhenAll(taskA, taskB);
+            var taskA = clientA.PostAsJsonAsync($"/api/finance/proposals/{proposalId}/settlements",
+                new CreateSettlementRequest(4_000_000m, "https://storage.example.com/receiptA.pdf"));
+            var taskB = clientB.PostAsJsonAsync($"/api/finance/proposals/{proposalId}/settlements",
+                new CreateSettlementRequest(5_000_000m, "https://storage.example.com/receiptB.pdf"));
 
-        var okCount = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
-        var conflictCount = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
+            var responses = await Task.WhenAll(taskA, taskB);
 
-        Assert.Equal(1, okCount);
-        Assert.Equal(1, conflictCount);
+            var okCount = responses.Count(r => r.StatusCode == HttpStatusCode.OK);
+            var conflictCount = responses.Count(r => r.StatusCode == HttpStatusCode.Conflict);
 
-        await using var scope = app.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<FinanceDbContext>();
-        var activeSettlements = await db.Settlements
-            .Where(s => s.BudgetProposalId == proposalId && (s.Status == FinanceStatuses.Submitted || s.Status == FinanceStatuses.Approved))
-            .ToListAsync();
+            Assert.Equal(1, okCount);
+            Assert.Equal(1, conflictCount);
 
-        Assert.Single(activeSettlements);
+            await using var scope = app.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<FinanceDbContext>();
+            var activeSettlements = await db.Settlements
+                .Where(s => s.BudgetProposalId == proposalId && (s.Status == FinanceStatuses.Submitted || s.Status == FinanceStatuses.Approved))
+                .ToListAsync();
+
+            Assert.Single(activeSettlements);
+        }
+        finally
+        {
+            await app.DisposeAsync();
+            if (File.Exists(databasePath))
+            {
+                try { File.Delete(databasePath); } catch { }
+            }
+        }
     }
 
     #endregion
@@ -381,7 +397,10 @@ public sealed class FinanceAndReportDataIntegrityTests
 
     #region Helpers & Test Servers
 
-    private static async Task<WebApplication> CreateFinanceTestAppAsync(int clubId = 10, int userId = 100)
+    private static async Task<WebApplication> CreateFinanceTestAppAsync(
+        int clubId = 10,
+        int userId = 100,
+        Action<DbContextOptionsBuilder>? configureDatabase = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
         builder.WebHost.UseTestServer();
@@ -393,7 +412,17 @@ public sealed class FinanceAndReportDataIntegrityTests
         });
 
         var dbName = $"finance-test-{Guid.NewGuid():N}";
-        builder.Services.AddDbContext<FinanceDbContext>(o => o.UseInMemoryDatabase(dbName));
+        builder.Services.AddDbContext<FinanceDbContext>(o =>
+        {
+            if (configureDatabase is null)
+            {
+                o.UseInMemoryDatabase(dbName);
+            }
+            else
+            {
+                configureDatabase(o);
+            }
+        });
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
         builder.Services.AddSingleton(CreateClubAccessClient(clubId, userId));
 

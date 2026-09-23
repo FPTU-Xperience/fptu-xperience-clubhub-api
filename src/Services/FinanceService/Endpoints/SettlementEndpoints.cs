@@ -122,19 +122,18 @@ public static class SettlementEndpoints
             ReceiptUrl = request.ReceiptUrl.Trim()
         };
         proposal.Version++;
+        proposal.Settlements.Add(settlement);
+        db.FinanceTransactions.Add(new FinanceTransaction
+        {
+            ClubId = proposal.ClubId,
+            Amount = request.TotalSpent,
+            Type = TransactionTypes.SettlementSubmitted,
+            Description = $"Đã nộp quyết toán cho {proposal.Title}",
+            ReferenceId = proposal.Id
+        });
 
         try
         {
-            await db.SaveChangesAsync(cancellationToken);
-            proposal.Settlements.Add(settlement);
-            db.FinanceTransactions.Add(new FinanceTransaction
-            {
-                ClubId = proposal.ClubId,
-                Amount = request.TotalSpent,
-                Type = TransactionTypes.SettlementSubmitted,
-                Description = $"Đã nộp quyết toán cho {proposal.Title}",
-                ReferenceId = proposal.Id
-            });
             await db.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException)

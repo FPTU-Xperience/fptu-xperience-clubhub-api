@@ -265,44 +265,56 @@ public sealed class ClubDataIntegrityConcurrencyTests
     [Fact]
     public async Task AssignManager_ConcurrentAssignments_AllowsOnlyOneActiveManagerPerClub()
     {
-        await using var app = await CreateTestAppAsync();
-        int clubId;
-
-        await using (var scope = app.Services.CreateAsyncScope())
+        var databasePath = Path.Combine(Path.GetTempPath(), $"clubhub-manager-concurrency-{Guid.NewGuid():N}.db");
+        var app = await CreateTestAppAsync(options => options.UseSqlite($"Data Source={databasePath};Default Timeout=30"));
+        try
         {
-            var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            int clubId;
 
-            var club = CreateClub("CLUB-M", "Club M");
-            db.Clubs.Add(club);
-            await db.SaveChangesAsync();
-            clubId = club.Id;
+            await using (var scope = app.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
+                await db.Database.EnsureCreatedAsync();
+
+                var club = CreateClub("CLUB-M", "Club M");
+                db.Clubs.Add(club);
+                await db.SaveChangesAsync();
+                clubId = club.Id;
+            }
+
+            using var clientA = app.GetTestClient();
+            clientA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(1, AuthRoles.Admin));
+
+            using var clientB = app.GetTestClient();
+            clientB.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(1, AuthRoles.Admin));
+
+            var taskA = clientA.PostAsJsonAsync($"/api/clubs/{clubId}/managers", new AssignManagerRequest(801, "Manager 801"));
+            var taskB = clientB.PostAsJsonAsync($"/api/clubs/{clubId}/managers", new AssignManagerRequest(802, "Manager 802"));
+
+            var responses = await Task.WhenAll(taskA, taskB);
+
+            var successResponses = responses.Where(r => r.StatusCode == HttpStatusCode.OK).ToList();
+            var conflictResponses = responses.Where(r => r.StatusCode == HttpStatusCode.Conflict).ToList();
+
+            Assert.NotEmpty(successResponses);
+
+            await using (var scope = app.Services.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
+                var activeManagers = await db.ClubManagerAssignments
+                    .Where(m => m.ClubId == clubId && m.IsActive)
+                    .ToListAsync();
+
+                Assert.Single(activeManagers);
+            }
         }
-
-        using var clientA = app.GetTestClient();
-        clientA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(1, AuthRoles.Admin));
-
-        using var clientB = app.GetTestClient();
-        clientB.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(1, AuthRoles.Admin));
-
-        var taskA = clientA.PostAsJsonAsync($"/api/clubs/{clubId}/managers", new AssignManagerRequest(801, "Manager 801"));
-        var taskB = clientB.PostAsJsonAsync($"/api/clubs/{clubId}/managers", new AssignManagerRequest(802, "Manager 802"));
-
-        var responses = await Task.WhenAll(taskA, taskB);
-
-        var successResponses = responses.Where(r => r.StatusCode == HttpStatusCode.OK).ToList();
-        var conflictResponses = responses.Where(r => r.StatusCode == HttpStatusCode.Conflict).ToList();
-
-        Assert.NotEmpty(successResponses);
-
-        await using (var scope = app.Services.CreateAsyncScope())
+        finally
         {
-            var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            var activeManagers = await db.ClubManagerAssignments
-                .Where(m => m.ClubId == clubId && m.IsActive)
-                .ToListAsync();
-
-            Assert.Single(activeManagers);
+            await app.DisposeAsync();
+            if (File.Exists(databasePath))
+            {
+                try { File.Delete(databasePath); } catch { }
+            }
         }
     }
 
@@ -466,7 +478,7 @@ public sealed class ClubDataIntegrityConcurrencyTests
     // Helper Methods & Setup
     // ============================================================================
 
-    private static async Task<WebApplication> CreateTestAppAsync()
+    private static async Task<WebApplication> CreateTestAppAsync(Action<DbContextOptionsBuilder>? configureDatabase = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -482,7 +494,16 @@ public sealed class ClubDataIntegrityConcurrencyTests
 
         var dbName = $"club-integrity-{Guid.NewGuid():N}";
         builder.Services.AddDbContext<ClubDbContext>(options =>
-            options.UseInMemoryDatabase(dbName));
+        {
+            if (configureDatabase is null)
+            {
+                options.UseInMemoryDatabase(dbName);
+            }
+            else
+            {
+                configureDatabase(options);
+            }
+        });
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
 
         var app = builder.Build();

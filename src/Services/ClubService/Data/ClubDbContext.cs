@@ -81,7 +81,6 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.Property(x => x.Skills).HasMaxLength(1000);
             entity.Property(x => x.Expectations).HasMaxLength(1000);
             entity.Property(x => x.Contributions).HasMaxLength(1000);
-            entity.Property(x => x.AdditionalInfoJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.ReviewNote).HasMaxLength(1000);
         });
 
@@ -101,7 +100,6 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.Property(x => x.ContactPhone).HasMaxLength(40);
             entity.Property(x => x.FounderRole).HasMaxLength(200);
             entity.Property(x => x.FounderOrganization).HasMaxLength(300);
-            entity.Property(x => x.FoundingMembersJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.MainActivities).HasMaxLength(2000);
             entity.Property(x => x.ActivityFrequency).HasMaxLength(200);
             entity.Property(x => x.ExpectedLocation).HasMaxLength(500);

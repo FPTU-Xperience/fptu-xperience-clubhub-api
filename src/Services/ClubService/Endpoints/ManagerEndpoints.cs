@@ -62,15 +62,6 @@ public static class ManagerEndpoints
 
         club.ConcurrencyToken = Guid.NewGuid();
 
-        try
-        {
-            await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            return Results.Conflict(new { message = "Each club owner can manage one club only and each club can have only one active owner." });
-        }
-
         foreach (var assignment in club.ManagerAssignments.Where(x => x.IsActive))
         {
             assignment.IsActive = false;

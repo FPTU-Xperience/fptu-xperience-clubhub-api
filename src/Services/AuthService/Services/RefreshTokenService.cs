@@ -141,14 +141,14 @@ public sealed class RefreshTokenService
             {
                 // A concurrent request on this same instance may have just completed rotation.
                 // Give the winner a short window to populate the cache if it hasn't yet:
-                for (var attempt = 0; attempt < 10; attempt++)
+                for (var attempt = 0; attempt < 30; attempt++)
                 {
                     if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentWinner) && concurrentWinner is not null)
                     {
                         return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentWinner);
                     }
 
-                    await Task.Delay(TimeSpan.FromMilliseconds(20));
+                    await Task.Delay(TimeSpan.FromMilliseconds(50));
                 }
 
                 // If not in cache after wait, the replacement is stored only as a hash and must never
@@ -196,14 +196,14 @@ public sealed class RefreshTokenService
         {
             // Another concurrent request committed the rotation at this exact instant!
             // Give the winning request a short window to populate this process-local cache.
-            for (var attempt = 0; attempt < 5; attempt++)
+            for (var attempt = 0; attempt < 30; attempt++)
             {
                 if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentResponse) && concurrentResponse is not null)
                 {
                     return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentResponse);
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(20));
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
             }
 
             return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: oldToken.User);
