@@ -139,9 +139,20 @@ public sealed class RefreshTokenService
 
             if (elapsed <= TimeSpan.FromSeconds(RotationGracePeriodSeconds))
             {
-                // The replacement is stored only as a hash and must never be returned as a bearer credential.
-                // A same-instance concurrent request is handled by the cache fast path above. A cache miss
-                // cannot safely reconstruct the raw replacement token, so the client must keep the winner's response.
+                // A concurrent request on this same instance may have just completed rotation.
+                // Give the winner a short window to populate the cache if it hasn't yet:
+                for (var attempt = 0; attempt < 10; attempt++)
+                {
+                    if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentWinner) && concurrentWinner is not null)
+                    {
+                        return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentWinner);
+                    }
+
+                    await Task.Delay(TimeSpan.FromMilliseconds(20));
+                }
+
+                // If not in cache after wait, the replacement is stored only as a hash and must never
+                // be returned as a bearer credential. The client must use the winner's response.
                 return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: oldToken.User);
             }
 
