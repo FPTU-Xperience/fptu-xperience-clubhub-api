@@ -78,6 +78,28 @@ jobs:
                 echo "Refusing deployment: existing SQL container belongs to Compose project '${existing_project}', expected '${COMPOSE_PROJECT_NAME}'." >&2
                 exit 1
               fi
+
+              if docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
+                echo "Creating automated database backup before deployment..."
+                backup_timestamp="$(date +%Y%m%d_%H%M%S)"
+                docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                  -S localhost -U sa -P "${SQL_PASSWORD}" -C \
+                  -Q "
+                    DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
+                    DECLARE db_cursor CURSOR FOR
+                      SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
+                    OPEN db_cursor;
+                    FETCH NEXT FROM db_cursor INTO @name;
+                    WHILE @@FETCH_STATUS = 0
+                    BEGIN
+                      SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT;';
+                      EXEC sp_executesql @sql;
+                      FETCH NEXT FROM db_cursor INTO @name;
+                    END
+                    CLOSE db_cursor;
+                    DEALLOCATE db_cursor;
+                  " || echo "Notice: Automated pre-deployment database backup encountered a non-critical issue; proceeding."
+              fi
             fi
 
             docker compose -p "${COMPOSE_PROJECT_NAME}" build
