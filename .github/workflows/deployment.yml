@@ -45,7 +45,7 @@ jobs:
         env:
           TARGET_ROOT: ${{ env.TARGET_ROOT }}
           RELEASE_DIR: ${{ env.RELEASE_DIR }}
-          COMPOSE_PROJECT_NAME: legacy-api
+          COMPOSE_PROJECT_NAME: fptux-clubhub-api
           SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
           FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
@@ -66,19 +66,21 @@ jobs:
 
             export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
 
-            cd "${RELEASE_DIR}"
-            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
-
             if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
               existing_project="$(
                 docker inspect clubreporthub-sqlserver \
                   --format '{{ index .Config.Labels "com.docker.compose.project" }}'
               )"
-              if [ "${existing_project}" != "${COMPOSE_PROJECT_NAME}" ]; then
-                echo "Refusing deployment: existing SQL container belongs to Compose project '${existing_project}', expected '${COMPOSE_PROJECT_NAME}'." >&2
-                exit 1
+              if [ -n "${existing_project}" ]; then
+                echo "Preserving existing Compose project: '${existing_project}' to protect volume attachment."
+                COMPOSE_PROJECT_NAME="${existing_project}"
               fi
+            fi
 
+            cd "${RELEASE_DIR}"
+            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
+
+            if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
               if docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
                 echo "Creating automated database backup before deployment..."
                 backup_timestamp="$(date +%Y%m%d_%H%M%S)"
