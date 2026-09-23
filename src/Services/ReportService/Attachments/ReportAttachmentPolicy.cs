@@ -91,8 +91,11 @@ public static class ReportAttachmentPolicy
 
         try
         {
-            var fullCandidate = Path.GetFullPath(candidatePath);
-            var fullRoot = Path.GetFullPath(rootPath);
+            var normalizedCandidateInput = candidatePath.Replace('\\', '/');
+            var normalizedRootInput = rootPath.Replace('\\', '/');
+
+            var fullCandidate = Path.GetFullPath(normalizedCandidateInput);
+            var fullRoot = Path.GetFullPath(normalizedRootInput);
 
             var normalizedRoot = fullRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                                  + Path.DirectorySeparatorChar;

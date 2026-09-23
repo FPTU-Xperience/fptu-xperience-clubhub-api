@@ -131,32 +131,43 @@ public sealed class CrossServiceOutboxAndDualWriteTests
             requestId = req.Id;
         }
 
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
+        var tempFileAsStorage = Path.GetTempFileName();
+        try
+        {
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Exports:StoragePath"] = tempFileAsStorage
+                })
+                .Build();
+
+            await using (var scope = sp.CreateAsyncScope())
             {
-                ["Exports:StoragePath"] = "Z:\\invalid_dir_path_that_fails_generation\\!@#"
-            })
-            .Build();
+                var db = scope.ServiceProvider.GetRequiredService<ExportDbContext>();
+                var generator = new ExportFileGenerator(config);
+                var job = new ExportGenerationJob(db, generator, config, NullLogger<ExportGenerationJob>.Instance);
 
-        await using (var scope = sp.CreateAsyncScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ExportDbContext>();
-            var generator = new ExportFileGenerator(config);
-            var job = new ExportGenerationJob(db, generator, config, NullLogger<ExportGenerationJob>.Instance);
+                // Job throws on failure so Hangfire can retry
+                await Assert.ThrowsAnyAsync<Exception>(() => job.GenerateAsync(requestId, CancellationToken.None));
+            }
 
-            // Job throws on failure so Hangfire can retry
-            await Assert.ThrowsAnyAsync<Exception>(() => job.GenerateAsync(requestId, CancellationToken.None));
+            await using (var scope = sp.CreateAsyncScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ExportDbContext>();
+                var req = await db.ExportRequests.SingleAsync(x => x.Id == requestId);
+                Assert.Equal(ExportStatuses.Failed, req.Status);
+                Assert.NotNull(req.ErrorMessage);
+
+                // Crucial: No outbox event is created on failed generation
+                Assert.Empty(db.OutboxMessages);
+            }
         }
-
-        await using (var scope = sp.CreateAsyncScope())
+        finally
         {
-            var db = scope.ServiceProvider.GetRequiredService<ExportDbContext>();
-            var req = await db.ExportRequests.SingleAsync(x => x.Id == requestId);
-            Assert.Equal(ExportStatuses.Failed, req.Status);
-            Assert.NotNull(req.ErrorMessage);
-
-            // Crucial: No outbox event is created on failed generation
-            Assert.Empty(db.OutboxMessages);
+            if (File.Exists(tempFileAsStorage))
+            {
+                File.Delete(tempFileAsStorage);
+            }
         }
     }
 

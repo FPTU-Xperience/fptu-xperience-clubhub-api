@@ -14,8 +14,10 @@ public static class ContentDispositionSanitizer
             return fallback;
         }
 
-        // 1. Strip directory paths and path traversal
-        var fileName = Path.GetFileName(rawFileName.Trim());
+        // 1. Strip directory paths and path traversal cross-platform
+        var trimmed = rawFileName.Trim();
+        var lastSlash = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        var fileName = lastSlash >= 0 ? trimmed[(lastSlash + 1)..] : trimmed;
 
         // 2. Remove CRLF to prevent HTTP response splitting / header injection
         fileName = fileName.Replace("\r", string.Empty).Replace("\n", string.Empty);
