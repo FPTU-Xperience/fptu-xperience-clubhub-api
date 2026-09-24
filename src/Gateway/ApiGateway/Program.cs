@@ -15,6 +15,7 @@ builder.Configuration
     .AddJsonFile($"yarp.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
 
 builder.Services.ConfigureTrustedForwardedHeaders(builder.Configuration);
+builder.Services.AddClubReportTracing();
 builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
 
 var authServiceUrl = builder.Configuration.GetValue<string>("Services:AuthServiceUrl");

@@ -113,6 +113,7 @@ public static class RemoteSecurityStampExtensions
         Uri authServiceBaseUrl)
     {
         services.AddMemoryCache();
+        services.AddClubReportTracing();
         services.AddHttpClient<IUserSecurityStampValidator, RemoteUserSecurityStampValidator>(client =>
         {
             client.BaseAddress = authServiceBaseUrl;

@@ -221,6 +221,7 @@ public static class ClubAccessServiceCollectionExtensions
             options.ExpirationScanFrequency = TimeSpan.FromMinutes(5);
         });
 
+        services.AddClubReportTracing();
         services.AddHttpClient<ClubAccessClient>(client =>
         {
             var baseUrl = configuration["Services:ClubService:BaseUrl"] ?? "http://localhost:5102";

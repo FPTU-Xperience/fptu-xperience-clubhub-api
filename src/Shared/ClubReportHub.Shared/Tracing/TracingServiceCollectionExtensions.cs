@@ -13,6 +13,9 @@ public static class TracingServiceCollectionExtensions
 
     public static IHttpClientBuilder AddCorrelationIdForwarding(this IHttpClientBuilder builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddTransient<CorrelationIdDelegatingHandler>();
         return builder.AddHttpMessageHandler<CorrelationIdDelegatingHandler>();
     }
 }
