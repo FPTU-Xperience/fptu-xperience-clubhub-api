@@ -6,6 +6,7 @@ namespace ActivityService.Infrastructure;
 
 public sealed record ClubMemberRosterItem(int Id, int UserId, string FullName, string Email, string PhoneNumber, string Role, string Status, DateTimeOffset JoinedAtUtc);
 public sealed record ClubMemberRosterPage(IReadOnlyCollection<ClubMemberRosterItem> Items, int Page, int PageSize, int TotalItems, int TotalPages);
+public sealed record MyClubMembership(int Id, int ClubId, int UserId, string FullName, string Status, DateTimeOffset RequestedAtUtc, DateTimeOffset? ReviewedAtUtc);
 public sealed record ResolveRosterRequest(
     IReadOnlyCollection<int>? MemberIds = null,
     DateTimeOffset? JoinedOnOrBefore = null,
@@ -13,6 +14,21 @@ public sealed record ResolveRosterRequest(
 
 public sealed class ClubMemberRosterClient(HttpClient httpClient)
 {
+    public async Task<MyClubMembership?> GetMyApprovedMembershipAsync(
+        int clubId,
+        int userId,
+        string? bearerToken,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/clubs/me/memberships");
+        SetBearer(request, bearerToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        var memberships = await response.Content.ReadFromJsonAsync<IReadOnlyCollection<MyClubMembership>>(cancellationToken: cancellationToken) ?? [];
+        return memberships.FirstOrDefault(x => x.ClubId == clubId && x.UserId == userId
+            && x.Id > 0 && string.Equals(x.Status, "Approved", StringComparison.Ordinal));
+    }
+
     public async Task<ClubMemberRosterPage> GetAsync(
         int clubId,
         DateTimeOffset joinedOnOrBefore,

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
@@ -22,6 +23,10 @@ public static class ProposalEndpoints
         group.MapGet("/proposals", GetProposals);
         group.MapGet("/proposals/{id:int}", GetProposalById);
         group.MapPost("/proposals", CreateProposal);
+        group.MapPost("/proposals/{id:int}/submit", SubmitProposal);
+        group.MapPost("/proposals/{id:int}/manager-review", ManagerReviewProposal);
+        group.MapPost("/proposals/{id:int}/review", ReviewProposal)
+            .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
         group.MapPost("/proposals/{id:int}/manager-approve", ManagerApproveProposal);
         group.MapPost("/proposals/{id:int}/manager-reject", ManagerRejectProposal);
         group.MapPost("/proposals/{id:int}/approve", ApproveProposal)
@@ -30,19 +35,129 @@ public static class ProposalEndpoints
             .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
     }
 
-    private static async Task<IResult> GetProposals(
-        int? clubId,
-        string? status,
-        int page,
-        int pageSize,
+    private static async Task<IResult> SubmitProposal(
+        int id,
         FinanceDbContext db,
         ClaimsPrincipal user,
         HttpContext httpContext,
         ClubAccessClient clubAccess,
         CancellationToken cancellationToken)
     {
-        page = Math.Max(page, 1);
-        pageSize = pageSize is <= 0 or > 100 ? 20 : pageSize;
+        var proposal = await db.BudgetProposals.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (proposal is null) return Results.NotFound();
+        if (!user.IsFinanceReviewer() && proposal.ProposedByUserId != user.GetUserId() &&
+            !await clubAccess.CanAccessFinanceClubAsync(proposal.ClubId, httpContext, cancellationToken))
+            return Results.Forbid();
+        if (proposal.Status != FinanceStatuses.Submitted)
+            return Results.Conflict(new { message = "This proposal is no longer awaiting manager review." });
+        return Results.Ok(new { success = true, status = "pending_manager_review" });
+    }
+
+    private static async Task<IResult> ManagerReviewProposal(
+        int id,
+        JsonElement request,
+        FinanceDbContext db,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        ClubAccessClient clubAccess,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadReview(request, out var review))
+            return Results.BadRequest(new { message = "A review note of at most 1,000 characters is required." });
+        var proposal = await db.BudgetProposals.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (proposal is null) return Results.NotFound();
+        if (proposal.SourceReportId.HasValue &&
+            !await ValidateCombinedReportWorkflowAsync(proposal, httpContext, futureEventReports, config, cancellationToken))
+            return Results.BadRequest(new { message = "Review this budget together with its future event report." });
+        if (proposal.Status != FinanceStatuses.Submitted)
+            return Results.Conflict(new { message = "Only submitted proposals can receive a manager review note." });
+        var access = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken))
+            .FirstOrDefault(x => x.ClubId == proposal.ClubId && x.IsManager);
+        if (access is null) return Results.Forbid();
+        if (proposal.ProposedByUserId == user.GetUserId())
+            return Results.BadRequest(new { message = "The proposal creator cannot review their own proposal." });
+        if (proposal.ManagerReviewNote == review && proposal.ManagerReviewedByUserId == user.GetUserId())
+            return Results.Ok(new { success = true });
+        proposal.ManagerReviewNote = review;
+        proposal.ManagerReviewedByUserId = user.GetUserId();
+        proposal.ManagerReviewedAtUtc = DateTimeOffset.UtcNow;
+        proposal.Version++;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Proposal changed while it was being reviewed." });
+        }
+        return Results.Ok(new { success = true });
+    }
+
+    private static async Task<IResult> ReviewProposal(
+        int id,
+        JsonElement request,
+        FinanceDbContext db,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        FutureEventReportClient futureEventReports,
+        IConfiguration config,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadReview(request, out var review))
+            return Results.BadRequest(new { message = "A review note of at most 1,000 characters is required." });
+        var proposal = await db.BudgetProposals.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (proposal is null) return Results.NotFound();
+        if (proposal.SourceReportId.HasValue &&
+            !await ValidateCombinedReportWorkflowAsync(proposal, httpContext, futureEventReports, config, cancellationToken))
+            return Results.BadRequest(new { message = "Review this budget together with its future event report." });
+        if (proposal.Status != FinanceStatuses.ManagerApproved)
+            return Results.Conflict(new { message = "The club manager must approve this proposal before final review." });
+        if (proposal.ProposedByUserId == user.GetUserId())
+            return Results.BadRequest(new { message = "The proposal creator cannot review their own proposal." });
+        if (proposal.ReviewNote == review && proposal.ReviewedByUserId == user.GetUserId())
+            return Results.Ok(new { success = true });
+        proposal.ReviewNote = review;
+        proposal.ReviewedByUserId = user.GetUserId();
+        proposal.ReviewedAtUtc = DateTimeOffset.UtcNow;
+        proposal.Version++;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Proposal changed while it was being reviewed." });
+        }
+        return Results.Ok(new { success = true });
+    }
+
+    private static bool TryReadReview(JsonElement request, out string review)
+    {
+        review = string.Empty;
+        if (request.ValueKind != JsonValueKind.Object ||
+            !request.TryGetProperty("review", out var value) || value.ValueKind != JsonValueKind.String)
+            return false;
+        review = value.GetString()?.Trim() ?? string.Empty;
+        return review.Length is > 0 and <= 1000;
+    }
+
+    private static async Task<IResult> GetProposals(
+        int? clubId,
+        string? status,
+        int? page,
+        int? pageSize,
+        FinanceDbContext db,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        ClubAccessClient clubAccess,
+        CancellationToken cancellationToken)
+    {
+        var actualPage = Math.Max(page ?? 1, 1);
+        var actualPageSize = pageSize is <= 0 ? 20 : Math.Min(pageSize ?? 20, 100);
+        var skip = (int)Math.Min((long)(actualPage - 1) * actualPageSize, int.MaxValue);
 
         var baseQuery = db.BudgetProposals.AsNoTracking();
         if (!user.IsFinanceReviewer())
@@ -74,12 +189,12 @@ public static class ProposalEndpoints
         var total = await baseQuery.CountAsync(cancellationToken);
         var rows = await baseQuery
             .OrderByDescending(x => x.ProposedAtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .Skip(skip)
+            .Take(actualPageSize)
             .Include(x => x.Settlements)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
-        return Results.Ok(new { total, page, pageSize, items = rows.Select(FinanceMappers.ToBudgetProposalResponse) });
+        return Results.Ok(new { total, page = actualPage, pageSize = actualPageSize, items = rows.Select(FinanceMappers.ToBudgetProposalResponse) });
     }
 
     private static async Task<IResult> GetProposalById(

@@ -37,7 +37,7 @@ using ReportService.Models;
 
 namespace Backend.StabilizationTests;
 
-public sealed class CrossServiceWorkflowAuthorizationTests
+public sealed partial class CrossServiceWorkflowAuthorizationTests
 {
     private const string SigningKey = "cross-service-workflow-auth-test-key-32chars!";
     private const string TestInternalWorkflowToken = "test-internal-workflow-token-secret-12345";

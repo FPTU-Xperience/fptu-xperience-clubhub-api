@@ -86,6 +86,13 @@
         "RateLimiterPolicy": "upload",
         "Match": { "Path": "/api/reports/{id}/attachments/upload" }
       },
+      "report-file-alias": {
+        "Order": 1,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "upload",
+        "Match": { "Path": "/api/reports/{reportId}/file" }
+      },
       "reports": {
         "Order": 10,
         "ClusterId": "report-service",
@@ -98,6 +105,12 @@
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/deadlines/{**catch-all}" }
+      },
+      "reporting-deadlines": {
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/reporting-deadlines" }
       },
       "kpis": {
         "ClusterId": "report-service",

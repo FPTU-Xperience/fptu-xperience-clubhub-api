@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using AuthService.Contracts;
 using AuthService.Data;
 using AuthService.Models;
@@ -14,17 +15,45 @@ public static class UserEndpoints
 {
     public static IEndpointRouteBuilder MapUserEndpoints(this IEndpointRouteBuilder app)
     {
+        // Self-service must not inherit the management-only group policy.
+        app.MapGet("/api/users/me", HandleGetCurrentUser)
+            .WithTags("Users")
+            .RequireAuthorization(AuthPolicies.AllActors);
+
         var users = app.MapGroup("/api/users")
             .WithTags("Users")
             .RequireAuthorization(AuthPolicies.SystemAdministration);
 
         users.MapGet("/", HandleGetUsers);
+        users.MapGet("/{id:int}", HandleGetUser);
         users.MapPost("/", HandleCreateUser);
         users.MapPut("/{id:int}", HandleUpdateUser);
+        users.MapDelete("/{id:int}", HandleDisableUser);
+        users.MapPost("/{id:int}/roles", HandleAssignRole);
+        users.MapDelete("/{id:int}/roles/{roleId}", HandleRemoveRole);
         users.MapPatch("/{id:int}/lock", HandleLockUser);
         users.MapPatch("/{id:int}/unlock", HandleUnlockUser);
 
         return app;
+    }
+
+    private static Task<IResult> HandleGetCurrentUser(
+        ClaimsPrincipal user,
+        AuthDbContext db,
+        CancellationToken cancellationToken)
+        => HandleGetUser(user.GetUserId(), db, cancellationToken);
+
+    private static async Task<IResult> HandleGetUser(
+        int id,
+        AuthDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var user = await db.Users.AsNoTracking()
+            .Include(x => x.UserRoles)
+            .ThenInclude(x => x.Role)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        return user is null ? Results.NotFound() : Results.Ok(ToSummary(user));
     }
 
     private static async Task<IResult> HandleGetUsers(
@@ -271,6 +300,203 @@ public static class UserEndpoints
             user.Id, user.Email, requestedRoleName, user.IsActive, actor.GetUserId());
 
         return Results.Ok(ToSummary(user, roles.Select(x => x.Name)));
+    }
+
+    private static async Task<IResult> HandleDisableUser(
+        int id,
+        AuthDbContext db,
+        ClaimsPrincipal actor,
+        RefreshTokenService refreshTokenService,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable, cancellationToken);
+        var user = await db.Users
+            .Include(x => x.UserRoles)
+            .ThenInclude(x => x.Role)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (user is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (id == actor.GetUserId())
+        {
+            return Results.BadRequest(new { message = "You cannot deactivate your own account." });
+        }
+
+        var targetIsAdmin = user.UserRoles.Any(x => x.Role.Name == AuthRoles.Admin);
+        if (targetIsAdmin && !actor.IsInRole(AuthRoles.Admin))
+        {
+            return Results.Forbid();
+        }
+
+        if (!user.IsActive)
+        {
+            return Results.Ok(new { success = true });
+        }
+
+        if (targetIsAdmin && !user.IsLocked)
+        {
+            var otherActiveAdmins = await db.Users.CountAsync(x =>
+                x.Id != id && x.IsActive && !x.IsLocked &&
+                x.UserRoles.Any(ur => ur.Role.Name == AuthRoles.Admin), cancellationToken);
+            if (otherActiveAdmins == 0)
+            {
+                return Results.Conflict(new { message = "The final active ADMIN account cannot be deactivated." });
+            }
+        }
+
+        user.IsActive = false;
+        user.SecurityVersion++;
+        await db.SaveChangesAsync(cancellationToken);
+        await refreshTokenService.RevokeForUserAsync(user.Id);
+        await transaction.CommitAsync(cancellationToken);
+        cache.Remove($"sec_stamp:user:{user.Id}");
+
+        loggerFactory.CreateLogger("AuthService.UserManagement")
+            .LogInformation("User deactivated: {UserId}, ActorId: {ActorId}", user.Id, actor.GetUserId());
+        return Results.Ok(new { success = true });
+    }
+
+    private static Task<IResult> HandleAssignRole(
+        int id,
+        JsonElement request,
+        AuthDbContext db,
+        ClaimsPrincipal actor,
+        RefreshTokenService refreshTokenService,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        if (request.ValueKind != JsonValueKind.Object ||
+            !request.TryGetProperty("roleId", out var roleIdValue) ||
+            !TryReadRoleId(roleIdValue, out var roleId))
+        {
+            return Task.FromResult<IResult>(Results.BadRequest(new { message = "roleId must be a positive numeric role ID." }));
+        }
+
+        return ReplaceActorRoleAsync(id, roleId, null, db, actor, refreshTokenService,
+            cache, loggerFactory, cancellationToken);
+    }
+
+    private static Task<IResult> HandleRemoveRole(
+        int id,
+        string roleId,
+        AuthDbContext db,
+        ClaimsPrincipal actor,
+        RefreshTokenService refreshTokenService,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!int.TryParse(roleId, out var removedRoleId) || removedRoleId <= 0)
+        {
+            return Task.FromResult<IResult>(Results.BadRequest(new { message = "roleId must be a positive numeric role ID." }));
+        }
+
+        return ReplaceActorRoleAsync(id, null, removedRoleId, db, actor, refreshTokenService,
+            cache, loggerFactory, cancellationToken);
+    }
+
+    private static bool TryReadRoleId(JsonElement value, out int roleId)
+    {
+        roleId = 0;
+        return (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out roleId) && roleId > 0) ||
+               (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out roleId) && roleId > 0);
+    }
+
+    private static async Task<IResult> ReplaceActorRoleAsync(
+        int id,
+        int? assignedRoleId,
+        int? removedRoleId,
+        AuthDbContext db,
+        ClaimsPrincipal actor,
+        RefreshTokenService refreshTokenService,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable, cancellationToken);
+        var user = await db.Users.Include(x => x.UserRoles).ThenInclude(x => x.Role)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (user is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (user.UserRoles.Count != 1)
+        {
+            return Results.Conflict(new { message = "Account must have exactly one actor role before a role change." });
+        }
+        var currentRole = user.UserRoles.Single();
+
+        if (removedRoleId.HasValue && currentRole.RoleId != removedRoleId.Value)
+        {
+            return Results.NotFound();
+        }
+
+        var desiredRole = await db.Roles.FirstOrDefaultAsync(x => x.Id ==
+            (assignedRoleId ?? 0), cancellationToken);
+        if (removedRoleId.HasValue)
+        {
+            desiredRole = await db.Roles.FirstOrDefaultAsync(x => x.Name == AuthRoles.ClubMember,
+                cancellationToken);
+        }
+
+        if (desiredRole is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (!ActorAccountPolicy.IsAllowedGoogleActorRole(desiredRole.Name))
+        {
+            return Results.BadRequest(new { message = "Only ADMIN, CLUB_MANAGER, and CLUB_MEMBER actor roles can be assigned." });
+        }
+
+        if (!actor.IsInRole(AuthRoles.Admin) &&
+            (currentRole.Role.Name == AuthRoles.Admin || desiredRole.Name == AuthRoles.Admin))
+        {
+            return Results.Forbid();
+        }
+
+        if (currentRole.RoleId == desiredRole.Id)
+        {
+            return Results.Ok(new { success = true });
+        }
+
+        if (id == actor.GetUserId())
+        {
+            return Results.BadRequest(new { message = "You cannot change your own actor role." });
+        }
+
+        if (currentRole.Role.Name == AuthRoles.Admin && user.IsActive && !user.IsLocked)
+        {
+            var otherActiveAdmins = await db.Users.CountAsync(x =>
+                x.Id != id && x.IsActive && !x.IsLocked &&
+                x.UserRoles.Any(ur => ur.Role.Name == AuthRoles.Admin), cancellationToken);
+            if (otherActiveAdmins == 0)
+            {
+                return Results.Conflict(new { message = "The final active ADMIN account cannot be reassigned." });
+            }
+        }
+
+        db.UserRoles.Remove(currentRole);
+        await db.SaveChangesAsync(cancellationToken);
+        db.UserRoles.Add(new UserRole { UserId = id, RoleId = desiredRole.Id });
+        user.SecurityVersion++;
+        await db.SaveChangesAsync(cancellationToken);
+        await refreshTokenService.RevokeForUserAsync(id);
+        await transaction.CommitAsync(cancellationToken);
+        cache.Remove($"sec_stamp:user:{id}");
+
+        loggerFactory.CreateLogger("AuthService.UserManagement")
+            .LogInformation("Actor role changed for UserId: {UserId}, RoleId: {RoleId}, ActorId: {ActorId}",
+                id, desiredRole.Id, actor.GetUserId());
+        return Results.Ok(new { success = true });
     }
 
     private static async Task<IResult> HandleLockUser(

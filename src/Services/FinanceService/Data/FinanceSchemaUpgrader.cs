@@ -57,7 +57,7 @@ public static class FinanceSchemaUpgrader
                   AND name = N'IX_Settlements_BudgetProposalId')
                 EXEC(N'CREATE UNIQUE INDEX [IX_Settlements_BudgetProposalId]
                     ON [dbo].[Settlements] ([BudgetProposalId])
-                    WHERE [Status] <> ''Rejected''');
+                    WHERE [Status] IN (''Submitted'', ''Approved'')');
 
             IF OBJECT_ID(N'dbo.OutboxMessages', N'U') IS NULL
             BEGIN

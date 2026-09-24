@@ -8,4 +8,5 @@ public static class ReportStatuses
     public const string UnderReview = "Under Review";
     public const string Approved = "Approved";
     public const string Rejected = "Rejected";
+    public const string Archived = "Archived";
 }

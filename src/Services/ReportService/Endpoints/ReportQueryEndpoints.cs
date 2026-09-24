@@ -38,6 +38,10 @@ public static class ReportQueryEndpoints
         pageSize = pageSize is <= 0 or > 100 ? 20 : pageSize;
 
         var baseQuery = db.Reports.AsNoTracking();
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            baseQuery = baseQuery.Where(x => x.Status != ReportStatuses.Archived);
+        }
 
         var reviewer = ReportExtensions.IsReportReviewer(user);
         var financeVisibleClubIds = new HashSet<int>();
@@ -108,7 +112,7 @@ public static class ReportQueryEndpoints
         CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var query = db.Reports.AsNoTracking();
+        var query = db.Reports.AsNoTracking().Where(x => x.Status != ReportStatuses.Archived);
         if (!ReportExtensions.IsReportReviewer(user))
         {
             var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);

@@ -38,7 +38,8 @@ jobs:
           password: ${{ secrets.VPC_PASSWORD }}
           source: "."
           target: ${{ env.RELEASE_DIR }}
-          rm: true
+          # A rerun can target the active release; never delete it before validation.
+          rm: false
 
       - name: Build, start, and verify production stack
         uses: appleboy/ssh-action@v1.0.3
@@ -74,6 +75,9 @@ jobs:
               if [ -n "${existing_project}" ]; then
                 echo "Preserving existing Compose project: '${existing_project}' to protect volume attachment."
                 COMPOSE_PROJECT_NAME="${existing_project}"
+              else
+                echo "Existing SQL Server container has no Compose project label; refusing to guess its volume ownership." >&2
+                exit 1
               fi
             fi
 
@@ -81,54 +85,40 @@ jobs:
             docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
 
             if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
-              active_sa_pass=""
-              if docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
-                if docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SQL_PASSWORD}" -C -Q "SELECT 1" >/dev/null 2>&1; then
-                  echo "Verified SQL Server connectivity with current SQL_PASSWORD."
-                  active_sa_pass="${SQL_PASSWORD}"
-                elif docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ClubReportHub!2026" -C -Q "SELECT 1" >/dev/null 2>&1; then
-                  echo "Verified SQL Server connectivity with legacy password. Updating SA password to match SQL_PASSWORD..."
-                  docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ClubReportHub!2026" -C -Q "ALTER LOGIN [sa] WITH PASSWORD = '${SQL_PASSWORD}';" || true
-                  active_sa_pass="${SQL_PASSWORD}"
-                fi
-
-                if [ -n "${active_sa_pass}" ]; then
-                  echo "Creating automated database backup before deployment..."
-                  backup_timestamp="$(date +%Y%m%d_%H%M%S)"
-                  docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-                    -S localhost -U sa -P "${active_sa_pass}" -C \
-                    -Q "
-                      DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
-                      DECLARE db_cursor CURSOR FOR
-                        SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
-                      OPEN db_cursor;
-                      FETCH NEXT FROM db_cursor INTO @name;
-                      WHILE @@FETCH_STATUS = 0
-                      BEGIN
-                        SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT;';
-                        EXEC sp_executesql @sql;
-                        FETCH NEXT FROM db_cursor INTO @name;
-                      END
-                      CLOSE db_cursor;
-                      DEALLOCATE db_cursor;
-                    " || echo "Notice: Automated pre-deployment database backup encountered a non-critical issue; proceeding."
-                fi
+              if ! docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
+                echo "SQL Server container exists but is not running; deployment aborted without changing it." >&2
+                exit 1
               fi
 
-              if [ -z "${active_sa_pass}" ]; then
-                sql_volume="$(docker inspect clubreporthub-sqlserver --format '{{ range .Mounts }}{{ if eq .Destination "/var/opt/mssql" }}{{ .Name }}{{ end }}{{ end }}' 2>/dev/null || echo "")"
-                if [ -n "${sql_volume}" ]; then
-                  echo "Resetting SA password directly on volume '${sql_volume}' to match SQL_PASSWORD..."
-                  docker stop clubreporthub-sqlserver 2>/dev/null || true
-                  printf "%s\n%s\n" "${SQL_PASSWORD}" "${SQL_PASSWORD}" | docker run --rm -i \
-                    -v "${sql_volume}:/var/opt/mssql" \
-                    -e "ACCEPT_EULA=Y" \
-                    -e "MSSQL_SA_PASSWORD=${SQL_PASSWORD}" \
-                    mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04 \
-                    /opt/mssql/bin/mssql-conf set-sa-password 2>/dev/null || true
-                  echo "Direct volume SA password synchronization completed."
-                fi
+              if ! docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "${SQL_PASSWORD}" -C -b -Q "SELECT 1" >/dev/null 2>&1; then
+                echo "SQL Server authentication with SQL_PASSWORD failed; deployment aborted without changing containers or volumes." >&2
+                exit 1
               fi
+
+              echo "Creating and verifying database backups before deployment..."
+              backup_timestamp="$(date +%Y%m%d_%H%M%S)"
+              docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "${SQL_PASSWORD}" -C -b \
+                -Q "
+                  DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
+                  DECLARE db_cursor CURSOR FOR
+                    SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
+                  OPEN db_cursor;
+                  FETCH NEXT FROM db_cursor INTO @name;
+                  WHILE @@FETCH_STATUS = 0
+                  BEGIN
+                    SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT, CHECKSUM;';
+                    EXEC sp_executesql @sql;
+                    SET @sql = 'RESTORE VERIFYONLY FROM DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH CHECKSUM;';
+                    EXEC sp_executesql @sql;
+                    FETCH NEXT FROM db_cursor INTO @name;
+                  END
+                  CLOSE db_cursor;
+                  DEALLOCATE db_cursor;
+                "
+            else
+              echo "No existing SQL Server container; first deployment has no databases to back up."
             fi
 
             docker compose -p "${COMPOSE_PROJECT_NAME}" build
@@ -226,17 +216,31 @@ jobs:
             trap - ERR
             docker image prune -f
 
-            # Retain only the 5 most recent release directories by modification time to prevent disk exhaustion (OPS-F03)
+            # Retain the 5 newest releases and always preserve active/rollback targets (OPS-F03).
             if [ -d "${TARGET_ROOT}/releases" ]; then
-              echo "Pruning old releases in ${TARGET_ROOT}/releases, keeping latest 5..."
-              current_real="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || echo "")"
-              find "${TARGET_ROOT}/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
-                | sort -rn \
-                | tail -n +6 \
-                | cut -d' ' -f2- \
-                | while read -r old_rel; do
-                    if [ -n "${old_rel}" ] && [ "${old_rel}" != "${current_real}" ]; then
-                      rm -rf "${old_rel}"
-                    fi
-                  done
+              target_root_real="$(readlink -f "${TARGET_ROOT}")"
+              releases_root="$(readlink -f "${TARGET_ROOT}/releases")"
+              if [ "${target_root_real}" = "/" ] ||
+                 [ "${releases_root}" != "${target_root_real}/releases" ]; then
+                echo "Refusing to prune releases through an unexpected directory or symlink." >&2
+                exit 1
+              fi
+              current_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
+              echo "Pruning old releases in ${releases_root}, keeping the newest 5 and rollback targets..."
+              find "${releases_root}" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' |
+                sort -z -nr |
+                tail -z -n +6 |
+                while IFS= read -r -d '' candidate; do
+                  old_release="${candidate#* }"
+                  resolved_release="$(readlink -f "${old_release}")"
+                  case "${resolved_release}" in
+                    "${releases_root}/"*) ;;
+                    *) echo "Refusing to prune a path outside the release directory." >&2; exit 1 ;;
+                  esac
+                  if [ "${resolved_release}" = "${current_release}" ] ||
+                     [ "${resolved_release}" = "${previous_release}" ]; then
+                    continue
+                  fi
+                  rm -rf -- "${resolved_release}"
+                done
             fi

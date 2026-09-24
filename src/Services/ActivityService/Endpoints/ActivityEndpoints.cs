@@ -28,6 +28,7 @@ public static class ActivityEndpoints
         MapGetActivityById(activities);
         MapCreateActivity(activities);
         MapCreateFromApprovedReport(activities);
+        activities.MapActivityWriteEndpoints();
 
         return app;
     }
@@ -151,16 +152,35 @@ public static class ActivityEndpoints
             ClubAccessClient clubAccess,
             CancellationToken cancellationToken) =>
         {
+            if (request.Title is not null && request.Name is not null
+                && !string.Equals(request.Title.Trim(), request.Name.Trim(), StringComparison.Ordinal))
+                return Results.BadRequest(new { message = "Title and name must agree when both are provided." });
+            if (request.StartTimeUtc.HasValue && request.StartAt.HasValue && request.StartTimeUtc != request.StartAt)
+                return Results.BadRequest(new { message = "StartTimeUtc and startAt must agree when both are provided." });
+            if (request.EndTimeUtc.HasValue && request.EndAt.HasValue && request.EndTimeUtc != request.EndAt)
+                return Results.BadRequest(new { message = "EndTimeUtc and endAt must agree when both are provided." });
+
+            var title = request.Title ?? request.Name;
+            var start = request.StartTimeUtc ?? request.StartAt;
+            var end = request.EndTimeUtc ?? request.EndAt;
             var validationError = ValidateCreateRequest(
                 request.ClubId,
-                request.Title,
+                title,
                 request.Description,
                 request.Location,
-                request.StartTimeUtc,
-                request.EndTimeUtc);
+                start,
+                end);
             if (validationError is not null)
             {
                 return Results.BadRequest(new { message = validationError });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ClubName) || request.ClubName.Length > 200
+                || title!.Length > 200 || request.Description.Length > 2000
+                || request.Location.Length > 200
+                || (request.MeetingDays is not null && request.MeetingDays.Any(day => day is < 1 or > 7)))
+            {
+                return Results.BadRequest(new { message = "Club name, content or meeting days are invalid." });
             }
 
             if (!await CanManageClubOrReviewAllAsync(
@@ -177,10 +197,10 @@ public static class ActivityEndpoints
             {
                 ClubId = request.ClubId,
                 ClubName = request.ClubName.Trim(),
-                Title = request.Title.Trim(),
+                Title = title.Trim(),
                 Description = request.Description.Trim(),
-                StartTimeUtc = request.StartTimeUtc!.Value,
-                EndTimeUtc = request.EndTimeUtc!.Value,
+                StartTimeUtc = start!.Value,
+                EndTimeUtc = end!.Value,
                 MeetingDaysCsv = string.Join(',', NormalizeMeetingDays(request.MeetingDays)),
                 Location = request.Location.Trim(),
                 Status = ActivityStatuses.Scheduled,

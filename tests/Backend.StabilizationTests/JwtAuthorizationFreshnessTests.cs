@@ -23,9 +23,97 @@ using Microsoft.Extensions.Options;
 
 namespace Backend.StabilizationTests;
 
-public sealed class JwtAuthorizationFreshnessTests
+public sealed partial class JwtAuthorizationFreshnessTests
 {
     private const string SigningKey = "test-only-signing-key-at-least-32-characters";
+
+    [Theory]
+    [InlineData(AuthRoles.Admin)]
+    [InlineData(AuthRoles.SystemAdmin)]
+    [InlineData(AuthRoles.StudentAffairsAdmin)]
+    [InlineData(AuthRoles.ClubManager)]
+    [InlineData(AuthRoles.Treasurer)]
+    [InlineData(AuthRoles.ClubMember)]
+    public async Task UserReadContract_MeUsesAuthenticatedIdentityAndSafeSummary(string roleName)
+    {
+        await using var fixture = await AuthTestFixture.CreateAsync();
+        var role = await fixture.Db.Roles.SingleAsync();
+        role.Name = roleName;
+        var user = await fixture.Db.Users.SingleAsync();
+        user.GoogleSubject = "private-google-subject";
+        await fixture.Db.SaveChangesAsync();
+        var token = fixture.TokenFactory.CreateToken(fixture.UserId, "testuser", "Test User", [roleName], securityVersion: 1);
+        using var client = fixture.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        var response = await client.GetAsync("/api/users/me?id=999&userId=999");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(fixture.UserId, body.GetProperty("id").GetInt32());
+        Assert.Equal("testuser@fpt.edu.vn", body.GetProperty("email").GetString());
+        Assert.Equal(roleName, body.GetProperty("roles")[0].GetString());
+        Assert.Equal(new[] { "email", "fullName", "id", "isActive", "isLocked", "roles", "username" },
+            body.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
+    }
+
+    [Theory]
+    [InlineData(AuthRoles.Admin, HttpStatusCode.OK)]
+    [InlineData(AuthRoles.SystemAdmin, HttpStatusCode.OK)]
+    [InlineData(AuthRoles.StudentAffairsAdmin, HttpStatusCode.Forbidden)]
+    [InlineData(AuthRoles.ClubManager, HttpStatusCode.Forbidden)]
+    [InlineData(AuthRoles.Treasurer, HttpStatusCode.Forbidden)]
+    [InlineData(AuthRoles.ClubMember, HttpStatusCode.Forbidden)]
+    public async Task UserReadContract_DetailKeepsManagementPolicy(string roleName, HttpStatusCode expected)
+    {
+        await using var fixture = await AuthTestFixture.CreateAsync();
+        var role = await fixture.Db.Roles.SingleAsync();
+        role.Name = roleName;
+        await fixture.Db.SaveChangesAsync();
+        var token = fixture.TokenFactory.CreateToken(fixture.UserId, "testuser", "Test User", [roleName], securityVersion: 1);
+        using var client = fixture.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        var response = await client.GetAsync($"/api/users/{fixture.UserId}");
+        Assert.Equal(expected, response.StatusCode);
+        var list = await client.GetAsync("/api/users");
+        Assert.Equal(expected, list.StatusCode);
+        var missing = await client.GetAsync("/api/users/999999");
+        Assert.Equal(expected == HttpStatusCode.OK ? HttpStatusCode.NotFound : expected, missing.StatusCode);
+
+        if (expected == HttpStatusCode.OK)
+        {
+            var detail = await response.Content.ReadFromJsonAsync<UserSummary>();
+            Assert.NotNull(detail);
+            Assert.Equal(fixture.UserId, detail.Id);
+            Assert.Equal(new[] { roleName }, detail.Roles);
+        }
+    }
+
+    [Theory]
+    [InlineData("/api/users/me")]
+    [InlineData("/api/users/1")]
+    public async Task UserReadContract_AnonymousIsRejected(string path)
+    {
+        await using var fixture = await AuthTestFixture.CreateAsync();
+        using var client = fixture.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
+    }
+
+    [Fact]
+    public async Task UserReadContract_MeRejectsRevokedToken()
+    {
+        await using var fixture = await AuthTestFixture.CreateAsync();
+        var token = fixture.TokenFactory.CreateToken(fixture.UserId, "testuser", "Test User", [AuthRoles.ClubMember], securityVersion: 1);
+        var user = await fixture.Db.Users.SingleAsync();
+        user.IsLocked = true;
+        user.SecurityVersion++;
+        await fixture.Db.SaveChangesAsync();
+        using var client = fixture.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/users/me")).StatusCode);
+    }
 
     [Fact]
     public async Task ActiveUserToken_WithMatchingSecurityVersion_IsAccepted()

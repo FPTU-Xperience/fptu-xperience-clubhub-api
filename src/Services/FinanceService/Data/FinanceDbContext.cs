@@ -9,6 +9,7 @@ public sealed class FinanceDbContext(DbContextOptions<FinanceDbContext> options)
     public DbSet<BudgetProposal> BudgetProposals => Set<BudgetProposal>();
     public DbSet<Settlement> Settlements => Set<Settlement>();
     public DbSet<FinanceTransaction> FinanceTransactions => Set<FinanceTransaction>();
+    public DbSet<ManualFinanceAdjustment> ManualFinanceAdjustments => Set<ManualFinanceAdjustment>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -39,7 +40,7 @@ public sealed class FinanceDbContext(DbContextOptions<FinanceDbContext> options)
             // DATA-F02: At most one active settlement (Submitted or Approved) per budget proposal
             entity.HasIndex(x => x.BudgetProposalId)
                 .IsUnique()
-                .HasFilter("[Status] <> 'Rejected'");
+                .HasFilter("[Status] IN ('Submitted', 'Approved')");
             entity.HasIndex(x => x.Status);
             entity.Property(x => x.TotalSpent).HasPrecision(18, 2);
             entity.Property(x => x.ReceiptUrl).HasMaxLength(500);
@@ -53,6 +54,17 @@ public sealed class FinanceDbContext(DbContextOptions<FinanceDbContext> options)
             entity.Property(x => x.Amount).HasPrecision(18, 2);
             entity.Property(x => x.Type).HasMaxLength(80);
             entity.Property(x => x.Description).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<ManualFinanceAdjustment>(entity =>
+        {
+            entity.HasIndex(x => x.IdempotencyKey).IsUnique();
+            entity.HasIndex(x => x.FinanceTransactionId).IsUnique();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(100);
+            entity.Property(x => x.Reason).HasMaxLength(1000);
+            entity.HasOne(x => x.FinanceTransaction).WithOne()
+                .HasForeignKey<ManualFinanceAdjustment>(x => x.FinanceTransactionId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.ApplyOutboxConfiguration();

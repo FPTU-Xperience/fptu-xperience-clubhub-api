@@ -20,6 +20,65 @@ public static class ReportCrudEndpoints
     {
         group.MapPost("/", CreateReport);
         group.MapPut("/{id:int}", UpdateReport);
+        group.MapDelete("/{id:int}", ArchiveReport);
+    }
+
+    private static async Task<IResult> ArchiveReport(
+        int id,
+        ReportDbContext db,
+        ClaimsPrincipal user,
+        ClubAccessClient clubAccess,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var report = await db.Reports.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (report is null)
+        {
+            return Results.NotFound();
+        }
+
+        var reviewer = ReportExtensions.IsReportReviewer(user);
+        if (!reviewer && (report.CreatedByUserId != user.GetUserId() ||
+            !await ReportExtensions.CanAuthorReportsAsync(report.ClubId, report.Tag,
+                report.ReportType, clubAccess, httpContext, cancellationToken)))
+        {
+            return Results.Forbid();
+        }
+
+        if (report.Status == ReportStatuses.Archived)
+        {
+            return Results.Ok(new { success = true });
+        }
+
+        if (report.Status is not (ReportStatuses.Draft or ReportStatuses.Rejected) ||
+            report.BudgetProposalId.HasValue || report.PublishedActivityId.HasValue ||
+            report.FinanceSubmittedAtUtc.HasValue)
+        {
+            return Results.Conflict(new { message = "Only an uncommitted draft or rejected report can be archived." });
+        }
+
+        await using var transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        report.Status = ReportStatuses.Archived;
+        report.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        report.Version++;
+        AuditHelper.AddAudit(db, report.Id, "Archive", user.GetUserId(),
+            "Report archived; files and review history retained.");
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Report changed while it was being archived." });
+        }
+
+        return Results.Ok(new { success = true });
     }
 
     private static async Task<IResult> CreateReport(

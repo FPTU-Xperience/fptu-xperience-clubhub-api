@@ -17,8 +17,33 @@ public static class NotificationEndpoints
             .RequireAuthorization(AuthPolicies.AllActors);
 
         notifications.MapGet("/", GetNotificationsAsync);
+        notifications.MapGet("/{id:int}", GetNotificationAsync);
         notifications.MapPut("/{id:int}/read", MarkAsReadAsync);
         notifications.MapPut("/read-all", MarkAllAsReadAsync);
+    }
+
+    private static async Task<IResult> GetNotificationAsync(
+        int id,
+        NotificationDbContext db,
+        ClaimsPrincipal user,
+        ClubAccessClient clubAccess,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var notification = await db.Notifications.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (notification is null)
+        {
+            return Results.NotFound();
+        }
+
+        var recipientRoles = await NotificationExtensions.GetRecipientRolesAsync(user, clubAccess, httpContext, cancellationToken);
+        if (!NotificationExtensions.CanAccessNotification(user, recipientRoles, notification))
+        {
+            return Results.Forbid();
+        }
+
+        return Results.Ok(NotificationExtensions.ToResponse(notification));
     }
 
     private static async Task<IResult> GetNotificationsAsync(

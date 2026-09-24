@@ -32,6 +32,10 @@ public static class ApplicationEndpoints
             .WithName("GetMyApplications")
             .WithDescription("Get current user's club creation applications");
 
+        clubs.MapGet("/applications/{applicationId:int}", GetApplication)
+            .WithName("GetApplication")
+            .WithDescription("Get a club creation application as its owner or reviewer");
+
         // POST /api/clubs/applications - Submit new application
         clubs.MapPost("/applications", SubmitApplication)
             .WithName("SubmitApplication")
@@ -63,14 +67,50 @@ public static class ApplicationEndpoints
             .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
     }
 
-    private static async Task<IResult> GetAllApplications(ClubDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> GetAllApplications(
+        string? status,
+        ClubDbContext db,
+        CancellationToken cancellationToken)
     {
-        var applications = await db.ClubCreationApplications
-            .AsNoTracking()
+        var query = db.ClubCreationApplications.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var normalizedStatus = status.Trim();
+            if (normalizedStatus is not (ClubApplicationStatuses.Submitted or ClubApplicationStatuses.NeedsRevision
+                or ClubApplicationStatuses.Approved or ClubApplicationStatuses.Rejected))
+            {
+                return Results.BadRequest(new { message = "Invalid application status. Use Submitted, NeedsRevision, Approved, or Rejected." });
+            }
+
+            query = query.Where(x => x.Status == normalizedStatus);
+        }
+
+        var applications = await query
             .OrderByDescending(x => x.SubmittedAtUtc)
             .ToListAsync(cancellationToken);
 
         return Results.Ok(applications.Select(ClubMappers.ToApplicationResponse));
+    }
+
+    private static async Task<IResult> GetApplication(
+        int applicationId,
+        ClaimsPrincipal user,
+        ClubDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var application = await db.ClubCreationApplications.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == applicationId, cancellationToken);
+        if (application is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (application.RequesterUserId != user.GetUserId() && !user.IsStudentAffairsAdministrator())
+        {
+            return Results.Forbid();
+        }
+
+        return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 
     private static async Task<IResult> GetMyApplications(

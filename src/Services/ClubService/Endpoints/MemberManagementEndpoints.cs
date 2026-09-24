@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
@@ -29,10 +31,18 @@ public static class MemberManagementEndpoints
             .WithName("ListClubMembers")
             .WithDescription("List all members of a club with pagination and filtering");
 
+        clubs.MapPost("/{clubId:int}/members", InviteClubMember)
+            .WithName("InviteClubMember")
+            .WithDescription("Create a pending invitation; the member must accept the club rules through /join before approval");
+
         // GET /api/clubs/{clubId}/members/{memberId} - Get member details
         clubs.MapGet("/{clubId:int}/members/{memberId:int}", GetMemberDetails)
             .WithName("GetMemberDetails")
             .WithDescription("Get detailed information about a specific member");
+
+        clubs.MapPut("/{clubId:int}/members/{memberId:int}", UpdateMemberProfile)
+            .WithName("UpdateClubMemberProfile")
+            .WithDescription("Update member contact/profile fields; role, identity, consent and membership status cannot be changed here");
 
         // DELETE /api/clubs/{clubId}/members/{memberId} - Remove member from club
         clubs.MapDelete("/{clubId:int}/members/{memberId:int}", RemoveMember)
@@ -48,6 +58,79 @@ public static class MemberManagementEndpoints
         clubs.MapPost("/{clubId:int}/member-roster/resolve", ResolveRosterMembers)
             .WithName("ResolveRosterMembers")
             .WithDescription("Resolve specific members from the roster");
+    }
+
+    private static async Task<IResult> InviteClubMember(
+        int clubId,
+        JsonElement request,
+        ClaimsPrincipal user,
+        ClubDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (request.ValueKind != JsonValueKind.Object ||
+            !request.TryGetProperty("userId", out var userIdValue) ||
+            !request.TryGetProperty("fullName", out var fullNameValue) ||
+            fullNameValue.ValueKind != JsonValueKind.String ||
+            !request.TryGetProperty("role", out var roleValue) ||
+            roleValue.ValueKind != JsonValueKind.String)
+        {
+            return Results.BadRequest(new { message = "userId, fullName and role are required." });
+        }
+
+        var parsedNumber = 0;
+        var validUserId = (userIdValue.ValueKind == JsonValueKind.Number &&
+                userIdValue.TryGetInt32(out parsedNumber) && parsedNumber > 0) ||
+            (userIdValue.ValueKind == JsonValueKind.String &&
+                int.TryParse(userIdValue.GetString(), out parsedNumber) && parsedNumber > 0);
+        var fullName = fullNameValue.GetString()?.Trim();
+        if (!validUserId || string.IsNullOrWhiteSpace(fullName) || fullName.Length > 200 ||
+            roleValue.GetString() != AuthRoles.ClubMember)
+        {
+            return Results.BadRequest(new { message = "Invitation requires a positive userId, a valid name and CLUB_MEMBER role." });
+        }
+
+        var club = await db.Clubs.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == clubId && x.IsActive, cancellationToken);
+        if (club is null) return Results.NotFound();
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+            return Results.Forbid();
+        if (await db.ClubManagerAssignments.AnyAsync(x =>
+                x.ClubId == clubId && x.ManagerUserId == parsedNumber && x.IsActive, cancellationToken))
+            return Results.Conflict(new { message = "The club manager is already attached to this club." });
+        if (await db.ClubMemberships.IgnoreQueryFilters().AnyAsync(x =>
+                x.ClubId == clubId && x.UserId == parsedNumber, cancellationToken))
+            return Results.Conflict(new { message = "Membership or invitation already exists for this user." });
+
+        var membership = new ClubMembership
+        {
+            ClubId = clubId,
+            UserId = parsedNumber,
+            FullName = fullName,
+            Role = ClubMemberRoles.Member,
+            Status = ClubMembershipStatuses.Pending,
+            AcceptedClubRules = false,
+            CommittedToParticipate = false
+        };
+        db.ClubMemberships.Add(membership);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { message = "Membership or invitation already exists for this user." });
+        }
+
+        return Results.Created($"/api/clubs/memberships/{membership.Id}", new
+        {
+            membership.Id,
+            membership.ClubId,
+            membership.UserId,
+            membership.FullName,
+            role = AuthRoles.ClubMember,
+            membership.Status,
+            membership.RequestedAtUtc
+        });
     }
 
     private static async Task<IResult> ListClubMembers(
@@ -182,6 +265,54 @@ public static class MemberManagementEndpoints
             actualHistoryPageSize,
             detail.TotalItems,
             detail.TotalPages));
+    }
+
+    private static async Task<IResult> UpdateMemberProfile(
+        int clubId,
+        int memberId,
+        UpdateClubMemberProfileRequest request,
+        ClubDbContext db,
+        ClaimsPrincipal user,
+        ILogger<Program> logger,
+        CancellationToken cancellationToken)
+    {
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+            return Results.Forbid();
+
+        var membership = await db.ClubMemberships.Include(x => x.Club)
+            .FirstOrDefaultAsync(x => x.Id == memberId && x.ClubId == clubId, cancellationToken);
+        if (membership is null)
+            return Results.NotFound(new { message = "Member not found in this club." });
+
+        var fullName = request.FullName?.Trim();
+        var email = request.Email?.Trim();
+        var phone = request.PhoneNumber?.Trim();
+        var address = request.Address?.Trim();
+        var gender = request.Gender?.Trim();
+        if (fullName is null && email is null && phone is null && address is null && gender is null && request.DateOfBirth is null)
+            return Results.BadRequest(new { message = "Provide at least one profile field to update." });
+
+        if (fullName is { Length: 0 or > 200 }
+            || email is { Length: 0 or > 255 }
+            || (email is not null && !new EmailAddressAttribute().IsValid(email))
+            || phone is { Length: 0 or > 40 }
+            || address is { Length: > 500 }
+            || gender is { Length: > 20 }
+            || (request.DateOfBirth.HasValue && (request.DateOfBirth.Value == DateOnly.MinValue
+                || request.DateOfBirth.Value > DateOnly.FromDateTime(DateTime.UtcNow))))
+        {
+            return Results.BadRequest(new { message = "Invalid profile field: check name, email, phone, date of birth and field lengths." });
+        }
+
+        if (fullName is not null) membership.FullName = fullName;
+        if (email is not null) membership.Email = email;
+        if (phone is not null) membership.PhoneNumber = phone;
+        if (address is not null) membership.Address = address;
+        if (gender is not null) membership.Gender = gender;
+        if (request.DateOfBirth.HasValue) membership.DateOfBirth = request.DateOfBirth.Value;
+        await db.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("Membership {MembershipId} profile in club {ClubId} was updated by user {UserId}", memberId, clubId, user.GetUserId());
+        return Results.Ok(ClubMappers.ToMembershipResponse(membership));
     }
 
     private static async Task<IResult> RemoveMember(

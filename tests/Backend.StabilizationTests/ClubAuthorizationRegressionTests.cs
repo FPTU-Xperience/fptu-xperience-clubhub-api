@@ -93,6 +93,80 @@ public sealed class ClubAuthorizationRegressionTests
         Assert.Null(unchanged.ReviewedByUserId);
     }
 
+    [Fact]
+    public async Task InvitedMemberMustPersonallyAcceptBeforeManagerCanApprove()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Issuer"] = "ClubReportHub",
+            ["Jwt:Audience"] = "ClubReportHub.Client",
+            ["Jwt:SigningKey"] = SigningKey
+        });
+        var databaseName = $"member-invitation-{Guid.NewGuid():N}";
+        builder.Services.AddDbContext<ClubDbContext>(options =>
+            options.UseInMemoryDatabase(databaseName));
+        builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapMembershipEndpoints();
+        app.MapMemberManagementEndpoints();
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
+            var club = CreateClub("CLUB-A", "Club A");
+            club.Id = 1;
+            club.ManagerAssignments.Add(new ClubManagerAssignment { ManagerUserId = 101, IsActive = true });
+            db.Clubs.Add(club);
+            await db.SaveChangesAsync();
+            Assert.True(await db.Clubs.AnyAsync(x => x.Id == 1 && x.IsActive));
+        }
+        await app.StartAsync();
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            Assert.True(await scope.ServiceProvider.GetRequiredService<ClubDbContext>()
+                .Clubs.AnyAsync(x => x.Id == 1 && x.IsActive));
+        }
+        using var manager = app.GetTestClient();
+        manager.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(101, AuthRoles.ClubManager));
+        using var member = app.GetTestClient();
+        member.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(202, AuthRoles.ClubMember));
+
+        var invite = await manager.PostAsJsonAsync("/api/clubs/1/members",
+            new { userId = "202", fullName = "Proposed name", role = "CLUB_MEMBER" });
+        Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
+        var invited = await invite.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(ClubMembershipStatuses.Pending, invited.GetProperty("status").GetString());
+        var membershipId = invited.GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await manager.PostAsJsonAsync($"/api/clubs/memberships/{membershipId}/approve", new { note = "premature" })).StatusCode);
+
+        var join = await member.PostAsJsonAsync("/api/clubs/1/join", new
+        {
+            fullName = "Confirmed name",
+            dateOfBirth = "2002-01-01",
+            gender = "MALE",
+            email = "member@example.edu",
+            phoneNumber = "0123456789",
+            reason = "I want to join",
+            acceptedClubRules = true,
+            committedToParticipate = true
+        });
+        Assert.Equal(HttpStatusCode.OK, join.StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await manager.PostAsJsonAsync($"/api/clubs/memberships/{membershipId}/approve", new { note = "accepted" })).StatusCode);
+        await using var verifyScope = app.Services.CreateAsyncScope();
+        var stored = await verifyScope.ServiceProvider.GetRequiredService<ClubDbContext>()
+            .ClubMemberships.SingleAsync(x => x.Id == membershipId);
+        Assert.Equal(202, stored.UserId);
+        Assert.Equal("Confirmed name", stored.FullName);
+        Assert.True(stored.AcceptedClubRules);
+        Assert.True(stored.CommittedToParticipate);
+        Assert.Equal(ClubMembershipStatuses.Approved, stored.Status);
+    }
+
     private static Club CreateClub(string code, string name) => new()
     {
         Code = code,

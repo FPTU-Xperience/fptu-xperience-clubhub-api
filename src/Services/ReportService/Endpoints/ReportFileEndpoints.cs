@@ -25,11 +25,69 @@ public static class ReportFileEndpoints
         group.MapPut("/{reportId:int}/uploaded-file", ReplaceUploadedFile).DisableAntiforgery();
         group.MapDelete("/{reportId:int}/uploaded-file", DeleteUploadedFile);
 
+        // Admin FE aliases share the canonical handlers and resource authorization.
+        group.MapGet("/{reportId:int}/file", GetUploadedFile);
+        group.MapGet("/{reportId:int}/file/preview", GetUploadedFilePreview);
+        group.MapGet("/{reportId:int}/file/download", DownloadUploadedFile);
+        group.MapPost("/{reportId:int}/file", ReplaceUploadedFile).DisableAntiforgery();
+        group.MapDelete("/{reportId:int}/file", DeleteUploadedFile);
+
         group.MapPost("/{id:int}/attachments", AddAttachmentMetadata);
         group.MapPost("/{id:int}/attachments/upload", UploadAttachment)
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
         group.MapGet("/{id:int}/attachments/{attachmentId:int}/download", DownloadAttachment);
+        group.MapDelete("/{reportId:int}/attachments/{attachmentId:int}", DeleteAttachment);
+    }
+
+    private static async Task<IResult> DeleteAttachment(
+        int reportId,
+        int attachmentId,
+        ReportDbContext db,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        ClubAccessClient clubAccess,
+        CancellationToken cancellationToken)
+    {
+        var report = await db.Reports.FirstOrDefaultAsync(x => x.Id == reportId, cancellationToken);
+        if (report is null)
+        {
+            return Results.NotFound();
+        }
+        if (report.CreatedByUserId != user.GetUserId()
+            || !await ReportExtensions.CanAuthorReportsAsync(
+                report.ClubId, report.Tag, report.ReportType, clubAccess, httpContext, cancellationToken))
+        {
+            return Results.Forbid();
+        }
+        if (report.Status is not (ReportStatuses.Draft or ReportStatuses.Rejected))
+        {
+            return Results.BadRequest(new { message = "Attachments can only be changed on draft or rejected reports." });
+        }
+
+        var attachment = await db.ReportAttachments
+            .FirstOrDefaultAsync(x => x.ReportId == reportId && x.Id == attachmentId, cancellationToken);
+        if (attachment is null)
+        {
+            return Results.NotFound();
+        }
+
+        // Metadata, report version and audit are persisted atomically. Physical
+        // file retention/cleanup is deliberately separate from this request.
+        db.ReportAttachments.Remove(attachment);
+        report.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        report.Version++;
+        AuditHelper.AddAudit(db, report.Id, "DeleteAttachment", user.GetUserId(), $"Attachment metadata removed: {attachment.Id}.");
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "The report or attachment changed. Reload before retrying." });
+        }
+
+        return Results.Ok(new { success = true });
     }
 
     private static async Task<IResult> UploadReportFile(

@@ -400,6 +400,7 @@ services:
       Cors__AllowedOrigins__2: "https://*.fptux-clubhub-ui.pages.dev"
       Cors__AllowedOrigins__3: "https://fptux-legacy-ui.pages.dev"
       Cors__AllowedOrigins__4: "https://*.fptux-legacy-ui.pages.dev"
+      Cors__AllowedOrigins__5: "https://fptux-admin-ui.pages.dev"
       Cors__AdditionalOrigins: "${CORS_ADDITIONAL_ORIGINS:-}"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"

@@ -140,6 +140,8 @@ public sealed record LinkFutureEventBudgetRequest(
 
 public sealed record DeadlineRequest(string Period, DateOnly DueDate, bool IsActive);
 
+public sealed record UpdateDeadlineRequest(DateOnly? DueDate, string? Period = null, bool? IsActive = null);
+
 public sealed record MyDeadlineResponse(
     int Id,
     string Period,

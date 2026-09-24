@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ActivityService.Contracts;
 
 public sealed record ActivityResponse(
@@ -41,7 +43,10 @@ public sealed record CreateActivityRequest(
     DateTimeOffset? StartTimeUtc,
     DateTimeOffset? EndTimeUtc,
     string Location,
-    IReadOnlyCollection<int>? MeetingDays);
+    IReadOnlyCollection<int>? MeetingDays,
+    string? Name = null,
+    DateTimeOffset? StartAt = null,
+    DateTimeOffset? EndAt = null);
 
 public sealed record CreateActivityFromApprovedReportRequest(
     int ReportId,
@@ -62,6 +67,19 @@ public sealed record UpdateActivityRequest(
     string Status,
     IReadOnlyCollection<int>? MeetingDays);
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record UpdateActivityDetailsRequest(
+    string? Title = null,
+    string? Name = null,
+    string? Description = null,
+    DateTimeOffset? StartTimeUtc = null,
+    DateTimeOffset? StartAt = null,
+    DateTimeOffset? EndTimeUtc = null,
+    DateTimeOffset? EndAt = null,
+    string? Location = null,
+    IReadOnlyCollection<int>? MeetingDays = null);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RegisterActivityParticipantRequest(int? UserId, string? FullName);
 
 public sealed record MemberStatisticsInput(int UserId, DateTimeOffset JoinedAtUtc);

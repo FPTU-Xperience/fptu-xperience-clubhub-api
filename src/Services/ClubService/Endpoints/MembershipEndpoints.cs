@@ -93,6 +93,15 @@ public static class MembershipEndpoints
 
         if (existing is not null)
         {
+            if (existing.Status == ClubMembershipStatuses.Pending &&
+                (!existing.AcceptedClubRules || !existing.CommittedToParticipate))
+            {
+                ClubMappers.ApplyJoinRequest(existing, request);
+                existing.RequestedAtUtc = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+                return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
+            }
+
             if (existing.Status == ClubMembershipStatuses.Rejected || existing.IsDeleted)
             {
                 existing.IsDeleted = false;
@@ -181,6 +190,11 @@ public static class MembershipEndpoints
         if (membership.Status != ClubMembershipStatuses.Pending)
         {
             return Results.Conflict(new { message = "Only pending membership requests can be approved." });
+        }
+
+        if (!membership.AcceptedClubRules || !membership.CommittedToParticipate)
+        {
+            return Results.Conflict(new { message = "The invited member must personally accept the club rules before approval." });
         }
 
         membership.Status = ClubMembershipStatuses.Approved;

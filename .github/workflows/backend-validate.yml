@@ -32,6 +32,7 @@ jobs:
       JWT_SIGNING_KEY: "ci-only-signing-key-with-at-least-32-characters"
       FRONTEND_ORIGIN: "https://ci.example.invalid"
       ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
+      FINANCE_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
 
     steps:
       - name: Checkout
@@ -124,7 +125,10 @@ jobs:
           fi
 
       - name: Validate Compose
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          docker compose config --format json |
+            jq -e '.services["api-gateway"].environment["Cors__AllowedOrigins__5"] == "https://fptux-admin-ui.pages.dev"'
 
       - name: Build AdminService production image
         run: docker build --file src/Services/AdminService/Dockerfile --tag clubreporthub-admin:ci .

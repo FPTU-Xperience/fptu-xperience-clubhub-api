@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ClubService.Contracts;
 
@@ -185,6 +186,15 @@ public sealed record JoinClubRequest(
     [StringLength(1000)] string? Message);
 
 public sealed record ReviewClubMembershipRequest([StringLength(1000)] string? Note);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record UpdateClubMemberProfileRequest(
+    string? FullName = null,
+    string? Email = null,
+    string? PhoneNumber = null,
+    string? Address = null,
+    DateOnly? DateOfBirth = null,
+    string? Gender = null);
 
 public sealed record AssignTreasurerRequest(
     int MemberUserId,
