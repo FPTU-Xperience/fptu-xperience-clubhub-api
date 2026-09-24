@@ -63,15 +63,10 @@ public static class ServiceCollectionExtensions
         {
             options.AddPolicy("frontend", policy =>
             {
-                var allowedOrigins = ClubReportHub.Shared.Cors.CorsOriginConfiguration.ResolveAllowedOrigins(
+                ClubReportHub.Shared.Cors.CorsOriginConfiguration.ApplyFrontendCorsPolicy(
+                    policy,
                     configuration,
                     environment);
-
-                policy
-                    .WithOrigins(allowedOrigins)
-                    .AllowAnyHeader()
-                    .AllowAnyMethod()
-                    .AllowCredentials();
             });
         });
 

@@ -81,12 +81,10 @@ public static class AuthServiceCollectionExtensions
         {
             options.AddPolicy("frontend", policy =>
             {
-                policy.WithOrigins(CorsOriginConfiguration.ResolveAllowedOrigins(
-                          configuration,
-                          environment))
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .AllowCredentials();
+                CorsOriginConfiguration.ApplyFrontendCorsPolicy(
+                    policy,
+                    configuration,
+                    environment);
             });
         });
 

@@ -131,6 +131,28 @@ public sealed class CorsOriginConfigurationTests
         Assert.DoesNotContain("https://evil.example", origins);
     }
 
+    [Theory]
+    [InlineData("https://f790bd35.fptux-clubhub-ui.pages.dev", true)]
+    [InlineData("https://preview-123.fptux-clubhub-ui.pages.dev", true)]
+    [InlineData("https://fptux-clubhub-ui.pages.dev", true)]
+    [InlineData("https://unapproved-preview.pages.dev", false)]
+    [InlineData("https://evil-fptux-clubhub-ui.pages.dev", false)]
+    [InlineData("http://f790bd35.fptux-clubhub-ui.pages.dev", false)]
+    [InlineData("invalid-uri", false)]
+    [InlineData("", false)]
+    public void IsOriginAllowed_EvaluatesWildcardAndExactOriginsCorrectly(string origin, bool expected)
+    {
+        string[] allowed =
+        [
+            "https://fptux-clubhub-ui.pages.dev",
+            "https://*.fptux-clubhub-ui.pages.dev",
+            "https://fptux-legacy-ui.pages.dev"
+        ];
+
+        var result = CorsOriginConfiguration.IsOriginAllowed(origin, allowed);
+        Assert.Equal(expected, result);
+    }
+
     private static string[] Resolve(
         string environmentName,
         params (string Key, string? Value)[] values)

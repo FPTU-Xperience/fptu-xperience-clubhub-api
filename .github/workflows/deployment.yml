@@ -49,7 +49,7 @@ jobs:
           SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
           FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
-          CORS_ADDITIONAL_ORIGINS: ${{ vars.CORS_ADDITIONAL_ORIGINS }}
+          CORS_ADDITIONAL_ORIGINS: "${{ vars.CORS_ADDITIONAL_ORIGINS }},https://fptux-clubhub-ui.pages.dev,https://*.fptux-clubhub-ui.pages.dev,https://fptux-legacy-ui.pages.dev,https://*.fptux-legacy-ui.pages.dev"
           GOOGLE_CLIENT_ID: ${{ secrets.CLUBHUB_GOOGLE_CLIENT_ID }}
           GOOGLE_ALLOWED_HOSTED_DOMAIN: ${{ secrets.GOOGLE_ALLOWED_HOSTED_DOMAIN }}
           GOOGLE_ALLOWED_EMAIL_DOMAINS: ${{ secrets.GOOGLE_ALLOWED_EMAIL_DOMAINS }}

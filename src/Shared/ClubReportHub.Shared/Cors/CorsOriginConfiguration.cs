@@ -39,4 +39,60 @@ public static class CorsOriginConfiguration
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
+
+    public static bool IsOriginAllowed(string origin, IEnumerable<string> allowedOrigins)
+    {
+        if (string.IsNullOrWhiteSpace(origin))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        foreach (var allowed in allowedOrigins)
+        {
+            if (string.Equals(origin, allowed, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (allowed.StartsWith("https://*.", StringComparison.OrdinalIgnoreCase) ||
+                allowed.StartsWith("http://*.", StringComparison.OrdinalIgnoreCase))
+            {
+                var schemeEnd = allowed.IndexOf("://*.", StringComparison.OrdinalIgnoreCase);
+                var allowedScheme = allowed[..schemeEnd];
+                var rootDomain = allowed[(schemeEnd + 5)..]; // e.g. "fptux-clubhub-ui.pages.dev"
+                var suffix = "." + rootDomain;
+
+                if (string.Equals(uri.Scheme, allowedScheme, StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(uri.Host, rootDomain, StringComparison.OrdinalIgnoreCase) ||
+                     uri.Host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public static void ApplyFrontendCorsPolicy(
+        Microsoft.AspNetCore.Cors.Infrastructure.CorsPolicyBuilder policy,
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(environment);
+
+        var allowedOrigins = ResolveAllowedOrigins(configuration, environment);
+        policy.WithOrigins(allowedOrigins)
+              .SetIsOriginAllowed(origin => IsOriginAllowed(origin, allowedOrigins))
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    }
 }

@@ -39,13 +39,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
     {
-        var allowedOrigins = CorsOriginConfiguration.ResolveAllowedOrigins(
+        CorsOriginConfiguration.ApplyFrontendCorsPolicy(
+            policy,
             builder.Configuration,
             builder.Environment);
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
     });
 });
 builder.Services.AddHealthChecks()
