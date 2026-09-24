@@ -226,8 +226,17 @@ jobs:
             trap - ERR
             docker image prune -f
 
-            # Retain only the 5 most recent release directories to prevent disk exhaustion (OPS-F03)
+            # Retain only the 5 most recent release directories by modification time to prevent disk exhaustion (OPS-F03)
             if [ -d "${TARGET_ROOT}/releases" ]; then
               echo "Pruning old releases in ${TARGET_ROOT}/releases, keeping latest 5..."
-              find "${TARGET_ROOT}/releases" -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +6 | xargs -r rm -rf
+              current_real="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || echo "")"
+              find "${TARGET_ROOT}/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+                | sort -rn \
+                | tail -n +6 \
+                | cut -d' ' -f2- \
+                | while read -r old_rel; do
+                    if [ -n "${old_rel}" ] && [ "${old_rel}" != "${current_real}" ]; then
+                      rm -rf "${old_rel}"
+                    fi
+                  done
             fi
