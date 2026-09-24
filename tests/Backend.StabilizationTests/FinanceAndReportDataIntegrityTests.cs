@@ -60,8 +60,8 @@ public sealed class FinanceAndReportDataIntegrityTests
 
         Assert.NotNull(proposalActiveIndex);
         var filter = proposalActiveIndex.GetFilter()!;
-        Assert.Contains("Submitted", filter);
-        Assert.Contains("Approved", filter);
+        Assert.Contains("Rejected", filter);
+        Assert.Contains("<>", filter);
     }
 
     [Fact]

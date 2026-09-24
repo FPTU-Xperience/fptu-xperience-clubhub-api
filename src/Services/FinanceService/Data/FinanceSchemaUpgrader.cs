@@ -48,7 +48,7 @@ public static class FinanceSchemaUpgrader
                 SELECT 1 FROM sys.indexes
                 WHERE object_id = OBJECT_ID(N'[dbo].[Settlements]')
                   AND name = N'IX_Settlements_BudgetProposalId'
-                  AND is_unique = 0)
+                  AND (is_unique = 0 OR has_filter = 0))
                 DROP INDEX [IX_Settlements_BudgetProposalId] ON [dbo].[Settlements];
 
             IF NOT EXISTS (
@@ -57,7 +57,7 @@ public static class FinanceSchemaUpgrader
                   AND name = N'IX_Settlements_BudgetProposalId')
                 EXEC(N'CREATE UNIQUE INDEX [IX_Settlements_BudgetProposalId]
                     ON [dbo].[Settlements] ([BudgetProposalId])
-                    WHERE [Status] = ''Submitted'' OR [Status] = ''Approved''');
+                    WHERE [Status] <> ''Rejected''');
 
             IF OBJECT_ID(N'dbo.OutboxMessages', N'U') IS NULL
             BEGIN

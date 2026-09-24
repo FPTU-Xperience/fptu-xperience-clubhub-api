@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -19,7 +19,7 @@ namespace FinanceService.Migrations
                 table: "Settlements",
                 column: "BudgetProposalId",
                 unique: true,
-                filter: "[Status] = 'Submitted' OR [Status] = 'Approved'");
+                filter: "[Status] <> 'Rejected'");
         }
 
         /// <inheritdoc />
