@@ -414,6 +414,7 @@ services:
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
       Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
+      Services__AuthServiceUrl: "http://auth-service:8080/"
     deploy:
       resources:
         limits:

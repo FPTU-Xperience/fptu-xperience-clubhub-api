@@ -35,11 +35,25 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/users/{**catch-all}" }
       },
+      "users-root": {
+        "Order": 1,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/users" }
+      },
       "roles": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/roles/{**catch-all}" }
+      },
+      "roles-root": {
+        "Order": 1,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/roles" }
       },
       "clubs": {
         "ClusterId": "club-service",
@@ -172,11 +186,25 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/admin/{**catch-all}" }
       },
+      "admin-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/admin" }
+      },
       "student-affairs-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/student-affairs/{**catch-all}" }
+      },
+      "student-affairs-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/student-affairs" }
       },
       "backoffice-me-v1": {
         "ClusterId": "admin-service",
