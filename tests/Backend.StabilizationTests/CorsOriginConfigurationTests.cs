@@ -153,6 +153,29 @@ public sealed class CorsOriginConfigurationTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("http://localhost:5173", true)]
+    [InlineData("http://localhost:3000", true)]
+    [InlineData("http://localhost:4173", true)]
+    [InlineData("http://localhost:5174", true)]
+    [InlineData("http://127.0.0.1:5173", true)]
+    [InlineData("http://127.0.0.1:3000", true)]
+    [InlineData("http://127.0.0.1:8080", true)]
+    [InlineData("https://localhost:3000", false)]
+    [InlineData("http://localhost.evil.com:5173", false)]
+    [InlineData("http://evil-localhost:5173", false)]
+    public void IsOriginAllowed_EvaluatesLocalhostWildcardCorrectly(string origin, bool expected)
+    {
+        string[] allowed =
+        [
+            "http://localhost:*",
+            "http://127.0.0.1:*"
+        ];
+
+        var result = CorsOriginConfiguration.IsOriginAllowed(origin, allowed);
+        Assert.Equal(expected, result);
+    }
+
     private static string[] Resolve(
         string environmentName,
         params (string Key, string? Value)[] values)

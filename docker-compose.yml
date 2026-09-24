@@ -400,11 +400,22 @@ services:
       Cors__AllowedOrigins__2: "https://*.fptux-clubhub-ui.pages.dev"
       Cors__AllowedOrigins__3: "https://fptux-legacy-ui.pages.dev"
       Cors__AllowedOrigins__4: "https://*.fptux-legacy-ui.pages.dev"
-      Cors__AllowedOrigins__5: "https://fptux-admin-ui.pages.dev"
+      Cors__AllowedOrigins__5: "http://localhost:*"
+      Cors__AllowedOrigins__6: "http://127.0.0.1:*"
+      Cors__AllowedOrigins__7: "http://localhost:5173"
+      Cors__AllowedOrigins__8: "http://localhost:3000"
+      Cors__AllowedOrigins__9: "http://127.0.0.1:5173"
+      Cors__AllowedOrigins__10: "http://127.0.0.1:3000"
+      Cors__AllowedOrigins__11: "http://localhost:5174"
+      Cors__AllowedOrigins__12: "http://localhost:4173"
+      Cors__AllowedOrigins__13: "http://127.0.0.1:5174"
+      Cors__AllowedOrigins__14: "http://127.0.0.1:4173"
+      Cors__AllowedOrigins__15: "https://fptux-admin-ui.pages.dev"
       Cors__AdditionalOrigins: "${CORS_ADDITIONAL_ORIGINS:-}"
       Jwt__Issuer: "ClubReportHub"
       Jwt__Audience: "ClubReportHub.Client"
       Jwt__SigningKey: "${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}"
+      Services__AuthServiceUrl: "http://auth-service:8080/"
     deploy:
       resources:
         limits:

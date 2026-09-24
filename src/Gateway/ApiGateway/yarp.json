@@ -35,17 +35,38 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/users/{**catch-all}" }
       },
+      "users-root": {
+        "Order": 1,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/users" }
+      },
       "roles": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/roles/{**catch-all}" }
       },
+      "roles-root": {
+        "Order": 1,
+        "ClusterId": "auth-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/roles" }
+      },
       "clubs": {
         "ClusterId": "club-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/clubs/{**catch-all}" }
+      },
+      "clubs-root": {
+        "Order": 1,
+        "ClusterId": "club-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs" }
       },
       "club-activities": {
         "ClusterId": "activity-service",
@@ -64,6 +85,13 @@
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/activities/{**catch-all}" }
+      },
+      "activities-root": {
+        "Order": 1,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/activities" }
       },
       "report-upload": {
         "Order": 1,
@@ -100,11 +128,25 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/reports/{**catch-all}" }
       },
+      "reports-root": {
+        "Order": 1,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/reports" }
+      },
       "deadlines": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/deadlines/{**catch-all}" }
+      },
+      "deadlines-root": {
+        "Order": 1,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/deadlines" }
       },
       "reporting-deadlines": {
         "ClusterId": "report-service",
@@ -118,11 +160,25 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/kpis/{**catch-all}" }
       },
+      "kpis-root": {
+        "Order": 1,
+        "ClusterId": "report-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/kpis" }
+      },
       "finance": {
         "ClusterId": "finance-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/finance/{**catch-all}" }
+      },
+      "finance-root": {
+        "Order": 1,
+        "ClusterId": "finance-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/finance" }
       },
       "exports": {
         "ClusterId": "export-service",
@@ -130,17 +186,38 @@
         "RateLimiterPolicy": "export",
         "Match": { "Path": "/api/exports/{**catch-all}" }
       },
+      "exports-root": {
+        "Order": 1,
+        "ClusterId": "export-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "export",
+        "Match": { "Path": "/api/exports" }
+      },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/admin/{**catch-all}" }
       },
+      "admin-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/admin" }
+      },
       "student-affairs-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/student-affairs/{**catch-all}" }
+      },
+      "student-affairs-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/student-affairs" }
       },
       "backoffice-me-v1": {
         "ClusterId": "admin-service",
@@ -153,6 +230,13 @@
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/notifications/{**catch-all}" }
+      },
+      "notifications-root": {
+        "Order": 1,
+        "ClusterId": "notification-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/notifications" }
       }
     },
     "Clusters": {

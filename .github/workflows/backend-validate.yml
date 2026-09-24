@@ -128,7 +128,7 @@ jobs:
         run: |
           docker compose config --quiet
           docker compose config --format json |
-            jq -e '.services["api-gateway"].environment["Cors__AllowedOrigins__5"] == "https://fptux-admin-ui.pages.dev"'
+            jq -e '.services["api-gateway"].environment["Cors__AllowedOrigins__15"] == "https://fptux-admin-ui.pages.dev"'
 
       - name: Build AdminService production image
         run: docker build --file src/Services/AdminService/Dockerfile --tag clubreporthub-admin:ci .
