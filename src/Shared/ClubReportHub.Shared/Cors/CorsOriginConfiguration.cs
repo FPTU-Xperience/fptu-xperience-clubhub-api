@@ -74,6 +74,22 @@ public static class CorsOriginConfiguration
                     return true;
                 }
             }
+
+            if (allowed.Equals("http://localhost:*", StringComparison.OrdinalIgnoreCase) ||
+                allowed.Equals("https://localhost:*", StringComparison.OrdinalIgnoreCase) ||
+                allowed.Equals("http://127.0.0.1:*", StringComparison.OrdinalIgnoreCase) ||
+                allowed.Equals("https://127.0.0.1:*", StringComparison.OrdinalIgnoreCase))
+            {
+                var schemeEnd = allowed.IndexOf("://", StringComparison.OrdinalIgnoreCase);
+                var allowedScheme = allowed[..schemeEnd];
+                var allowedHost = allowed[(schemeEnd + 3)..^2]; // "localhost" or "127.0.0.1"
+
+                if (string.Equals(uri.Scheme, allowedScheme, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(uri.Host, allowedHost, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
         }
 
         return false;

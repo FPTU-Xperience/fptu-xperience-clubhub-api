@@ -159,6 +159,25 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger
     app.UseSwaggerUI();
 }
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+        var correlationId = context.Response.Headers["X-Correlation-Id"].FirstOrDefault()
+            ?? context.TraceIdentifier;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            type = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
+            title = "An unexpected error occurred",
+            status = StatusCodes.Status500InternalServerError,
+            detail = "The API gateway encountered an internal server error.",
+            traceId = correlationId
+        });
+    });
+});
+
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
