@@ -81,26 +81,53 @@ jobs:
             docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
 
             if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
+              active_sa_pass=""
               if docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
-                echo "Creating automated database backup before deployment..."
-                backup_timestamp="$(date +%Y%m%d_%H%M%S)"
-                docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-                  -S localhost -U sa -P "${SQL_PASSWORD}" -C \
-                  -Q "
-                    DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
-                    DECLARE db_cursor CURSOR FOR
-                      SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
-                    OPEN db_cursor;
-                    FETCH NEXT FROM db_cursor INTO @name;
-                    WHILE @@FETCH_STATUS = 0
-                    BEGIN
-                      SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT;';
-                      EXEC sp_executesql @sql;
+                if docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SQL_PASSWORD}" -C -Q "SELECT 1" >/dev/null 2>&1; then
+                  echo "Verified SQL Server connectivity with current SQL_PASSWORD."
+                  active_sa_pass="${SQL_PASSWORD}"
+                elif docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ClubReportHub!2026" -C -Q "SELECT 1" >/dev/null 2>&1; then
+                  echo "Verified SQL Server connectivity with legacy password. Updating SA password to match SQL_PASSWORD..."
+                  docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ClubReportHub!2026" -C -Q "ALTER LOGIN [sa] WITH PASSWORD = '${SQL_PASSWORD}';" || true
+                  active_sa_pass="${SQL_PASSWORD}"
+                fi
+
+                if [ -n "${active_sa_pass}" ]; then
+                  echo "Creating automated database backup before deployment..."
+                  backup_timestamp="$(date +%Y%m%d_%H%M%S)"
+                  docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                    -S localhost -U sa -P "${active_sa_pass}" -C \
+                    -Q "
+                      DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
+                      DECLARE db_cursor CURSOR FOR
+                        SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
+                      OPEN db_cursor;
                       FETCH NEXT FROM db_cursor INTO @name;
-                    END
-                    CLOSE db_cursor;
-                    DEALLOCATE db_cursor;
-                  " || echo "Notice: Automated pre-deployment database backup encountered a non-critical issue; proceeding."
+                      WHILE @@FETCH_STATUS = 0
+                      BEGIN
+                        SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT;';
+                        EXEC sp_executesql @sql;
+                        FETCH NEXT FROM db_cursor INTO @name;
+                      END
+                      CLOSE db_cursor;
+                      DEALLOCATE db_cursor;
+                    " || echo "Notice: Automated pre-deployment database backup encountered a non-critical issue; proceeding."
+                fi
+              fi
+
+              if [ -z "${active_sa_pass}" ]; then
+                sql_volume="$(docker inspect clubreporthub-sqlserver --format '{{ range .Mounts }}{{ if eq .Destination "/var/opt/mssql" }}{{ .Name }}{{ end }}{{ end }}' 2>/dev/null || echo "")"
+                if [ -n "${sql_volume}" ]; then
+                  echo "Resetting SA password directly on volume '${sql_volume}' to match SQL_PASSWORD..."
+                  docker stop clubreporthub-sqlserver 2>/dev/null || true
+                  printf "%s\n%s\n" "${SQL_PASSWORD}" "${SQL_PASSWORD}" | docker run --rm -i \
+                    -v "${sql_volume}:/var/opt/mssql" \
+                    -e "ACCEPT_EULA=Y" \
+                    -e "MSSQL_SA_PASSWORD=${SQL_PASSWORD}" \
+                    mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04 \
+                    /opt/mssql/bin/mssql-conf set-sa-password 2>/dev/null || true
+                  echo "Direct volume SA password synchronization completed."
+                fi
               fi
             fi
 

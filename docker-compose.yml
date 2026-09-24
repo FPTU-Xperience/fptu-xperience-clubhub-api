@@ -23,12 +23,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" 2>/dev/null || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -Q "SELECT 1" 2>/dev/null || exit 1',
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" 2>/dev/null || /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ClubReportHub!2026" -C -Q "SELECT 1" 2>/dev/null || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -Q "SELECT 1" 2>/dev/null || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "ClubReportHub!2026" -Q "SELECT 1" 2>/dev/null || exit 1',
         ]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 25s
+      timeout: 10s
+      retries: 15
+      start_period: 45s
     networks:
       - internal-net
 
