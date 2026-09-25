@@ -9,6 +9,7 @@ public class ActorAccountPolicyTests
 {
     [Theory]
     [InlineData(AuthRoles.Admin)]
+    [InlineData(AuthRoles.StudentAffairsAdmin)]
     [InlineData(AuthRoles.ClubManager)]
     [InlineData(AuthRoles.ClubMember)]
     public void IsAllowedGoogleActorRole_StandardRoles_ReturnsTrue(string roleName)
@@ -20,9 +21,11 @@ public class ActorAccountPolicyTests
 
     [Theory]
     [InlineData("admin")]
+    [InlineData("student_affairs_admin")]
     [InlineData("club_manager")]
     [InlineData("club_member")]
     [InlineData("ADMIN")]
+    [InlineData("STUDENT_AFFAIRS_ADMIN")]
     [InlineData("Club_Manager")]
     public void IsAllowedGoogleActorRole_CaseInsensitiveMatching_ReturnsTrue(string roleName)
     {
@@ -48,6 +51,7 @@ public class ActorAccountPolicyTests
 
     [Theory]
     [InlineData(AuthRoles.Admin)]
+    [InlineData(AuthRoles.StudentAffairsAdmin)]
     [InlineData(AuthRoles.ClubManager)]
     [InlineData(AuthRoles.ClubMember)]
     public void HasValidActorConfiguration_SingleAllowedRole_ReturnsTrue(string roleName)

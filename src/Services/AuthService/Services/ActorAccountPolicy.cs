@@ -8,6 +8,7 @@ public static class ActorAccountPolicy
     private static readonly HashSet<string> GoogleActorRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         AuthRoles.Admin,
+        AuthRoles.StudentAffairsAdmin,
         AuthRoles.ClubManager,
         AuthRoles.ClubMember
     };

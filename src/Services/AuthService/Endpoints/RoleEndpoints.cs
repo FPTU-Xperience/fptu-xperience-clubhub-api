@@ -39,7 +39,7 @@ public static class RoleEndpoints
         // actors that the teacher is expected to test.
         if (!ActorAccountPolicy.IsAllowedGoogleActorRole(roleName))
         {
-            return Results.BadRequest(new { message = "Only ADMIN, CLUB_MANAGER, and CLUB_MEMBER roles are enabled for Google sign-in." });
+            return Results.BadRequest(new { message = "Only ADMIN, STUDENT_AFFAIRS_ADMIN, CLUB_MANAGER, and CLUB_MEMBER roles are enabled for Google sign-in." });
         }
 
         // Check if already exists
