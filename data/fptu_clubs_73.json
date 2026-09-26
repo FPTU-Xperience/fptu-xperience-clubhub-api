@@ -1,0 +1,659 @@
+[
+  {
+    "stt": 1,
+    "name": "CLB Street Workout",
+    "code": "FU-SWO",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FuStreetWorkout"
+  },
+  {
+    "stt": 2,
+    "name": "CLB iSkate",
+    "code": "FU-ISKT",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FPTUISkate"
+  },
+  {
+    "stt": 3,
+    "name": "CLB Vovinam",
+    "code": "FU-VVIN",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fvchn"
+  },
+  {
+    "stt": 4,
+    "name": "Đội tuyển bóng đá",
+    "code": "FU-FOOT",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fu.football.team"
+  },
+  {
+    "stt": 5,
+    "name": "CLB Bóng chuyền",
+    "code": "FU-VOL",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FptVolleyballClub/"
+  },
+  {
+    "stt": 6,
+    "name": "CLB Cầu lông",
+    "code": "FU-BADM",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FPTUbadminton/"
+  },
+  {
+    "stt": 7,
+    "name": "CLB Gym",
+    "code": "FU-GYM",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FuGymnastic"
+  },
+  {
+    "stt": 8,
+    "name": "CLB Bóng đá Đại học FPT (FPTU.FC)",
+    "code": "FPTU-FC",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FPTU.FC/"
+  },
+  {
+    "stt": 9,
+    "name": "CLB Taekwondo",
+    "code": "FU-TAEK",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FTCTaekwondo/"
+  },
+  {
+    "stt": 10,
+    "name": "CLB Côn nhị khúc",
+    "code": "FU-NUNCH",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/nunchaku.fnc/"
+  },
+  {
+    "stt": 11,
+    "name": "CLB Bóng bàn",
+    "code": "FU-TTEN",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FPT.Tabletennis/"
+  },
+  {
+    "stt": 12,
+    "name": "CLB Muay Thái",
+    "code": "FU-MUAY",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fmuc.fptu/"
+  },
+  {
+    "stt": 13,
+    "name": "FVC - FPT Vovinam Club HCM",
+    "code": "HCM-FVC",
+    "campus": "Hồ Chí Minh",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fvchcm/"
+  },
+  {
+    "stt": 14,
+    "name": "FFC - Câu lạc bộ Bóng đá FPTU HCM",
+    "code": "HCM-FFC",
+    "campus": "Hồ Chí Minh",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/FFC.FPTUHCM/"
+  },
+  {
+    "stt": 15,
+    "name": "FBC - FPTU HCM Basketball Club",
+    "code": "HCM-FBC",
+    "campus": "Hồ Chí Minh",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fptuhcmbasketballclub/"
+  },
+  {
+    "stt": 16,
+    "name": "FVB - Câu lạc bộ Bóng chuyền FPTU HCM",
+    "code": "HCM-FVB",
+    "campus": "Hồ Chí Minh",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/volleyballfpt/"
+  },
+  {
+    "stt": 17,
+    "name": "FUDN Basketball Club",
+    "code": "DN-FBC",
+    "campus": "Đà Nẵng",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fudnbasketball"
+  },
+  {
+    "stt": 18,
+    "name": "FVC-ĐN - FU Vovinam Club Đà Nẵng",
+    "code": "DN-FVC",
+    "campus": "Đà Nẵng",
+    "category": "SPORTS",
+    "group": "Thể thao & võ thuật",
+    "facebook": "https://www.facebook.com/fvcdn"
+  },
+  {
+    "stt": 19,
+    "name": "CLB Văn hóa nghệ thuật (Hebe)",
+    "code": "FU-HEBE",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/HebeFPT/"
+  },
+  {
+    "stt": 20,
+    "name": "CLB Melody",
+    "code": "FU-MELD",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FptuMelodyClub"
+  },
+  {
+    "stt": 21,
+    "name": "CLB Guitar",
+    "code": "FU-GUIT",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/fuguitarclub/"
+  },
+  {
+    "stt": 22,
+    "name": "CLB Hiphop",
+    "code": "FU-HIPH",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/hiphopfptuniversity"
+  },
+  {
+    "stt": 23,
+    "name": "CLB Yosakoi",
+    "code": "FU-YOSA",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FPTJuniorYosakoi"
+  },
+  {
+    "stt": 24,
+    "name": "CLB Nhạc cụ truyền thống (FTIC)",
+    "code": "FU-FTIC",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FTIC.FUHL"
+  },
+  {
+    "stt": 25,
+    "name": "CLB Điện ảnh",
+    "code": "FU-CINE",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/fucinemastudio/"
+  },
+  {
+    "stt": 26,
+    "name": "Soleil Crew - CLB nhảy hiện đại",
+    "code": "FU-SOLE",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/soleilcrewfptu/"
+  },
+  {
+    "stt": 27,
+    "name": "FTI - FPT Traditional Instruments",
+    "code": "HCM-FTI",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/ftihcm/"
+  },
+  {
+    "stt": 28,
+    "name": "FBK - FPT Beat King Club",
+    "code": "HCM-FBK",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FPTBeatKingClub/"
+  },
+  {
+    "stt": 29,
+    "name": "F# - F# Live Music Club",
+    "code": "HCM-FSHP",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FsharpLiveMusicClub/"
+  },
+  {
+    "stt": 30,
+    "name": "FStyle - FStyle Crew",
+    "code": "HCM-FSTY",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FStyleFamily/"
+  },
+  {
+    "stt": 31,
+    "name": "MEC - Multimedia & Entertainment Club",
+    "code": "HCM-MEC",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/Mec.Fptuhcm/"
+  },
+  {
+    "stt": 32,
+    "name": "FAC - FPT Art and Culture Community",
+    "code": "HCM-FAC",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/fac.fptuhcm/"
+  },
+  {
+    "stt": 33,
+    "name": "UDC - Unity Dance Crew",
+    "code": "HCM-UDC",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/udcsg.fpt/"
+  },
+  {
+    "stt": 34,
+    "name": "FU-Dancing Club (DfP - Dance for Passion)",
+    "code": "DN-DFP",
+    "campus": "Đà Nẵng",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/FUDancingClub/"
+  },
+  {
+    "stt": 35,
+    "name": "NYS Club - CLB Nghệ thuật FUDN",
+    "code": "DN-NYS",
+    "campus": "Đà Nẵng",
+    "category": "ARTS",
+    "group": "Nghệ thuật, âm nhạc & biểu diễn",
+    "facebook": "https://www.facebook.com/nysclubdn/"
+  },
+  {
+    "stt": 36,
+    "name": "F-Code",
+    "code": "F-CODE",
+    "campus": "Hà Nội & Hồ Chí Minh",
+    "category": "TECHNOLOGY",
+    "group": "Công nghệ & kỹ thuật",
+    "facebook": "https://www.facebook.com/fcodefpt/"
+  },
+  {
+    "stt": 37,
+    "name": "CLB Kỹ sư phần mềm Nhật Bản (JS Club)",
+    "code": "FU-JSCL",
+    "campus": "Hà Nội",
+    "category": "TECHNOLOGY",
+    "group": "Công nghệ & kỹ thuật",
+    "facebook": "https://www.facebook.com/fu.jsclub"
+  },
+  {
+    "stt": 38,
+    "name": "CLB AI",
+    "code": "FU-AICL",
+    "campus": "Hà Nội",
+    "category": "TECHNOLOGY",
+    "group": "Công nghệ & kỹ thuật",
+    "facebook": "https://www.facebook.com/aiclub.fptu/"
+  },
+  {
+    "stt": 39,
+    "name": "FIA - FPT Information Assurance Club",
+    "code": "HCM-FIA",
+    "campus": "Hồ Chí Minh",
+    "category": "TECHNOLOGY",
+    "group": "Công nghệ & kỹ thuật",
+    "facebook": "https://www.facebook.com/fptinformationassurance/"
+  },
+  {
+    "stt": 40,
+    "name": "HNF - Hardware Network FPTU",
+    "code": "HCM-HNF",
+    "campus": "Hồ Chí Minh",
+    "category": "TECHNOLOGY",
+    "group": "Công nghệ & kỹ thuật",
+    "facebook": "https://www.facebook.com/hnffptu/"
+  },
+  {
+    "stt": 41,
+    "name": "FU-Dever - CLB Lập trình",
+    "code": "DN-DEVR",
+    "campus": "Đà Nẵng",
+    "category": "TECHNOLOGY",
+    "group": "Công nghệ & kỹ thuật",
+    "facebook": "https://www.facebook.com/FPTUDever/"
+  },
+  {
+    "stt": 42,
+    "name": "CLB Design",
+    "code": "FU-DESG",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Truyền thông, thiết kế & sự kiện",
+    "facebook": "https://www.facebook.com/fudesigners"
+  },
+  {
+    "stt": 43,
+    "name": "CLB Photography",
+    "code": "FU-PHOT",
+    "campus": "Hà Nội",
+    "category": "ARTS",
+    "group": "Truyền thông, thiết kế & sự kiện",
+    "facebook": "https://www.facebook.com/FUphotography.club"
+  },
+  {
+    "stt": 44,
+    "name": "FEV - FPT Event Club",
+    "code": "HCM-FEV",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Truyền thông, thiết kế & sự kiện",
+    "facebook": "https://www.facebook.com/FPTEventClub/"
+  },
+  {
+    "stt": 45,
+    "name": "CSG - CLB Truyền thông Cóc Sài Gòn",
+    "code": "HCM-CSG",
+    "campus": "Hồ Chí Minh",
+    "category": "ARTS",
+    "group": "Truyền thông, thiết kế & sự kiện",
+    "facebook": "https://www.facebook.com/cocsaigonfuhcm/"
+  },
+  {
+    "stt": 46,
+    "name": "FUM - FPT University Media",
+    "code": "DN-FUM",
+    "campus": "Đà Nẵng",
+    "category": "ARTS",
+    "group": "Truyền thông, thiết kế & sự kiện",
+    "facebook": "https://www.facebook.com/FUMedia/"
+  },
+  {
+    "stt": 47,
+    "name": "EVo - CLB Tổ chức sự kiện",
+    "code": "DN-EVO",
+    "campus": "Đà Nẵng",
+    "category": "ARTS",
+    "group": "Truyền thông, thiết kế & sự kiện",
+    "facebook": "https://www.facebook.com/FPTUDNEventClub/"
+  },
+  {
+    "stt": 48,
+    "name": "CLB Tiếng Trung",
+    "code": "FU-CHIN",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Ngôn ngữ & văn hóa quốc tế",
+    "facebook": "https://www.facebook.com/tiengtrungFPT/"
+  },
+  {
+    "stt": 49,
+    "name": "Mây Mưa Club - CLB yêu thích Nhật Bản",
+    "code": "FU-MAYM",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Ngôn ngữ & văn hóa quốc tế",
+    "facebook": "https://www.facebook.com/maymuaclub/"
+  },
+  {
+    "stt": 50,
+    "name": "CLB Tiếng Anh",
+    "code": "FU-ENGC",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Ngôn ngữ & văn hóa quốc tế",
+    "facebook": "https://www.facebook.com/englishclub.fu/"
+  },
+  {
+    "stt": 51,
+    "name": "CLB Dango (anime, manga, tokusatsu...)",
+    "code": "FU-DANG",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Ngôn ngữ & văn hóa quốc tế",
+    "facebook": "https://www.facebook.com/groups/dango.clb/"
+  },
+  {
+    "stt": 52,
+    "name": "JSC - CLB Phong Cách Nhật Bản",
+    "code": "HCM-JSC",
+    "campus": "Hồ Chí Minh",
+    "category": "ACADEMIC",
+    "group": "Ngôn ngữ & văn hóa quốc tế",
+    "facebook": "https://www.facebook.com/clbJSC/"
+  },
+  {
+    "stt": 53,
+    "name": "Eflame - Câu lạc bộ Tiếng Anh",
+    "code": "DN-EFLM",
+    "campus": "Đà Nẵng",
+    "category": "ACADEMIC",
+    "group": "Ngôn ngữ & văn hóa quốc tế",
+    "facebook": "https://www.facebook.com/EngCF/"
+  },
+  {
+    "stt": 54,
+    "name": "CLB Business",
+    "code": "FU-BUSN",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Kinh doanh, tài chính & nghề nghiệp",
+    "facebook": "https://www.facebook.com/FU.Business/"
+  },
+  {
+    "stt": 55,
+    "name": "CLB Chứng khoán (FSIC)",
+    "code": "FU-FSIC",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Kinh doanh, tài chính & nghề nghiệp",
+    "facebook": "https://www.facebook.com/FSIC-FPT-Securities-Investment-Cl"
+  },
+  {
+    "stt": 56,
+    "name": "BEC - Business Economics Club",
+    "code": "HCM-BEC",
+    "campus": "Hồ Chí Minh",
+    "category": "ACADEMIC",
+    "group": "Kinh doanh, tài chính & nghề nghiệp",
+    "facebook": "https://www.facebook.com/bec.fptuhcm/"
+  },
+  {
+    "stt": 57,
+    "name": "Skillcetera",
+    "code": "HCM-SKIL",
+    "campus": "Hồ Chí Minh",
+    "category": "ACADEMIC",
+    "group": "Kinh doanh, tài chính & nghề nghiệp",
+    "facebook": "https://www.facebook.com/skillcetera/"
+  },
+  {
+    "stt": 58,
+    "name": "CLB No Shy",
+    "code": "FU-NOSH",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Học thuật, kỹ năng & phát triển cá nhân",
+    "facebook": "https://www.facebook.com/noshyclub/"
+  },
+  {
+    "stt": 59,
+    "name": "CLB Sách",
+    "code": "FU-BOOK",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Học thuật, kỹ năng & phát triển cá nhân",
+    "facebook": "https://www.facebook.com/fu.bukclub/"
+  },
+  {
+    "stt": 60,
+    "name": "FU Debate Club - CLB Tranh biện",
+    "code": "FU-DEBT",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Học thuật, kỹ năng & phát triển cá nhân",
+    "facebook": "https://www.facebook.com/FUDebateClub/"
+  },
+  {
+    "stt": 61,
+    "name": "CLB Tâm lý học",
+    "code": "FU-PSYC",
+    "campus": "Hà Nội",
+    "category": "ACADEMIC",
+    "group": "Học thuật, kỹ năng & phát triển cá nhân",
+    "facebook": "https://www.facebook.com/FPT.Psy/"
+  },
+  {
+    "stt": 62,
+    "name": "FPS - FPTU Public Speaking",
+    "code": "HCM-FPS",
+    "campus": "Hồ Chí Minh",
+    "category": "ACADEMIC",
+    "group": "Học thuật, kỹ năng & phát triển cá nhân",
+    "facebook": "https://www.facebook.com/FPTUPublicSpeakingClub/"
+  },
+  {
+    "stt": 63,
+    "name": "CLB Esports",
+    "code": "FU-ESPT",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Trò chơi & tư duy",
+    "facebook": "https://www.facebook.com/ESCFUHL"
+  },
+  {
+    "stt": 64,
+    "name": "CLB Cờ vây",
+    "code": "FU-GOCL",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Trò chơi & tư duy",
+    "facebook": "https://www.facebook.com/fptgoclub/"
+  },
+  {
+    "stt": 65,
+    "name": "CLB Cờ (Chess)",
+    "code": "FU-CHES",
+    "campus": "Hà Nội",
+    "category": "SPORTS",
+    "group": "Trò chơi & tư duy",
+    "facebook": "https://www.facebook.com/FPTUChessClub/"
+  },
+  {
+    "stt": 66,
+    "name": "FCC - FPT Chess Club",
+    "code": "HCM-FCC",
+    "campus": "Hồ Chí Minh",
+    "category": "SPORTS",
+    "group": "Trò chơi & tư duy",
+    "facebook": "https://www.facebook.com/FptChessClubFcc/"
+  },
+  {
+    "stt": 67,
+    "name": "FBG - FPT Boardgame Club",
+    "code": "HCM-FBG",
+    "campus": "Hồ Chí Minh",
+    "category": "ACADEMIC",
+    "group": "Trò chơi & tư duy",
+    "facebook": "https://www.facebook.com/fptboardgameclu"
+  },
+  {
+    "stt": 68,
+    "name": "CLB Tình nguyện vì cộng đồng iGo",
+    "code": "FU-IGO",
+    "campus": "Hà Nội",
+    "category": "VOLUNTEER",
+    "group": "Cộng đồng, tình nguyện & sinh viên",
+    "facebook": "https://www.facebook.com/iGoClub/"
+  },
+  {
+    "stt": 69,
+    "name": "Quỹ Vỏ Chai",
+    "code": "FU-QVC",
+    "campus": "Hà Nội",
+    "category": "VOLUNTEER",
+    "group": "Cộng đồng, tình nguyện & sinh viên",
+    "facebook": "https://www.facebook.com/qvcfpt/"
+  },
+  {
+    "stt": 70,
+    "name": "Hội Sinh viên",
+    "code": "FU-STUA",
+    "campus": "Hà Nội",
+    "category": "VOLUNTEER",
+    "group": "Cộng đồng, tình nguyện & sinh viên",
+    "facebook": "https://www.facebook.com/hoisinhvien.fu"
+  },
+  {
+    "stt": 71,
+    "name": "SitiGroup - Cộng đồng Sinh viên Tình nguyện",
+    "code": "HCM-SITI",
+    "campus": "Hồ Chí Minh",
+    "category": "VOLUNTEER",
+    "group": "Cộng đồng, tình nguyện & sinh viên",
+    "facebook": "https://www.facebook.com/sititgroupfuhcm/"
+  },
+  {
+    "stt": 72,
+    "name": "Unicamp",
+    "code": "FU-UNIC",
+    "campus": "Hà Nội",
+    "category": "OTHER",
+    "group": "Khác / chưa phân loại rõ",
+    "facebook": "https://www.facebook.com/unicamp.hl"
+  },
+  {
+    "stt": 73,
+    "name": "Color Team",
+    "code": "FU-COLR",
+    "campus": "Hà Nội",
+    "category": "OTHER",
+    "group": "Khác / chưa phân loại rõ",
+    "facebook": "https://www.facebook.com/colorteamvn/"
+  }
+]

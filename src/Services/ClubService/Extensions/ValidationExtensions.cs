@@ -51,7 +51,7 @@ public static class ValidationExtensions
             return "The application content exceeds the allowed length.";
         }
 
-        if (!ClubCategories.All.Contains(request.Category.Trim().ToUpperInvariant()))
+        if (!ClubCategories.All.Contains(NormalizeClubCategory(request.Category)))
         {
             return "The club category is invalid.";
         }
@@ -152,8 +152,26 @@ public static class ValidationExtensions
 
     public static string NormalizeClubCategory(string? category)
     {
-        var normalized = category?.Trim().ToUpperInvariant();
-        return ClubCategories.All.Contains(normalized) ? normalized! : ClubCategories.Other;
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return ClubCategories.Other;
+        }
+
+        var normalized = category.Trim().ToUpperInvariant();
+        if (ClubCategories.All.Contains(normalized))
+        {
+            return normalized;
+        }
+
+        return normalized switch
+        {
+            "CÔNG NGHỆ" or "CÔNG NGHỆ & KỸ THUẬT" or "TECH" => ClubCategories.Technology,
+            "NGHỆ THUẬT" or "NGHỆ THUẬT, ÂM NHẠC & BIỂU DIỄN" or "TRUYỀN THÔNG, THIẾT KẾ & SỰ KIỆN" or "ART" => ClubCategories.Arts,
+            "THỂ THAO" or "THỂ THAO & VÕ THUẬT" or "SPORT" => ClubCategories.Sports,
+            "TÌNH NGUYỆN" or "CỘNG ĐỒNG" or "CỘNG ĐỒNG, TÌNH NGUYỆN & SINH VIÊN" => ClubCategories.Volunteer,
+            "HỌC THUẬT" or "HỌC THUẬT, KỸ NĂNG & PHÁT TRIỂN CÁ NHÂN" or "KINH DOANH" or "KINH DOANH, TÀI CHÍNH & NGHỀ NGHIỆP" or "NGÔN NGỮ & VĂN HÓA QUỐC TẾ" or "TRÒ CHƠI & TƯ DUY" => ClubCategories.Academic,
+            _ => ClubCategories.Other
+        };
     }
 
     public static string NormalizeOrGenerateClubCode(string? code, int requesterUserId)
