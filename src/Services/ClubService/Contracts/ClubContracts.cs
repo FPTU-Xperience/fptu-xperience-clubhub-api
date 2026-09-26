@@ -145,20 +145,20 @@ public sealed record ClubCreationApplicationResponse(
 public sealed record CreateClubRequest(
     [StringLength(20)] string Code,
     [StringLength(200)] string Name,
-    [StringLength(1000)] string Description,
-    [StringLength(255), EmailAddress] string ContactEmail,
-    [StringLength(20)] string ContactPhone,
+    [StringLength(1000)] string? Description = null,
+    [StringLength(255), EmailAddress] string? ContactEmail = null,
+    [StringLength(20)] string? ContactPhone = null,
     [StringLength(40)] string? Category = null,
     [StringLength(1000)] string? LogoUrl = null,
     [StringLength(500)] string? ScheduleLabel = null,
     bool IsRecruiting = false);
 
 public sealed record UpdateClubRequest(
-    [StringLength(200)] string Name,
-    [StringLength(1000)] string Description,
-    [StringLength(255), EmailAddress] string ContactEmail,
-    [StringLength(20)] string ContactPhone,
-    bool IsActive,
+    [StringLength(200)] string? Name = null,
+    [StringLength(1000)] string? Description = null,
+    [StringLength(255), EmailAddress] string? ContactEmail = null,
+    [StringLength(20)] string? ContactPhone = null,
+    bool IsActive = true,
     [StringLength(40)] string? Category = null,
     [StringLength(1000)] string? LogoUrl = null,
     [StringLength(500)] string? ScheduleLabel = null,

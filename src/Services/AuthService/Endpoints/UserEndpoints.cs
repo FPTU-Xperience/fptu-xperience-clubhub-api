@@ -22,17 +22,17 @@ public static class UserEndpoints
 
         var users = app.MapGroup("/api/users")
             .WithTags("Users")
-            .RequireAuthorization(AuthPolicies.SystemAdministration);
+            .RequireAuthorization(AuthPolicies.UserDirectoryRead);
 
         users.MapGet("/", HandleGetUsers);
         users.MapGet("/{id:int}", HandleGetUser);
-        users.MapPost("/", HandleCreateUser);
-        users.MapPut("/{id:int}", HandleUpdateUser);
-        users.MapDelete("/{id:int}", HandleDisableUser);
-        users.MapPost("/{id:int}/roles", HandleAssignRole);
-        users.MapDelete("/{id:int}/roles/{roleId}", HandleRemoveRole);
-        users.MapPatch("/{id:int}/lock", HandleLockUser);
-        users.MapPatch("/{id:int}/unlock", HandleUnlockUser);
+        users.MapPost("/", HandleCreateUser).RequireAuthorization(AuthPolicies.SystemAdministration);
+        users.MapPut("/{id:int}", HandleUpdateUser).RequireAuthorization(AuthPolicies.SystemAdministration);
+        users.MapDelete("/{id:int}", HandleDisableUser).RequireAuthorization(AuthPolicies.SystemAdministration);
+        users.MapPost("/{id:int}/roles", HandleAssignRole).RequireAuthorization(AuthPolicies.SystemAdministration);
+        users.MapDelete("/{id:int}/roles/{roleId}", HandleRemoveRole).RequireAuthorization(AuthPolicies.SystemAdministration);
+        users.MapPatch("/{id:int}/lock", HandleLockUser).RequireAuthorization(AuthPolicies.SystemAdministration);
+        users.MapPatch("/{id:int}/unlock", HandleUnlockUser).RequireAuthorization(AuthPolicies.SystemAdministration);
 
         return app;
     }
@@ -64,7 +64,7 @@ public static class UserEndpoints
         CancellationToken cancellationToken)
     {
         var resolvedPage = Math.Max(page ?? 1, 1);
-        var resolvedPageSize = pageSize is null or <= 0 or > 100 ? 20 : pageSize.Value;
+        var resolvedPageSize = Math.Clamp(pageSize ?? 20, 1, 500);
 
         var query = db.Users.AsNoTracking().AsQueryable();
 

@@ -60,7 +60,7 @@ public sealed partial class JwtAuthorizationFreshnessTests
     [Theory]
     [InlineData(AuthRoles.Admin, HttpStatusCode.OK)]
     [InlineData(AuthRoles.SystemAdmin, HttpStatusCode.OK)]
-    [InlineData(AuthRoles.StudentAffairsAdmin, HttpStatusCode.Forbidden)]
+    [InlineData(AuthRoles.StudentAffairsAdmin, HttpStatusCode.OK)]
     [InlineData(AuthRoles.ClubManager, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.Treasurer, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.ClubMember, HttpStatusCode.Forbidden)]

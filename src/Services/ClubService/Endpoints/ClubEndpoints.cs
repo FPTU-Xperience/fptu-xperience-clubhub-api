@@ -276,6 +276,11 @@ public static class ClubEndpoints
         ClubDbContext db,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.BadRequest(new { message = "Club code and name are required." });
+        }
+
         var code = request.Code.Trim().ToUpperInvariant();
         if (await db.Clubs.AnyAsync(x => x.Code == code, cancellationToken))
         {
@@ -287,10 +292,10 @@ public static class ClubEndpoints
             Code = code,
             Name = request.Name.Trim(),
             Category = ValidationExtensions.NormalizeClubCategory(request.Category),
-            Description = request.Description.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
             LogoUrl = request.LogoUrl?.Trim(),
-            ContactEmail = request.ContactEmail.Trim(),
-            ContactPhone = request.ContactPhone.Trim(),
+            ContactEmail = request.ContactEmail?.Trim() ?? string.Empty,
+            ContactPhone = request.ContactPhone?.Trim() ?? string.Empty,
             ScheduleLabel = request.ScheduleLabel?.Trim(),
             IsRecruiting = request.IsRecruiting
         };
@@ -337,12 +342,36 @@ public static class ClubEndpoints
             return Results.NotFound();
         }
 
-        club.Name = request.Name.Trim();
-        club.Category = ValidationExtensions.NormalizeClubCategory(request.Category);
-        club.Description = request.Description.Trim();
-        club.LogoUrl = request.LogoUrl?.Trim();
-        club.ContactEmail = request.ContactEmail.Trim();
-        club.ContactPhone = request.ContactPhone.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Name))
+        {
+            club.Name = request.Name.Trim();
+        }
+
+        if (request.Category is not null)
+        {
+            club.Category = ValidationExtensions.NormalizeClubCategory(request.Category);
+        }
+
+        if (request.Description is not null)
+        {
+            club.Description = request.Description.Trim();
+        }
+
+        if (request.LogoUrl is not null)
+        {
+            club.LogoUrl = string.IsNullOrWhiteSpace(request.LogoUrl) ? null : request.LogoUrl.Trim();
+        }
+
+        if (request.ContactEmail is not null)
+        {
+            club.ContactEmail = request.ContactEmail.Trim();
+        }
+
+        if (request.ContactPhone is not null)
+        {
+            club.ContactPhone = request.ContactPhone.Trim();
+        }
+
         club.IsActive = request.IsActive;
 
         if (request.ScheduleLabel is not null)

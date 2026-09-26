@@ -120,6 +120,10 @@ public static class JwtServiceCollectionExtensions
             options.AddPolicy(AuthPolicies.StudentAffairsAdministration, policy => policy.RequireRole(
                 AuthRoles.Admin,
                 AuthRoles.StudentAffairsAdmin));
+            options.AddPolicy(AuthPolicies.UserDirectoryRead, policy => policy.RequireRole(
+                AuthRoles.Admin,
+                AuthRoles.SystemAdmin,
+                AuthRoles.StudentAffairsAdmin));
             options.AddPolicy(AuthPolicies.SuperAdminOnly, policy => policy.RequireRole(AuthRoles.Admin));
             options.AddPolicy(AuthPolicies.AdminOnly, policy => policy.RequireRole(AuthRoles.Admin));
             options.AddPolicy(AuthPolicies.ClubManagerOnly, policy => policy.RequireRole(AuthRoles.ClubManager));

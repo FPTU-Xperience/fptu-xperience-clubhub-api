@@ -167,6 +167,74 @@ public sealed class ClubAuthorizationRegressionTests
         Assert.Equal(ClubMembershipStatuses.Approved, stored.Status);
     }
 
+    [Fact]
+    public async Task CreateClub_WhenContactPhoneMissing_ReturnsCreatedAndSavesSuccessfully()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Testing"
+        });
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Issuer"] = "ClubReportHub",
+            ["Jwt:Audience"] = "ClubReportHub.Client",
+            ["Jwt:SigningKey"] = SigningKey
+        });
+        var databaseName = $"club-create-test-{Guid.NewGuid():N}";
+        builder.Services.AddDbContext<ClubDbContext>(options =>
+            options.UseInMemoryDatabase(databaseName));
+        builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
+
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapClubEndpoints();
+
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
+            await db.Database.EnsureCreatedAsync();
+        }
+
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", CreateToken(99, AuthRoles.StudentAffairsAdmin));
+
+        // Payload with contactEmail but NO contactPhone (reproduces the frontend admin payload)
+        var response = await client.PostAsJsonAsync("/api/clubs", new
+        {
+            code = "ROBOTICS",
+            name = "Robotics Club",
+            category = "Academic",
+            description = "Robotics and Automation",
+            contactEmail = "robotics@example.edu"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await using var verifyScope = app.Services.CreateAsyncScope();
+        var stored = await verifyScope.ServiceProvider.GetRequiredService<ClubDbContext>()
+            .Clubs.SingleAsync(x => x.Code == "ROBOTICS");
+        Assert.Equal("Robotics Club", stored.Name);
+        Assert.Equal("robotics@example.edu", stored.ContactEmail);
+        Assert.Equal(string.Empty, stored.ContactPhone);
+
+        // Now test PUT /api/clubs/{id} without contactPhone
+        var updateResponse = await client.PutAsJsonAsync($"/api/clubs/{stored.Id}", new
+        {
+            name = "Updated Robotics Club",
+            category = "Academic",
+            description = "Updated description",
+            isActive = true
+        });
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        await verifyScope.ServiceProvider.GetRequiredService<ClubDbContext>().Entry(stored).ReloadAsync();
+        Assert.Equal("Updated Robotics Club", stored.Name);
+    }
+
     private static Club CreateClub(string code, string name) => new()
     {
         Code = code,

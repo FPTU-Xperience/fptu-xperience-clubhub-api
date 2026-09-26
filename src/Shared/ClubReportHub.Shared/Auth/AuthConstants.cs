@@ -24,6 +24,7 @@ public static class AuthPolicies
     public const string BusinessAccess = "BusinessAccess";
     public const string SystemAdministration = "SystemAdministration";
     public const string StudentAffairsAdministration = "StudentAffairsAdministration";
+    public const string UserDirectoryRead = "UserDirectoryRead";
     public const string SuperAdminOnly = "SuperAdminOnly";
     public const string AdminOnly = "AdminOnly";
     public const string ClubManagerOnly = "ClubManagerOnly";

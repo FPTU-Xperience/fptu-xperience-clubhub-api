@@ -12,10 +12,11 @@ public static class RoleEndpoints
     {
         var roles = app.MapGroup("/api/roles")
             .WithTags("Roles")
-            .RequireAuthorization(AuthPolicies.SystemAdministration);
+            .RequireAuthorization(AuthPolicies.UserDirectoryRead);
 
         roles.MapGet("/", HandleGetRoles);
-        roles.MapPost("/", HandleCreateRole);
+        roles.MapPost("/", HandleCreateRole)
+            .RequireAuthorization(AuthPolicies.SystemAdministration);
 
         return app;
     }

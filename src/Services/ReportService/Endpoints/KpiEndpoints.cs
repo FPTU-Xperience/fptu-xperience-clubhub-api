@@ -88,8 +88,8 @@ public static class KpiEndpoints
             query = query.Where(x => visibleClubIds.Contains(x.ClubId));
         }
 
-        // PERF-F02: Aggregate directly in the database instead of loading all Report and Detail entities into RAM
-        var aggregatedReports = await query
+        // Project scalar report properties to memory before grouping to avoid SQL Server nested aggregate subquery limitation
+        var reportSummaries = await query
             .Select(r => new
             {
                 r.ClubId,
@@ -100,6 +100,9 @@ public static class KpiEndpoints
                 ActivityCount = r.Status == ReportStatuses.Approved ? r.Details.Count : 0,
                 ParticipantCount = r.Status == ReportStatuses.Approved ? (r.Details.Sum(d => (int?)d.ParticipantCount) ?? 0) : 0
             })
+            .ToListAsync(httpCancellationToken);
+
+        var aggregatedReports = reportSummaries
             .GroupBy(x => new { x.ClubId, x.ClubName })
             .Select(g => new
             {
@@ -111,7 +114,7 @@ public static class KpiEndpoints
                 Activities = g.Sum(x => x.ActivityCount),
                 Participants = g.Sum(x => x.ParticipantCount)
             })
-            .ToListAsync(httpCancellationToken);
+            .ToList();
 
         var aggregatedByClub = aggregatedReports.ToDictionary(x => x.ClubId);
         foreach (var agg in aggregatedReports)
