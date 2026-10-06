@@ -365,6 +365,14 @@ public sealed class OperationalHardeningAndHealthCheckTests
         }
     }
 
+    [Fact]
+    public void DemoCatalog_ValidateDefinition_PassesWithNoErrors()
+    {
+        var catalog = DemoCatalog.Build(new DateOnly(2026, 9, 11));
+        var errors = catalog.ValidateDefinition();
+        Assert.Empty(errors);
+    }
+
     // =========================================================================
     // 5. OPS-F06: .dockerignore excludes test and dev configuration files
     // =========================================================================
@@ -422,6 +430,7 @@ public sealed class OperationalHardeningAndHealthCheckTests
         SetEnv("ConnectionStrings__Notification", cs);
         SetEnv("ConnectionStrings__Export", cs);
         SetEnv("DemoData__AdminEmail", "admin@fpt.edu.vn");
+        SetEnv("DemoData__CtsvEmail", "ctsv@fpt.edu.vn");
         SetEnv("DemoData__ClubManagerEmail", "manager@fpt.edu.vn");
         SetEnv("DemoData__StudentEmail", "student@fpt.edu.vn");
     }
@@ -433,7 +442,7 @@ public sealed class OperationalHardeningAndHealthCheckTests
             "ConnectionStrings__Auth", "ConnectionStrings__Club", "ConnectionStrings__Activity",
             "ConnectionStrings__Report", "ConnectionStrings__Finance", "ConnectionStrings__Notification",
             "ConnectionStrings__Export", "DemoData__Enabled", "DemoData__ResetAll",
-            "DemoData__ConfirmDestructiveReset", "DemoData__AdminEmail", "DemoData__ClubManagerEmail",
+            "DemoData__ConfirmDestructiveReset", "DemoData__AdminEmail", "DemoData__CtsvEmail", "DemoData__ClubManagerEmail",
             "DemoData__StudentEmail"
         })
         {

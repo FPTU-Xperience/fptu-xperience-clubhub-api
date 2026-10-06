@@ -34,6 +34,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
     private static readonly HashSet<string> DemoActorRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         AuthRoles.Admin,
+        AuthRoles.StudentAffairsAdmin,
         AuthRoles.ClubManager,
         AuthRoles.ClubMember
     };
@@ -1191,7 +1192,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
                 .Include(x => x.Role)
                 .CountAsync(x => !DemoActorRoles.Contains(x.Role.Name), cancellationToken);
             if (outOfScopeRoleAssignments > 0)
-                errors.Add($"Found {outOfScopeRoleAssignments} assignments outside ADMIN, CLUB_MANAGER, and CLUB_MEMBER.");
+                errors.Add($"Found {outOfScopeRoleAssignments} assignments outside ADMIN, STUDENT_AFFAIRS_ADMIN, CLUB_MANAGER, and CLUB_MEMBER.");
         }
 
         var clubs = await clubDb.Clubs

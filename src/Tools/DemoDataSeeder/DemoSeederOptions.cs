@@ -4,11 +4,13 @@ namespace DemoDataSeeder;
 
 public sealed record DemoIdentityOverrides(
     string AdminEmail,
+    string CtsvEmail,
     string ClubManagerEmail,
     string StudentEmail)
 {
     public static DemoIdentityOverrides Default { get; } = new(
         "admin@fpt.edu.vn",
+        "ctsv@fpt.edu.vn",
         "manager.tech@fpt.edu.vn",
         "se170002@fpt.edu.vn");
 }
@@ -57,6 +59,7 @@ public sealed record DemoSeederOptions(
             DatabaseWaitTimeout: TimeSpan.FromSeconds(waitSeconds),
             IdentityOverrides: new DemoIdentityOverrides(
                 GetOptional("DemoData__AdminEmail", DemoIdentityOverrides.Default.AdminEmail),
+                GetOptional("DemoData__CtsvEmail", DemoIdentityOverrides.Default.CtsvEmail),
                 GetOptional("DemoData__ClubManagerEmail", DemoIdentityOverrides.Default.ClubManagerEmail),
                 GetOptional("DemoData__StudentEmail", DemoIdentityOverrides.Default.StudentEmail)),
             AuthConnectionString: GetRequired("ConnectionStrings__Auth"),
@@ -115,6 +118,7 @@ public sealed record DemoSeederOptions(
         var entries = new[]
         {
             ("DemoData__AdminEmail", overrides.AdminEmail),
+            ("DemoData__CtsvEmail", overrides.CtsvEmail),
             ("DemoData__ClubManagerEmail", overrides.ClubManagerEmail),
             ("DemoData__StudentEmail", overrides.StudentEmail)
         };

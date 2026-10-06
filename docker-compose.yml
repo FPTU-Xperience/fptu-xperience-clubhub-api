@@ -456,6 +456,7 @@ services:
       DemoData__DatabaseWaitSeconds: "180"
       DemoData__ServiceHealthUrls: "http://auth-service:8080/health;http://club-service:8080/health;http://activity-service:8080/health;http://report-service:8080/health;http://finance-service:8080/health;http://notification-service:8080/health;http://export-service:8080/health"
       DemoData__AdminEmail: "${DEMO_ADMIN_EMAIL:-admin@fpt.edu.vn}"
+      DemoData__CtsvEmail: "${DEMO_CTSV_EMAIL:-ctsv@fpt.edu.vn}"
       DemoData__ClubManagerEmail: "${DEMO_CLUB_MANAGER_EMAIL:-manager.tech@fpt.edu.vn}"
       DemoData__StudentEmail: "${DEMO_STUDENT_EMAIL:-se170002@fpt.edu.vn}"
       Redis__ConnectionString: "redis:6379"

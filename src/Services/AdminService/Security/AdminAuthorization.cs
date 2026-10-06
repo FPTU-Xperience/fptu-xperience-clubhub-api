@@ -7,4 +7,5 @@ public static class AdminPolicies
     public const string AdminOnly = "AdminService.AdminOnly";
     public const string StudentAffairsOnly = "AdminService.StudentAffairsOnly";
     public const string BackofficeUser = "AdminService.BackofficeUser";
+    public const string AnyActor = "AdminService.AnyActor";
 }

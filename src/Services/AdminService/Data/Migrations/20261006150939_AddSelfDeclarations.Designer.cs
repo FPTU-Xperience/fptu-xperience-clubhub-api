@@ -4,6 +4,7 @@ using AdminService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AdminService.Data.Migrations
 {
     [DbContext(typeof(AdminDbContext))]
-    partial class AdminDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261006150939_AddSelfDeclarations")]
+    partial class AddSelfDeclarations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -203,108 +206,6 @@ namespace AdminService.Data.Migrations
                     b.HasIndex("StudentId");
 
                     b.ToTable("SelfDeclarations", (string)null);
-                });
-
-            modelBuilder.Entity("AdminService.Data.SemesterBenchmarkConfig", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AcademicYear")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasPrecision(7)
-                        .HasColumnType("datetimeoffset(7)");
-
-                    b.Property<string>("CreatedByName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<int?>("CreatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsLocked")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTimeOffset?>("LockedAtUtc")
-                        .HasPrecision(7)
-                        .HasColumnType("datetimeoffset(7)");
-
-                    b.Property<string>("LockedByName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<int?>("LockedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("MinJAllRounder")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("MinPillarScoreAllRounder")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<string>("SemesterCode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<decimal>("TauAcademic")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("TauCommunity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("TauCultureSports")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("TauEntrepreneurship")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("TauGlobal")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("TauRealWorldWork")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("TauResearch")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("ThresholdLeader")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("ThresholdPractitioner")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("ThresholdStarter")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsActive");
-
-                    b.HasIndex("SemesterCode")
-                        .IsUnique();
-
-                    b.ToTable("SemesterBenchmarkConfigs", (string)null);
                 });
 #pragma warning restore 612, 618
         }

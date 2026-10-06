@@ -6,6 +6,8 @@ namespace AdminService.Data;
 public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : DbContext(options)
 {
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
+    public DbSet<SelfDeclaration> SelfDeclarations => Set<SelfDeclaration>();
+    public DbSet<SemesterBenchmarkConfig> SemesterBenchmarkConfigs => Set<SemesterBenchmarkConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,5 +35,82 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         audit.HasIndex(record => record.TimestampUtc);
         audit.HasIndex(record => new { record.ActorSubjectId, record.TimestampUtc });
         audit.HasIndex(record => new { record.Action, record.TimestampUtc });
+
+        var declaration = modelBuilder.Entity<SelfDeclaration>();
+        declaration.ToTable("SelfDeclarations");
+        declaration.HasKey(x => x.Id);
+        declaration.Property(x => x.Title).HasMaxLength(200).IsRequired();
+        declaration.Property(x => x.StudentName).HasMaxLength(150).IsRequired();
+        declaration.Property(x => x.StudentEmail).HasMaxLength(320).IsRequired();
+        declaration.Property(x => x.Category).HasMaxLength(50).IsRequired();
+        declaration.Property(x => x.FinalCategory).HasMaxLength(50);
+        declaration.Property(x => x.OrganizationSource).HasMaxLength(150).IsRequired();
+        declaration.Property(x => x.EvidenceUrl).HasMaxLength(1000).IsRequired();
+        declaration.Property(x => x.EvidenceDescription).HasMaxLength(2000).IsRequired();
+        declaration.Property(x => x.RoleProposed).HasMaxLength(50);
+        declaration.Property(x => x.Status).HasMaxLength(30).IsRequired();
+        declaration.Property(x => x.ReviewedByName).HasMaxLength(150);
+        declaration.Property(x => x.ReviewNote).HasMaxLength(1000);
+        declaration.Property(x => x.Tier).HasMaxLength(10);
+        declaration.Property(x => x.Role).HasMaxLength(50);
+        declaration.Property(x => x.Scale).HasMaxLength(50);
+        declaration.Property(x => x.BonusResult).HasMaxLength(50);
+        declaration.Property(x => x.RawPoints).HasPrecision(18, 4);
+
+        var createdAt = declaration.Property(x => x.CreatedAtUtc).IsRequired();
+        var reviewedAt = declaration.Property(x => x.ReviewedAtUtc);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            createdAt.HasConversion(new DateTimeOffsetToBinaryConverter());
+            reviewedAt.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            createdAt.HasPrecision(7);
+            reviewedAt.HasPrecision(7);
+        }
+
+        declaration.HasIndex(x => x.StudentId);
+        declaration.HasIndex(x => x.Status);
+        declaration.HasIndex(x => x.Category);
+        declaration.HasIndex(x => x.CreatedAtUtc);
+
+        var benchmark = modelBuilder.Entity<SemesterBenchmarkConfig>();
+        benchmark.ToTable("SemesterBenchmarkConfigs");
+        benchmark.HasKey(x => x.Id);
+        benchmark.Property(x => x.SemesterCode).HasMaxLength(20).IsRequired();
+        benchmark.Property(x => x.AcademicYear).HasMaxLength(20).IsRequired();
+        benchmark.Property(x => x.CreatedByName).HasMaxLength(150);
+        benchmark.Property(x => x.LockedByName).HasMaxLength(150);
+
+        benchmark.Property(x => x.TauAcademic).HasPrecision(18, 4);
+        benchmark.Property(x => x.TauResearch).HasPrecision(18, 4);
+        benchmark.Property(x => x.TauGlobal).HasPrecision(18, 4);
+        benchmark.Property(x => x.TauCultureSports).HasPrecision(18, 4);
+        benchmark.Property(x => x.TauCommunity).HasPrecision(18, 4);
+        benchmark.Property(x => x.TauEntrepreneurship).HasPrecision(18, 4);
+        benchmark.Property(x => x.TauRealWorldWork).HasPrecision(18, 4);
+
+        benchmark.Property(x => x.ThresholdStarter).HasPrecision(18, 4);
+        benchmark.Property(x => x.ThresholdPractitioner).HasPrecision(18, 4);
+        benchmark.Property(x => x.ThresholdLeader).HasPrecision(18, 4);
+        benchmark.Property(x => x.MinPillarScoreAllRounder).HasPrecision(18, 4);
+        benchmark.Property(x => x.MinJAllRounder).HasPrecision(18, 4);
+
+        var benchmarkCreated = benchmark.Property(x => x.CreatedAtUtc).IsRequired();
+        var benchmarkLocked = benchmark.Property(x => x.LockedAtUtc);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            benchmarkCreated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            benchmarkLocked.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            benchmarkCreated.HasPrecision(7);
+            benchmarkLocked.HasPrecision(7);
+        }
+
+        benchmark.HasIndex(x => x.SemesterCode).IsUnique();
+        benchmark.HasIndex(x => x.IsActive);
     }
 }

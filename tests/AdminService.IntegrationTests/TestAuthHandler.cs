@@ -34,6 +34,10 @@ public sealed class TestAuthHandler(
             "admin" => CreateIdentity("101", "admin@fpt.edu.vn", AuthRoles.Admin),
             "student-affairs" => CreateIdentity(
                 "202", "ctsv@fpt.edu.vn", AuthRoles.StudentAffairsAdmin),
+            "student" or "student-1" => CreateIdentity(
+                "301", "student1@fpt.edu.vn", AuthRoles.ClubMember),
+            "student-2" => CreateIdentity(
+                "302", "student2@fpt.edu.vn", AuthRoles.ClubMember),
             _ => null
         };
         if (identity is null)

@@ -35,6 +35,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(AuthRoles.StudentAffairsAdmin));
     options.AddPolicy(AdminPolicies.BackofficeUser, policy =>
         policy.RequireRole(AuthRoles.Admin, AuthRoles.StudentAffairsAdmin));
+    options.AddPolicy(AdminPolicies.AnyActor, policy =>
+        policy.RequireRole(
+            AuthRoles.Admin,
+            AuthRoles.StudentAffairsAdmin,
+            AuthRoles.ClubManager,
+            AuthRoles.ClubMember));
 });
 builder.Services.AddClubReportTracing();
 builder.Services.AddScoped<ICurrentActor, HttpCurrentActor>();
@@ -86,6 +92,8 @@ app.MapGet("/", () => Results.Ok(new
     status = "running"
 })).AllowAnonymous();
 app.MapAdminEndpoints();
+app.MapDeclarationEndpoints();
+app.MapBenchmarkEndpoints();
 
 if (app.Environment.IsEnvironment("Test"))
 {

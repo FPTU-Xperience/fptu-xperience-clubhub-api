@@ -219,6 +219,19 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/student-affairs" }
       },
+      "declarations-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/declarations/{**catch-all}" }
+      },
+      "declarations-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/declarations" }
+      },
       "backoffice-me-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",

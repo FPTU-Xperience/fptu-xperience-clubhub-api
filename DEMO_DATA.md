@@ -1,12 +1,13 @@
 # Coherent Demo Dataset
 
-This dataset is intended for a teacher or reviewer testing a deployed demo server. It is deliberately limited to three business actor types:
+This dataset is intended for a teacher or reviewer testing a deployed demo server. It is configured for four business actor types:
 
 - `ADMIN`
+- `STUDENT_AFFAIRS_ADMIN` (shown to users as **CTSV / Student Affairs**)
 - `CLUB_MANAGER`
 - `CLUB_MEMBER` (shown to users as **Student**)
 
-The authorization role definitions used by the source code are still retained, but no demo account is assigned `SYSTEM_ADMIN`, `STUDENT_AFFAIRS_ADMIN`, or global `TREASURER`. A student receives finance permissions through the `TREASURER` role of their **club membership**, while their global account role remains `CLUB_MEMBER`.
+The authorization role definitions used by the source code are retained, but no demo account is assigned legacy `SYSTEM_ADMIN` or global `TREASURER`. A student receives finance permissions through the `TREASURER` role of their **club membership**, while their global account role remains `CLUB_MEMBER`.
 
 ## Run on the demo server
 
@@ -54,8 +55,8 @@ docker compose --profile demo run --rm -e DemoData__ValidateOnly=true demo-data-
 
 | Area | Seeded data |
 |---|---:|
-| Accounts | 16 |
-| Actor types | 3 |
+| Accounts | 17 |
+| Actor types | 4 |
 | Clubs | 3 |
 | Memberships | 17 |
 | Club creation applications | 3 |
@@ -72,17 +73,18 @@ The default reference date is `2026-09-11`. Change `DEMO_REFERENCE_DATE` in `.en
 
 ## Google-only login accounts
 
-There are no passwords, self-registration endpoint, or automatic account creation. Google verifies the browser identity, then the backend grants a JWT only if the verified e-mail is already an active, unlocked row in `ClubReportHub_Auth.dbo.Users` with exactly one enabled actor role: `ADMIN`, `CLUB_MANAGER`, or `CLUB_MEMBER`.
+There are no passwords, self-registration endpoint, or automatic account creation. Google verifies the browser identity, then the backend grants a JWT only if the verified e-mail is already an active, unlocked row in `ClubReportHub_Auth.dbo.Users` with exactly one enabled actor role: `ADMIN`, `STUDENT_AFFAIRS_ADMIN`, `CLUB_MANAGER`, or `CLUB_MEMBER`.
 
 Before the teacher tests the server:
 
 1. Create a **Web application OAuth client** in Google Cloud and add the deployed front-end origin to its authorized JavaScript origins.
 2. Put that client ID in `GOOGLE_CLIENT_ID` in `.env`.
-3. Replace the three e-mails below with real Google accounts controlled by the teacher/testers, then run the demo seeder. The default `@fpt.edu.vn` addresses are realistic sample roster data, not Google accounts anyone can sign into.
+3. Replace the four e-mails below with real Google accounts controlled by the teacher/testers, then run the demo seeder. The default `@fpt.edu.vn` addresses are realistic sample roster data, not Google accounts anyone can sign into.
 
 | Actor test path | `.env` key | Default sample e-mail |
 |---|---|---|
 | `ADMIN` | `DEMO_ADMIN_EMAIL` | `admin@fpt.edu.vn` |
+| `STUDENT_AFFAIRS_ADMIN` (CTSV) | `DEMO_CTSV_EMAIL` | `ctsv@fpt.edu.vn` |
 | `CLUB_MANAGER` | `DEMO_CLUB_MANAGER_EMAIL` | `manager.tech@fpt.edu.vn` |
 | `CLUB_MEMBER` (Student) | `DEMO_STUDENT_EMAIL` | `se170002@fpt.edu.vn` |
 
@@ -96,7 +98,15 @@ See [GOOGLE_SIGN_IN.md](GOOGLE_SIGN_IN.md) for the exact Google Cloud, API, and 
 |---|---|
 | `DEMO_ADMIN_EMAIL` (default `admin@fpt.edu.vn`) | Nguyễn Thu Hà |
 
-The Admin account can perform both system administration and final business approval because the existing authorization policies include `ADMIN` in both paths.
+The Admin account can perform system administration, account lifecycle, and configuration management.
+
+### Student Affairs / CTSV
+
+| Username / allow-listed Google e-mail | Name |
+|---|---|
+| `DEMO_CTSV_EMAIL` (default `ctsv@fpt.edu.vn`) | Trần Thị Mai Phương |
+
+The Student Affairs (CTSV) account performs club governance approvals (establishment, transfers, disbanding), activity/proposal approvals, and experience self-declaration verification.
 
 ### Club managers
 

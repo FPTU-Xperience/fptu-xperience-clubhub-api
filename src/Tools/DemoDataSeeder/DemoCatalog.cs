@@ -191,6 +191,13 @@ public sealed class DemoCatalog
                 "Đọc sách, chạy bộ", "Quản trị hệ thống, kiểm soát quy trình", "Các CLB báo cáo đúng hạn.",
                 "Phê duyệt và hỗ trợ xử lý các vướng mắc liên CLB."),
 
+            new("ctsv", "ctsv@fpt.edu.vn", "Trần Thị Mai Phương", AuthRoles.StudentAffairsAdmin,
+                new DateOnly(1988, 5, 20), ClubGenders.Female, "0901000002", "Quận Cầu Giấy, Hà Nội",
+                "Cán bộ Phòng Công tác Sinh viên (CTSV) phụ trách quản lý CLB và trải nghiệm sinh viên.",
+                "Thẩm định và đồng hành cùng các hoạt động phát triển trải nghiệm sinh viên.",
+                "Đọc sách, cắm hoa", "Quản lý sinh viên, thẩm định hoạt động", "Hoạt động sinh viên diễn ra an toàn, chất lượng và đúng quy chế.",
+                "Thẩm định thành lập CLB, phê duyệt kế hoạch hoạt động và xác nhận minh chứng trải nghiệm."),
+
             new("manager-tech", "manager.tech@fpt.edu.vn", "Trần Minh Quân", AuthRoles.ClubManager,
                 new DateOnly(1998, 8, 12), ClubGenders.Male, "0902000001", "Quận Nam Từ Liêm, Hà Nội",
                 "Cựu sinh viên ngành Kỹ thuật phần mềm, phụ trách định hướng chuyên môn.", "Xây dựng cộng đồng lập trình thực chiến.",
@@ -277,6 +284,7 @@ public sealed class DemoCatalog
         users = users.Select(user => user.Key switch
         {
             "admin" => user with { Username = configuredIdentities.AdminEmail },
+            "ctsv" => user with { Username = configuredIdentities.CtsvEmail },
             "manager-tech" => user with { Username = configuredIdentities.ClubManagerEmail },
             "tech-02" => user with { Username = configuredIdentities.StudentEmail },
             _ => user
@@ -675,6 +683,7 @@ public sealed class DemoCatalog
         var allowedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             AuthRoles.Admin,
+            AuthRoles.StudentAffairsAdmin,
             AuthRoles.ClubManager,
             AuthRoles.ClubMember
         };
@@ -835,8 +844,9 @@ public sealed class DemoCatalog
                 errors.Add($"Notification '{notification.Title}' has both a user and role recipient.");
         }
 
-        if (Users.Count != 16) errors.Add($"Expected 16 demo users, found {Users.Count}.");
+        if (Users.Count != 17) errors.Add($"Expected 17 demo users, found {Users.Count}.");
         if (Users.Count(x => x.Role == AuthRoles.Admin) != 1) errors.Add("Expected exactly one ADMIN account.");
+        if (Users.Count(x => x.Role == AuthRoles.StudentAffairsAdmin) != 1) errors.Add("Expected exactly one STUDENT_AFFAIRS_ADMIN account.");
         if (Users.Count(x => x.Role == AuthRoles.ClubManager) != 3) errors.Add("Expected exactly three CLUB_MANAGER accounts.");
         if (Users.Count(x => x.Role == AuthRoles.ClubMember) != 12) errors.Add("Expected exactly twelve STUDENT accounts.");
         if (Clubs.Count != 3) errors.Add($"Expected 3 demo clubs, found {Clubs.Count}.");
