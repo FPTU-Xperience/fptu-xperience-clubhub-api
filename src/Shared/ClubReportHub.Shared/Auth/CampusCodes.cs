@@ -38,7 +38,7 @@ public static class CampusCodes
             "DAN" or "DN" or "ĐÀ NẴNG" or "DANANG" or "DA NANG" => Danang,
             "CAN" or "CT" or "CẦN THƠ" or "CANTHO" or "CAN THO" => CanTho,
             "QNH" or "QN" or "QUY NHƠN" or "QUYNHON" or "QUY NHON" => QuyNhon,
-            "GLOBAL" or "ALL" or "TOÀN TRƯỜNG" or "TOAN TRUONG" or "SYSTEM" => Global,
+            "GLOBAL" or "ALL" or "TOÀN TRƯỜNG" or "TOAN TRUONG" or "SYSTEM" or "HÀ NỘI & HỒ CHÍ MINH" or "HN & HCM" or "HAN & HCM" or "MULTI" or "LIÊN CƠ SỞ" => Global,
             _ => defaultCampus
         };
     }

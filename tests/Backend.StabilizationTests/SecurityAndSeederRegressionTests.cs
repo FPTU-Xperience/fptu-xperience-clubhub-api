@@ -203,13 +203,14 @@ public sealed class SecurityAndSeederRegressionTests
         await ClubSeeder.SeedAsync(db);
         db.ChangeTracker.Clear();
 
-        var club = await db.Clubs.SingleAsync();
+        var club = await db.Clubs.SingleAsync(x => x.Code == "REAL-IT-CLUB");
         Assert.Equal("User Managed Name", club.Name);
         Assert.Equal(ClubCategories.Sports, club.Category);
         Assert.Equal("User managed description", club.Description);
         Assert.Equal("owner@example.edu", club.ContactEmail);
         Assert.Equal("User managed schedule", club.ScheduleLabel);
         Assert.False(club.IsRecruiting);
+        Assert.Equal(74, await db.Clubs.CountAsync());
     }
 
     private static AuthDbContext CreateAuthDbContext(SqliteConnection connection) =>

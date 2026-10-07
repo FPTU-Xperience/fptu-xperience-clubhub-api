@@ -540,6 +540,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
 
         await db.SaveChangesAsync(cancellationToken);
         await SeedClubApplicationsAsync(catalog, users, clubs, db, cancellationToken);
+        await ClubSeeder.SeedAsync(db, cancellationToken: cancellationToken);
         return clubs;
     }
 
