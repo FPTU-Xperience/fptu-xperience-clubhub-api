@@ -23,6 +23,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Property(x => x.FullName).HasMaxLength(200);
             entity.Property(x => x.Email).HasMaxLength(200);
             entity.Property(x => x.GoogleSubject).HasMaxLength(255);
+            entity.Property(x => x.CampusCode).HasMaxLength(20).HasDefaultValue(ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
             entity.Property(x => x.SecurityVersion).HasDefaultValue(1);
         });
 

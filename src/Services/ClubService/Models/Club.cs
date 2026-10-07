@@ -8,6 +8,7 @@ public sealed class Club
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = ClubCategories.Other;
+    public string CampusCode { get; set; } = ClubReportHub.Shared.Auth.CampusCodes.Hanoi;
     public string Description { get; set; } = string.Empty;
     public string? LogoUrl { get; set; }
     public string ContactEmail { get; set; } = string.Empty;

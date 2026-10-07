@@ -48,6 +48,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         declaration.Property(x => x.EvidenceUrl).HasMaxLength(1000).IsRequired();
         declaration.Property(x => x.EvidenceDescription).HasMaxLength(2000).IsRequired();
         declaration.Property(x => x.RoleProposed).HasMaxLength(50);
+        declaration.Property(x => x.CampusCode).HasMaxLength(20).HasDefaultValue(ClubReportHub.Shared.Auth.CampusCodes.Hanoi).IsRequired();
         declaration.Property(x => x.Status).HasMaxLength(30).IsRequired();
         declaration.Property(x => x.ReviewedByName).HasMaxLength(150);
         declaration.Property(x => x.ReviewNote).HasMaxLength(1000);
@@ -73,6 +74,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         declaration.HasIndex(x => x.StudentId);
         declaration.HasIndex(x => x.Status);
         declaration.HasIndex(x => x.Category);
+        declaration.HasIndex(x => x.CampusCode);
         declaration.HasIndex(x => x.CreatedAtUtc);
 
         var benchmark = modelBuilder.Entity<SemesterBenchmarkConfig>();

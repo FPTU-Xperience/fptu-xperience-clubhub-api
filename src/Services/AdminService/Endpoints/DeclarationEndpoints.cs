@@ -66,11 +66,16 @@ public static class DeclarationEndpoints
 
         ValidateSubmission(request);
 
+        var campusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(!string.IsNullOrWhiteSpace(request.CampusCode)
+            ? request.CampusCode
+            : ClubReportHub.Shared.Auth.CampusCodes.InferFromStudentCodeOrEmail(actor.Email ?? actor.SubjectId));
+
         var declaration = new SelfDeclaration
         {
             StudentId = actor.UserId.Value,
             StudentName = actor.Email ?? actor.SubjectId ?? $"User {actor.UserId.Value}",
             StudentEmail = actor.Email ?? string.Empty,
+            CampusCode = campusCode,
             Title = request.Title.Trim(),
             Category = request.Category.Trim(),
             OrganizationSource = request.OrganizationSource.Trim(),
@@ -215,6 +220,7 @@ public static class DeclarationEndpoints
         int? pageSize,
         string? status,
         string? category,
+        string? campus,
         bool? isOutsideClub,
         AdminDbContext dbContext,
         CancellationToken cancellationToken)
@@ -223,6 +229,15 @@ public static class DeclarationEndpoints
         request.Validate();
 
         var query = dbContext.SelfDeclarations.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(campus))
+        {
+            var normalizedCampus = ClubReportHub.Shared.Auth.CampusCodes.Normalize(campus);
+            if (normalizedCampus != ClubReportHub.Shared.Auth.CampusCodes.Global)
+            {
+                query = query.Where(x => x.CampusCode == normalizedCampus);
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(status))
         {

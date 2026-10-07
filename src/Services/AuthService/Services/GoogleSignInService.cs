@@ -95,9 +95,21 @@ public sealed class GoogleSignInService(
             return new GoogleSignInResult(GoogleSignInStatus.NotAllowlisted);
         }
 
+        var needsSave = false;
         if (string.IsNullOrWhiteSpace(user.GoogleSubject))
         {
             user.GoogleSubject = identity.Subject;
+            needsSave = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(user.CampusCode))
+        {
+            user.CampusCode = CampusCodes.Normalize(CampusCodes.InferFromStudentCodeOrEmail(user.Username));
+            needsSave = true;
+        }
+
+        if (needsSave)
+        {
             try
             {
                 await db.SaveChangesAsync(cancellationToken);

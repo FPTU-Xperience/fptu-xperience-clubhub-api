@@ -58,6 +58,7 @@ public static class UserEndpoints
 
     private static async Task<IResult> HandleGetUsers(
         string? search,
+        string? campus,
         int? page,
         int? pageSize,
         AuthDbContext db,
@@ -77,6 +78,15 @@ public static class UserEndpoints
                 x.FullName.Contains(term) ||
                 x.Email.Contains(term) ||
                 x.UserRoles.Any(userRole => userRole.Role.Name.Contains(term)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(campus))
+        {
+            var normalizedCampus = CampusCodes.Normalize(campus);
+            if (normalizedCampus != CampusCodes.Global)
+            {
+                query = query.Where(x => x.CampusCode == normalizedCampus);
+            }
         }
 
         var total = await query.CountAsync(cancellationToken);
@@ -148,12 +158,17 @@ public static class UserEndpoints
             return Results.BadRequest(new { message = "The requested actor role is not available." });
         }
 
+        var campusCode = CampusCodes.Normalize(!string.IsNullOrWhiteSpace(request.CampusCode)
+            ? request.CampusCode
+            : CampusCodes.InferFromStudentCodeOrEmail(username));
+
         // Create user
         var user = new User
         {
             Username = username,
             FullName = request.FullName.Trim(),
             Email = email,
+            CampusCode = campusCode,
             IsActive = true
         };
 
@@ -267,6 +282,10 @@ public static class UserEndpoints
         user.FullName = request.FullName.Trim();
         user.Email = trimmedEmail;
         user.IsActive = request.IsActive;
+        if (!string.IsNullOrWhiteSpace(request.CampusCode))
+        {
+            user.CampusCode = CampusCodes.Normalize(request.CampusCode);
+        }
         if (emailChanged)
         {
             user.GoogleSubject = null;
@@ -613,7 +632,8 @@ public static class UserEndpoints
             user.Email,
             roles,
             user.IsActive,
-            user.IsLocked);
+            user.IsLocked,
+            user.CampusCode);
     }
 
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();

@@ -62,7 +62,8 @@ public static class AuthSeeder
             username: normalizedEmail,
             fullName: normalizedFullName,
             email: normalizedEmail,
-            roles: [AuthRoles.Admin]);
+            roles: [AuthRoles.Admin],
+            campusCode: CampusCodes.Global);
     }
 
     private static void ValidateBootstrapAdmin(string email, string fullName)
@@ -93,7 +94,8 @@ public static class AuthSeeder
         string username,
         string fullName,
         string email,
-        IReadOnlyCollection<string> roles)
+        IReadOnlyCollection<string> roles,
+        string? campusCode = null)
     {
         var existing = await db.Users
             .FirstOrDefaultAsync(x => x.Username == username || x.Email == email);
@@ -104,11 +106,13 @@ public static class AuthSeeder
             return;
         }
 
+        var normalizedCampus = CampusCodes.Normalize(campusCode ?? CampusCodes.InferFromStudentCodeOrEmail(username));
         var user = new User
         {
             Username = username,
             FullName = fullName,
             Email = email,
+            CampusCode = normalizedCampus,
             IsActive = true
         };
         db.Users.Add(user);

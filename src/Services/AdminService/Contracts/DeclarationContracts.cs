@@ -12,7 +12,8 @@ public sealed record SubmitDeclarationRequest(
     string EvidenceDescription,
     string? RoleProposed,
     DateOnly StartDate,
-    DateOnly EndDate);
+    DateOnly EndDate,
+    string? CampusCode = null);
 
 public sealed record ReviewDeclarationRequest(
     string Decision,
@@ -49,7 +50,8 @@ public sealed record DeclarationResponse(
     string? Role,
     string? Scale,
     string? BonusResult,
-    decimal? RawPoints)
+    decimal? RawPoints,
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
 {
     public static DeclarationResponse From(SelfDeclaration item) =>
         new(
@@ -78,5 +80,6 @@ public sealed record DeclarationResponse(
             item.Role,
             item.Scale,
             item.BonusResult,
-            item.RawPoints);
+            item.RawPoints,
+            item.CampusCode);
 }

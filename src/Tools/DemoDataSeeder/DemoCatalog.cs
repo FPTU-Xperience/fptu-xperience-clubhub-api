@@ -22,7 +22,8 @@ public sealed record DemoUserSpec(
     string Hobbies,
     string Skills,
     string Expectations,
-    string Contributions);
+    string Contributions,
+    string? CampusCode = null);
 
 public sealed record DemoClubSpec(
     string Code,
@@ -31,7 +32,8 @@ public sealed record DemoClubSpec(
     string Description,
     string ContactEmail,
     string ContactPhone,
-    string ManagerUserKey);
+    string ManagerUserKey,
+    string? CampusCode = null);
 
 public sealed record DemoMembershipSpec(
     string ClubCode,
@@ -189,14 +191,14 @@ public sealed class DemoCatalog
                 new DateOnly(1990, 3, 18), ClubGenders.Female, "0901000001", "Quận Cầu Giấy, Hà Nội",
                 "Chuyên viên phụ trách hệ thống câu lạc bộ sinh viên.", "Vận hành dữ liệu minh bạch và đúng quy trình.",
                 "Đọc sách, chạy bộ", "Quản trị hệ thống, kiểm soát quy trình", "Các CLB báo cáo đúng hạn.",
-                "Phê duyệt và hỗ trợ xử lý các vướng mắc liên CLB."),
+                "Phê duyệt và hỗ trợ xử lý các vướng mắc liên CLB.", CampusCodes.Global),
 
             new("ctsv", "ctsv@fpt.edu.vn", "Trần Thị Mai Phương", AuthRoles.StudentAffairsAdmin,
                 new DateOnly(1988, 5, 20), ClubGenders.Female, "0901000002", "Quận Cầu Giấy, Hà Nội",
                 "Cán bộ Phòng Công tác Sinh viên (CTSV) phụ trách quản lý CLB và trải nghiệm sinh viên.",
                 "Thẩm định và đồng hành cùng các hoạt động phát triển trải nghiệm sinh viên.",
                 "Đọc sách, cắm hoa", "Quản lý sinh viên, thẩm định hoạt động", "Hoạt động sinh viên diễn ra an toàn, chất lượng và đúng quy chế.",
-                "Thẩm định thành lập CLB, phê duyệt kế hoạch hoạt động và xác nhận minh chứng trải nghiệm."),
+                "Thẩm định thành lập CLB, phê duyệt kế hoạch hoạt động và xác nhận minh chứng trải nghiệm.", CampusCodes.Hanoi),
 
             new("manager-tech", "manager.tech@fpt.edu.vn", "Trần Minh Quân", AuthRoles.ClubManager,
                 new DateOnly(1998, 8, 12), ClubGenders.Male, "0902000001", "Quận Nam Từ Liêm, Hà Nội",
@@ -294,13 +296,13 @@ public sealed class DemoCatalog
         {
             new("FPT-TECH", "Câu lạc bộ Công nghệ FPT", ClubCategories.Technology,
                 "Cộng đồng sinh viên phát triển phần mềm, DevOps và sản phẩm số thông qua workshop, dự án và cuộc thi thực chiến.",
-                "techclub@fpt.edu.vn", "02473001866", "manager-tech"),
+                "techclub@fpt.edu.vn", "02473001866", "manager-tech", CampusCodes.Hanoi),
             new("FPT-AI", "Câu lạc bộ AI & Data", ClubCategories.Academic,
                 "Nơi sinh viên học và ứng dụng khoa học dữ liệu, machine learning và trí tuệ nhân tạo vào các bài toán thực tế.",
-                "aiclub@fpt.edu.vn", "02473001867", "manager-ai"),
+                "aiclub@fpt.edu.vn", "02473001867", "manager-ai", CampusCodes.Hanoi),
             new("FPT-VOL", "Câu lạc bộ Tình nguyện Cóc Xanh", ClubCategories.Volunteer,
                 "Kết nối sinh viên với các hoạt động cộng đồng, bảo vệ môi trường và chương trình thiện nguyện có tác động bền vững.",
-                "cocxanh@fpt.edu.vn", "02473001868", "manager-vol")
+                "cocxanh@fpt.edu.vn", "02473001868", "manager-vol", CampusCodes.Hanoi)
         };
 
         var memberships = new List<DemoMembershipSpec>

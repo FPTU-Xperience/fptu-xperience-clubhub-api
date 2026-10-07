@@ -79,6 +79,7 @@ public static class ClubEndpoints
     private static async Task<IResult> GetAllClubs(
         string? search,
         string? category,
+        string? campus,
         bool? active,
         bool? recruiting,
         ClubDbContext db,
@@ -108,6 +109,15 @@ public static class ClubEndpoints
         if (!string.IsNullOrWhiteSpace(category) && !category.Equals("ALL", StringComparison.OrdinalIgnoreCase))
         {
             query = query.Where(x => x.Category == category);
+        }
+
+        if (!string.IsNullOrWhiteSpace(campus))
+        {
+            var normalizedCampus = CampusCodes.Normalize(campus);
+            if (normalizedCampus != CampusCodes.Global)
+            {
+                query = query.Where(x => x.CampusCode == normalizedCampus);
+            }
         }
 
         if (active.HasValue)
@@ -287,11 +297,13 @@ public static class ClubEndpoints
             return Results.Conflict(new { message = "Club code already exists." });
         }
 
+        var campusCode = CampusCodes.Normalize(request.CampusCode);
         var club = new Club
         {
             Code = code,
             Name = request.Name.Trim(),
             Category = ValidationExtensions.NormalizeClubCategory(request.Category),
+            CampusCode = campusCode,
             Description = request.Description?.Trim() ?? string.Empty,
             LogoUrl = request.LogoUrl?.Trim(),
             ContactEmail = request.ContactEmail?.Trim() ?? string.Empty,
@@ -373,6 +385,11 @@ public static class ClubEndpoints
         }
 
         club.IsActive = request.IsActive;
+
+        if (!string.IsNullOrWhiteSpace(request.CampusCode))
+        {
+            club.CampusCode = CampusCodes.Normalize(request.CampusCode);
+        }
 
         if (request.ScheduleLabel is not null)
         {

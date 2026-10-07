@@ -10,10 +10,11 @@ public sealed class JwtTokenFactory(IOptions<JwtOptions> options)
 {
     private readonly JwtOptions _options = options.Value;
 
-    public TokenResult CreateToken(int userId, string username, string fullName, IEnumerable<string> roles, int securityVersion = 1)
+    public TokenResult CreateToken(int userId, string username, string fullName, IEnumerable<string> roles, int securityVersion = 1, string? campusCode = null)
     {
         var now = DateTimeOffset.UtcNow;
         var expires = now.AddMinutes(_options.ExpirationMinutes);
+        var normalizedCampus = CampusCodes.Normalize(campusCode);
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId.ToString()),
@@ -21,6 +22,7 @@ public sealed class JwtTokenFactory(IOptions<JwtOptions> options)
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, fullName),
             new("username", username),
+            new("campus", normalizedCampus),
             new("ver", securityVersion.ToString())
         };
 

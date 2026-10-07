@@ -44,7 +44,8 @@ public static class ClubMappers
             club.ScheduleLabel,
             club.IsRecruiting,
             managers,
-            members);
+            members,
+            club.CampusCode);
     }
 
     public static ClubDirectoryResponse ToDirectoryResponse(Club club)
@@ -76,7 +77,8 @@ public static class ClubMappers
             club.IsRecruiting,
             memberCount,
             club.IsActive,
-            managers);
+            managers,
+            club.CampusCode);
     }
 
     public static ClubPublicDetailResponse ToPublicDetailResponse(Club club)
@@ -109,7 +111,8 @@ public static class ClubMappers
             club.ContactEmail,
             club.ContactPhone,
             publicLeaders,
-            club.IsActive);
+            club.IsActive,
+            club.CampusCode);
     }
 
     // ========================================================================
@@ -196,7 +199,8 @@ public static class ClubMappers
             application.CreatedClubId,
             application.SubmittedAtUtc,
             application.ReviewedAtUtc,
-            application.ReviewedByUserId);
+            application.ReviewedByUserId,
+            application.CampusCode);
     }
 
     // ========================================================================
@@ -253,6 +257,10 @@ public static class ClubMappers
         application.Code = code;
         application.Name = request.Name.Trim();
         application.Category = Extensions.ValidationExtensions.NormalizeClubCategory(request.Category);
+        application.CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(
+            !string.IsNullOrWhiteSpace(request.CampusCode)
+                ? request.CampusCode
+                : ClubReportHub.Shared.Auth.CampusCodes.InferFromStudentCodeOrEmail(request.FounderEmail));
         application.Description = request.Description.Trim();
         application.Purpose = request.Purpose.Trim();
         application.Reason = string.Empty;

@@ -69,6 +69,7 @@ public static class ApplicationEndpoints
 
     private static async Task<IResult> GetAllApplications(
         string? status,
+        string? campus,
         ClubDbContext db,
         CancellationToken cancellationToken)
     {
@@ -83,6 +84,15 @@ public static class ApplicationEndpoints
             }
 
             query = query.Where(x => x.Status == normalizedStatus);
+        }
+
+        if (!string.IsNullOrWhiteSpace(campus))
+        {
+            var normalizedCampus = ClubReportHub.Shared.Auth.CampusCodes.Normalize(campus);
+            if (normalizedCampus != ClubReportHub.Shared.Auth.CampusCodes.Global)
+            {
+                query = query.Where(x => x.CampusCode == normalizedCampus);
+            }
         }
 
         var applications = await query
@@ -261,6 +271,7 @@ public static class ApplicationEndpoints
             Code = application.Code,
             Name = application.Name,
             Category = application.Category,
+            CampusCode = application.CampusCode,
             Description = application.Description,
             LogoUrl = application.LogoUrl,
             ContactEmail = application.ContactEmail,

@@ -10,6 +10,7 @@ public sealed class User
     // been linked to this pre-approved roster entry. It is intentionally not
     // inferred from an unverified e-mail address sent by a client.
     public string? GoogleSubject { get; set; }
+    public string CampusCode { get; set; } = ClubReportHub.Shared.Auth.CampusCodes.Hanoi;
     public bool IsActive { get; set; } = true;
     public bool IsLocked { get; set; }
     public int SecurityVersion { get; set; } = 1;

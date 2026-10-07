@@ -29,18 +29,21 @@ public sealed record UserSummary(
     string Email,
     IReadOnlyCollection<string> Roles,
     bool IsActive,
-    bool IsLocked);
+    bool IsLocked,
+    string? CampusCode = null);
 
 public sealed record CreateUserRequest(
     [StringLength(100)] string Username,
     [StringLength(200)] string FullName,
     [StringLength(200), EmailAddress] string Email,
-    IReadOnlyCollection<string> Roles);
+    IReadOnlyCollection<string> Roles,
+    string? CampusCode = null);
 
 public sealed record UpdateUserRequest(
     [StringLength(200)] string FullName,
     [StringLength(200), EmailAddress] string Email,
     bool IsActive,
-    IReadOnlyCollection<string> Roles);
+    IReadOnlyCollection<string> Roles,
+    string? CampusCode = null);
 
 public sealed record CreateRoleRequest([StringLength(50)] string Name);

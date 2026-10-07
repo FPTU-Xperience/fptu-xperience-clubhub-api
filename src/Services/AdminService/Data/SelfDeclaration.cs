@@ -10,6 +10,8 @@ public sealed class SelfDeclaration
 
     public string StudentEmail { get; set; } = string.Empty;
 
+    public string CampusCode { get; set; } = ClubReportHub.Shared.Auth.CampusCodes.Hanoi;
+
     public string Title { get; set; } = string.Empty;
 
     public string Category { get; set; } = string.Empty;

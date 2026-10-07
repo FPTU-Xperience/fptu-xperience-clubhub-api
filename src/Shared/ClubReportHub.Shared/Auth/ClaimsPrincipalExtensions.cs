@@ -24,4 +24,9 @@ public static class ClaimsPrincipalExtensions
             ?? principal.FindFirstValue("username")
             ?? "System";
     }
+
+    public static string GetCampus(this ClaimsPrincipal principal)
+    {
+        return principal.FindFirstValue("campus") ?? CampusCodes.Hanoi;
+    }
 }

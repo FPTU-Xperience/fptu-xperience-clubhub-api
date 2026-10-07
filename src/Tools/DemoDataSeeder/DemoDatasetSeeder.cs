@@ -386,6 +386,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
 
             user.FullName = spec.FullName;
             user.Email = spec.Username;
+            user.CampusCode = CampusCodes.Normalize(spec.CampusCode ?? CampusCodes.InferFromStudentCodeOrEmail(spec.Username));
             user.IsActive = true;
             user.IsLocked = false;
 
@@ -432,6 +433,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
 
             club.Name = spec.Name;
             club.Category = spec.Category;
+            club.CampusCode = CampusCodes.Normalize(spec.CampusCode);
             club.Description = spec.Description;
             club.ContactEmail = spec.ContactEmail;
             club.ContactPhone = spec.ContactPhone;

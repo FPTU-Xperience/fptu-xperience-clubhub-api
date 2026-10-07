@@ -20,9 +20,11 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
         {
             entity.HasIndex(x => x.Code).IsUnique();
             entity.HasIndex(x => x.IsActive);
+            entity.HasIndex(x => x.CampusCode);
             entity.Property(x => x.Code).HasMaxLength(30);
             entity.Property(x => x.Name).HasMaxLength(200);
             entity.Property(x => x.Category).HasMaxLength(40);
+            entity.Property(x => x.CampusCode).HasMaxLength(20).HasDefaultValue(ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.LogoUrl).HasMaxLength(1000);
             entity.Property(x => x.ContactEmail).HasMaxLength(200);
@@ -88,10 +90,12 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
         {
             entity.HasIndex(x => new { x.RequesterUserId, x.Status });
             entity.HasIndex(x => new { x.Code, x.Status });
+            entity.HasIndex(x => x.CampusCode);
             entity.Property(x => x.RequesterName).HasMaxLength(200);
             entity.Property(x => x.Code).HasMaxLength(30);
             entity.Property(x => x.Name).HasMaxLength(200);
             entity.Property(x => x.Category).HasMaxLength(40);
+            entity.Property(x => x.CampusCode).HasMaxLength(20).HasDefaultValue(ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.Purpose).HasMaxLength(1000);
             entity.Property(x => x.Reason).HasMaxLength(1000);

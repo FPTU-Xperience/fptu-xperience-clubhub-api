@@ -293,7 +293,7 @@ public sealed class RefreshTokenService
         IEnumerable<string>? withRoles = null)
     {
         var roles = withRoles?.ToArray() ?? user.UserRoles.Select(x => x.Role.Name).OrderBy(x => x).ToArray();
-        var token = _tokenFactory.CreateToken(user.Id, user.Username, user.FullName, roles, user.SecurityVersion);
+        var token = _tokenFactory.CreateToken(user.Id, user.Username, user.FullName, roles, user.SecurityVersion, user.CampusCode);
 
         var clientRefreshToken = rawRefreshToken ?? refreshToken.RawToken ?? refreshToken.Token;
 
@@ -307,7 +307,8 @@ public sealed class RefreshTokenService
                 user.Email,
                 roles,
                 user.IsActive,
-                user.IsLocked),
+                user.IsLocked,
+                user.CampusCode),
             clientRefreshToken,
             refreshToken.ExpiresAtUtc);
     }

@@ -53,7 +53,7 @@ public sealed partial class JwtAuthorizationFreshnessTests
         Assert.Equal(fixture.UserId, body.GetProperty("id").GetInt32());
         Assert.Equal("testuser@fpt.edu.vn", body.GetProperty("email").GetString());
         Assert.Equal(roleName, body.GetProperty("roles")[0].GetString());
-        Assert.Equal(new[] { "email", "fullName", "id", "isActive", "isLocked", "roles", "username" },
+        Assert.Equal(new[] { "campusCode", "email", "fullName", "id", "isActive", "isLocked", "roles", "username" },
             body.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
     }
 

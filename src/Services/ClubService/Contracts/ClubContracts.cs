@@ -16,7 +16,8 @@ public sealed record ClubDirectoryResponse(
     bool IsRecruiting,
     int MemberCount,
     bool IsActive,
-    IReadOnlyCollection<ManagerAssignmentResponse> Managers);
+    IReadOnlyCollection<ManagerAssignmentResponse> Managers,
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
 
 public sealed record PublicLeaderResponse(
     string DisplayName,
@@ -37,7 +38,8 @@ public sealed record ClubPublicDetailResponse(
     string ContactEmail,
     string ContactPhone,
     IReadOnlyCollection<PublicLeaderResponse> PublicLeaders,
-    bool IsActive);
+    bool IsActive,
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
 
 public sealed record ClubResponse(
     int Id,
@@ -52,7 +54,8 @@ public sealed record ClubResponse(
     string? ScheduleLabel,
     bool IsRecruiting,
     IReadOnlyCollection<ManagerAssignmentResponse> Managers,
-    IReadOnlyCollection<ClubMembershipResponse> Members);
+    IReadOnlyCollection<ClubMembershipResponse> Members,
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
 
 public sealed record ManagerAssignmentResponse(
     int Id,
@@ -140,7 +143,8 @@ public sealed record ClubCreationApplicationResponse(
     int? CreatedClubId,
     DateTimeOffset SubmittedAtUtc,
     DateTimeOffset? ReviewedAtUtc,
-    int? ReviewedByUserId);
+    int? ReviewedByUserId,
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
 
 public sealed record CreateClubRequest(
     [StringLength(20)] string Code,
@@ -151,7 +155,8 @@ public sealed record CreateClubRequest(
     [StringLength(40)] string? Category = null,
     [StringLength(1000)] string? LogoUrl = null,
     [StringLength(500)] string? ScheduleLabel = null,
-    bool IsRecruiting = false);
+    bool IsRecruiting = false,
+    [StringLength(20)] string? CampusCode = null);
 
 public sealed record UpdateClubRequest(
     [StringLength(200)] string? Name = null,
@@ -162,7 +167,8 @@ public sealed record UpdateClubRequest(
     [StringLength(40)] string? Category = null,
     [StringLength(1000)] string? LogoUrl = null,
     [StringLength(500)] string? ScheduleLabel = null,
-    bool? IsRecruiting = null);
+    bool? IsRecruiting = null,
+    [StringLength(20)] string? CampusCode = null);
 
 public sealed record AssignManagerRequest(
     int ManagerUserId,
@@ -231,7 +237,8 @@ public sealed record CreateClubApplicationRequest(
     bool AdvisorNeeded,
     bool CommittedToRules,
     bool CommittedToResponsibility,
-    bool CommittedToReporting);
+    bool CommittedToReporting,
+    [StringLength(20)] string? CampusCode = null);
 
 public sealed record ReviewClubApplicationRequest(
     [StringLength(1000)] string? Note,
