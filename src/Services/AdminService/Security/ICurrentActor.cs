@@ -7,4 +7,5 @@ public interface ICurrentActor
     string? Email { get; }
     IReadOnlyCollection<string> Roles { get; }
     bool IsAuthenticated { get; }
+    string CampusCode { get; }
 }

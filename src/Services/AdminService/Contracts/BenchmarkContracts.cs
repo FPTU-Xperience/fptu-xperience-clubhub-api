@@ -103,3 +103,49 @@ public sealed record StudentRadarResponse(
     string ProfileTitle,
     int ApprovedDeclarationsCount,
     IReadOnlyList<PillarRadarItemResponse> Pillars);
+
+public sealed record PillarOverviewResponse(
+    string Pillar,
+    string PillarName,
+    string Description,
+    decimal Tau,
+    decimal TotalRawPoints,
+    decimal AverageRawPoints,
+    decimal AverageSaturatedScore,
+    int StudentCount,
+    int LeaderCount,
+    IReadOnlyDictionary<string, int> MasteryTierCounts);
+
+public sealed record ProfileTitleStatResponse(
+    string Title,
+    int Count,
+    decimal Percentage);
+
+public sealed record CampusComparisonItemResponse(
+    string CampusCode,
+    string CampusName,
+    int TotalStudents,
+    int TotalApprovedDeclarations,
+    decimal AverageD,
+    decimal AverageJ,
+    decimal AverageM,
+    decimal AverageERI,
+    string TopStrengthPillar);
+
+public sealed record CampusRadarOverviewResponse(
+    string Scope,
+    string CampusCode,
+    string CampusName,
+    string SemesterCode,
+    string AcademicYear,
+    int TotalStudents,
+    int TotalApprovedDeclarations,
+    decimal TotalRawPointsAwarded,
+    decimal AverageD,
+    decimal AverageJ,
+    decimal AverageM,
+    decimal AverageERI,
+    IReadOnlyList<PillarOverviewResponse> Pillars,
+    IReadOnlyList<ProfileTitleStatResponse> ProfileTitlesDistribution,
+    IReadOnlyList<CampusComparisonItemResponse>? CampusesComparison);
+

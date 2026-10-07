@@ -1,4 +1,4 @@
-﻿# 📡 TÀI LIỆU API ENDPOINTS TOÀN BỘ HỆ THỐNG FPTU-Xperience ClubHub
+# 📡 TÀI LIỆU API ENDPOINTS TOÀN BỘ HỆ THỐNG FPTU-Xperience ClubHub
 
 > **Dành cho Frontend Developer:** Tài liệu hướng dẫn cấu hình Base URL và toàn bộ các API Endpoints của hệ thống Backend Microservices. Tuyệt đối không gọi trực tiếp vào các port nội bộ của các microservice con, **toàn bộ request bắt buộc phải đi qua API Gateway**.
 
@@ -258,6 +258,24 @@ AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp en
 | :--- | :--- | :--- | :--- |
 | `GET` | `/` | Public | Thông tin cổng API Gateway: `{"service": "YARP API Gateway", "status": "running"}` |
 | `GET` | `/health` | Public | Healthcheck tình trạng kết nối mạng của Gateway |
+
+---
+
+### 10. QUẢN LÝ TRẢI NGHIỆM & RADAR 6+1 (CTSV & ADMIN)
+* **Base Path:** `{{baseUrl}}/api/v1/student-affairs` và `{{baseUrl}}/api/v1/declarations`
+
+| Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/student-affairs/radar/overview` | CTSV, Admin | **Radar 6+1 Tổng quan:** Thể hiện 6 trục trải nghiệm (Học tập, Nghiên cứu, Quốc tế, Thể thao & văn hóa, Cộng đồng, Khởi nghiệp) + 1 Thực chiến. **CTSV** chỉ xem cơ sở của mình (`campusCode` của CTSV). **Admin** xem toàn bộ trường (mặc định / `GLOBAL`, có bảng so sánh 5 cơ sở) hoặc cụ thể 1 cơ sở (`?campusCode=HAN/HCM/DAN/CAN/QNH`). | `?semester=&campusCode=` |
+| `GET` | `/api/v1/student-affairs/students/{studentId}/radar` | CTSV, Admin | CTSV/Admin tra cứu hồ sơ Radar 6+1 và danh hiệu của một sinh viên cụ thể | `?semester=` *(Param `studentId`)* |
+| `GET` | `/api/v1/declarations/me/radar` | Sinh viên (Tất cả) | Sinh viên xem biểu đồ Radar 6+1, chỉ số D, J, M, ERI và danh hiệu cá nhân của mình | `?semester=` |
+| `GET` | `/api/v1/student-affairs/benchmarks` | CTSV, Admin | Danh sách cấu hình chỉ tiêu và ngưỡng bão hòa Tau theo từng học kỳ | *(Không có params)* |
+| `GET` | `/api/v1/student-affairs/benchmarks/active` | CTSV, Admin | Lấy cấu hình chỉ tiêu học kỳ đang kích hoạt | *(Không có params)* |
+| `POST` | `/api/v1/student-affairs/benchmarks` | CTSV, Admin | Tạo cấu hình chỉ tiêu học kỳ mới | Body JSON chứa `semesterCode`, các ngưỡng Tau |
+| `POST` | `/api/v1/student-affairs/benchmarks/{id}/lock` | CTSV, Admin | Khóa cấu hình chỉ tiêu học kỳ (bất biến sau khi công bố) | *(Param `id`)* |
+| `GET` | `/api/v1/student-affairs/declarations` | CTSV, Admin | Hàng đợi thẩm định hồ sơ tự khai báo trải nghiệm sinh viên | `?status=&page=&pageSize=` |
+| `POST` | `/api/v1/student-affairs/declarations/{id}/review` | CTSV, Admin | Thẩm định hồ sơ tự khai báo (Duyệt / Yêu cầu bổ sung / Từ chối) | `{"decision": "Approved", "reviewNote": "", ...}` |
+| `POST` | `/api/v1/declarations` | Sinh viên (Tất cả) | Sinh viên nộp hồ sơ tự khai báo minh chứng trải nghiệm | Body JSON chứa `title`, `category`, `evidenceUrl`, ... |
 
 ---
 

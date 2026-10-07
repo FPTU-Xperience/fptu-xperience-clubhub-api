@@ -30,4 +30,6 @@ internal sealed class HttpCurrentActor(IHttpContextAccessor httpContextAccessor)
         .ToArray();
 
     public bool IsAuthenticated => Principal.Identity?.IsAuthenticated == true;
+
+    public string CampusCode => ClubReportHub.Shared.Auth.ClaimsPrincipalExtensions.GetCampus(Principal);
 }

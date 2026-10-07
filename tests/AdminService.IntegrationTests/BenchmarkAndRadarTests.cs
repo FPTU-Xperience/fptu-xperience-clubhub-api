@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AdminService.Contracts;
 using AdminService.Errors;
+using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Experience;
 using Xunit;
 
@@ -173,6 +174,92 @@ public sealed class BenchmarkAndRadarTests(AdminApiFactory factory) : IClassFixt
         using var student2Client = CreateClient("student-2");
         var student2Inspect = await student2Client.GetAsync("/api/v1/student-affairs/students/301/radar");
         Assert.Equal(HttpStatusCode.Forbidden, student2Inspect.StatusCode);
+    }
+
+    [Fact]
+    public async Task RadarOverview_StudentForbidden_Returns403()
+    {
+        using var studentClient = CreateClient("student-1");
+        var response = await studentClient.GetAsync("/api/v1/student-affairs/radar/overview");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RadarOverview_Ctsv_CanViewOwnCampus_AndForbiddenOnOtherCampus()
+    {
+        using var ctsvHanClient = CreateClient("student-affairs-han");
+
+        // 1. CTSV HAN views overview -> succeeds and scopes to HAN
+        var response = await ctsvHanClient.GetAsync("/api/v1/student-affairs/radar/overview");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var overview = await response.Content.ReadFromJsonAsync<CampusRadarOverviewResponse>(JsonOptions);
+        Assert.NotNull(overview);
+        Assert.Equal("CAMPUS", overview.Scope);
+        Assert.Equal(CampusCodes.Hanoi, overview.CampusCode);
+        Assert.Equal("Hà Nội (Hòa Lạc)", overview.CampusName);
+        Assert.NotNull(overview.Pillars);
+        Assert.Equal(7, overview.Pillars.Count);
+
+        // Verify the 6 core pillars reflect documented functions
+        var academic = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.Academic);
+        Assert.Equal("Học tập", academic.PillarName);
+        Assert.False(string.IsNullOrWhiteSpace(academic.Description));
+        Assert.NotNull(academic.MasteryTierCounts);
+
+        var research = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.Research);
+        Assert.Equal("Nghiên cứu", research.PillarName);
+
+        var globalPillar = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.Global);
+        Assert.Equal("Quốc tế", globalPillar.PillarName);
+
+        var cultureSports = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.CultureSports);
+        Assert.Equal("Thể thao & văn hóa", cultureSports.PillarName);
+
+        var community = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.Community);
+        Assert.Equal("Cộng đồng", community.PillarName);
+
+        var entrepreneurship = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.Entrepreneurship);
+        Assert.Equal("Khởi nghiệp", entrepreneurship.PillarName);
+
+        var realWorld = Assert.Single(overview.Pillars, p => p.Pillar == ExperienceCategories.RealWorldWork);
+        Assert.Equal("Thực chiến dự án (+1)", realWorld.PillarName);
+
+        // CTSV cannot query another campus (e.g. HCM) -> 403 Forbidden
+        var forbiddenResp = await ctsvHanClient.GetAsync("/api/v1/student-affairs/radar/overview?campusCode=HCM");
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task RadarOverview_Admin_CanViewGlobalOverview_AndSpecificCampus()
+    {
+        using var adminClient = CreateClient("admin");
+
+        // 1. Admin views global overview -> Scope GLOBAL, includes CampusesComparison for all 5 FPT campuses
+        var globalResp = await adminClient.GetAsync("/api/v1/student-affairs/radar/overview");
+        Assert.Equal(HttpStatusCode.OK, globalResp.StatusCode);
+
+        var globalOverview = await globalResp.Content.ReadFromJsonAsync<CampusRadarOverviewResponse>(JsonOptions);
+        Assert.NotNull(globalOverview);
+        Assert.Equal("GLOBAL", globalOverview.Scope);
+        Assert.Equal(CampusCodes.Global, globalOverview.CampusCode);
+        Assert.NotNull(globalOverview.CampusesComparison);
+        Assert.Equal(5, globalOverview.CampusesComparison.Count);
+        Assert.Contains(globalOverview.CampusesComparison, c => c.CampusCode == CampusCodes.Hanoi);
+        Assert.Contains(globalOverview.CampusesComparison, c => c.CampusCode == CampusCodes.HoChiMinh);
+        Assert.Contains(globalOverview.CampusesComparison, c => c.CampusCode == CampusCodes.Danang);
+        Assert.Contains(globalOverview.CampusesComparison, c => c.CampusCode == CampusCodes.CanTho);
+        Assert.Contains(globalOverview.CampusesComparison, c => c.CampusCode == CampusCodes.QuyNhon);
+
+        // 2. Admin views specific campus (e.g. HCM) -> Scope CAMPUS, CampusCode HCM
+        var hcmResp = await adminClient.GetAsync("/api/v1/student-affairs/radar/overview?campusCode=HCM");
+        Assert.Equal(HttpStatusCode.OK, hcmResp.StatusCode);
+
+        var hcmOverview = await hcmResp.Content.ReadFromJsonAsync<CampusRadarOverviewResponse>(JsonOptions);
+        Assert.NotNull(hcmOverview);
+        Assert.Equal("CAMPUS", hcmOverview.Scope);
+        Assert.Equal(CampusCodes.HoChiMinh, hcmOverview.CampusCode);
+        Assert.Equal("TP. Hồ Chí Minh", hcmOverview.CampusName);
     }
 
     private HttpClient CreateClient(string token)

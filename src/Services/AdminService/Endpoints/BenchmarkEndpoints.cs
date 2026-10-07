@@ -48,6 +48,14 @@ public static class BenchmarkEndpoints
             .WithName("GetStudentRadarByCtsv")
             .Produces<StudentRadarResponse>();
 
+        // Radar 6+1 overview for CTSV (campus-scoped) and Admin (global or specific campus)
+        api.MapGroup("/student-affairs/radar")
+            .WithTags("Student Affairs Radar Overview")
+            .RequireAuthorization(AdminPolicies.BackofficeUser)
+            .MapGet("/overview", GetRadarOverviewAsync)
+            .WithName("GetRadarOverview")
+            .Produces<CampusRadarOverviewResponse>();
+
         // Student personal 6+1 radar
         api.MapGroup("/declarations")
             .WithTags("Self Declarations")
@@ -369,6 +377,231 @@ public static class BenchmarkEndpoints
             ProfileTitle: radarResult.ProfileTitle,
             ApprovedDeclarationsCount: approvedDeclarations.Count,
             Pillars: pillarResponses);
+
+        return Results.Ok(response);
+    }
+
+    private static async Task<IResult> GetRadarOverviewAsync(
+        string? semester,
+        string? campusCode,
+        ICurrentActor actor,
+        AdminDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var isAdmin = actor.Roles.Any(r => string.Equals(r, AuthRoles.Admin, StringComparison.OrdinalIgnoreCase));
+        var isCtsv = actor.Roles.Any(r => string.Equals(r, AuthRoles.StudentAffairsAdmin, StringComparison.OrdinalIgnoreCase));
+
+        if (!isAdmin && !isCtsv)
+        {
+            throw new OperationForbiddenException("Chỉ Quản trị viên (Admin) hoặc Cán bộ CTSV mới có quyền xem tổng quan Radar trải nghiệm.");
+        }
+
+        string targetCampus;
+        if (isAdmin)
+        {
+            if (string.IsNullOrWhiteSpace(campusCode) ||
+                string.Equals(campusCode.Trim(), "GLOBAL", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(campusCode.Trim(), "ALL", StringComparison.OrdinalIgnoreCase))
+            {
+                targetCampus = CampusCodes.Global;
+            }
+            else
+            {
+                targetCampus = CampusCodes.Normalize(campusCode);
+            }
+        }
+        else
+        {
+            var ctsvCampus = CampusCodes.Normalize(actor.CampusCode);
+            if (!string.IsNullOrWhiteSpace(campusCode))
+            {
+                var requestedCampus = CampusCodes.Normalize(campusCode);
+                if (!string.Equals(requestedCampus, ctsvCampus, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(ctsvCampus, CampusCodes.Global, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new OperationForbiddenException("Cán bộ CTSV chỉ có quyền xem tổng quan dữ liệu tại cơ sở của mình.");
+                }
+            }
+            targetCampus = ctsvCampus;
+        }
+
+        SemesterBenchmarkConfig? activeBenchmark = null;
+        if (!string.IsNullOrWhiteSpace(semester))
+        {
+            var code = semester.Trim().ToUpperInvariant();
+            activeBenchmark = await dbContext.SemesterBenchmarkConfigs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.SemesterCode == code, cancellationToken);
+        }
+
+        activeBenchmark ??= await dbContext.SemesterBenchmarkConfigs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.IsActive, cancellationToken)
+            ?? new SemesterBenchmarkConfig { SemesterCode = "FA26", AcademicYear = "2026-2027" };
+
+        var tauDict = activeBenchmark.ToTauDictionary();
+
+        // Query declarations
+        var decQuery = dbContext.SelfDeclarations
+            .AsNoTracking()
+            .Where(x => x.Status == DeclarationStatuses.Approved);
+
+        if (targetCampus != CampusCodes.Global)
+        {
+            decQuery = decQuery.Where(x => x.CampusCode == targetCampus);
+        }
+
+        var approvedDeclarations = await decQuery.ToListAsync(cancellationToken);
+
+        // Group declarations per student to calculate individual student radars
+        var studentGroups = approvedDeclarations.GroupBy(x => x.StudentId).ToList();
+        var studentRadars = new List<(int StudentId, string CampusCode, RadarIndexResult Radar)>();
+
+        foreach (var group in studentGroups)
+        {
+            var studentCampus = group.FirstOrDefault()?.CampusCode ?? targetCampus;
+            var rawScores = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+            var leaderPillars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var p in RadarPillars.AllSeven)
+            {
+                rawScores[p] = 0m;
+            }
+
+            foreach (var dec in group)
+            {
+                var pillar = dec.FinalCategory ?? dec.Category;
+                var points = dec.RawPoints ?? 0m;
+
+                if (rawScores.ContainsKey(pillar))
+                {
+                    rawScores[pillar] += points;
+                }
+                else
+                {
+                    rawScores[pillar] = points;
+                }
+
+                if (string.Equals(dec.Role, ContributionRoles.Leader, StringComparison.OrdinalIgnoreCase))
+                {
+                    leaderPillars.Add(pillar);
+                }
+            }
+
+            var radar = ExperienceIndexCalculator.ComputeRadar(rawScores, tauDict, leaderPillars);
+            studentRadars.Add((group.Key, studentCampus, radar));
+        }
+
+        var totalStudents = studentRadars.Count;
+        var totalApprovedDeclarations = approvedDeclarations.Count;
+        var totalRawPointsAwarded = approvedDeclarations.Sum(x => x.RawPoints ?? 0m);
+
+        decimal avgD = totalStudents > 0 ? Math.Round(studentRadars.Average(s => s.Radar.D), 4) : 0m;
+        decimal avgJ = totalStudents > 0 ? Math.Round(studentRadars.Average(s => s.Radar.J), 4) : 0m;
+        decimal avgM = totalStudents > 0 ? Math.Round(studentRadars.Average(s => s.Radar.M), 4) : 1.0m;
+        decimal avgERI = totalStudents > 0 ? Math.Round(studentRadars.Average(s => s.Radar.ERI), 4) : 0m;
+
+        // Pillar details for the 6 core pillars + 1 real world work pillar
+        var pillarOverviews = RadarPillars.AllSeven.Select(pillar =>
+        {
+            var tau = tauDict.TryGetValue(pillar, out var t) ? t : 1000m;
+            var decsForPillar = approvedDeclarations.Where(d => string.Equals(d.FinalCategory ?? d.Category, pillar, StringComparison.OrdinalIgnoreCase)).ToList();
+            var totalPillarRaw = decsForPillar.Sum(d => d.RawPoints ?? 0m);
+            var studentsInPillar = studentRadars.Where(s => s.Radar.Pillars.TryGetValue(pillar, out var pAcc) && pAcc.RawPointsSum > 0m).ToList();
+            var studentCount = studentsInPillar.Count;
+            var avgRaw = studentCount > 0 ? Math.Round(totalPillarRaw / studentCount, 2) : 0m;
+            var avgSat = totalStudents > 0
+                ? Math.Round(studentRadars.Average(s => s.Radar.Pillars.TryGetValue(pillar, out var pAcc) ? pAcc.SaturatedScore : 0m), 2)
+                : 0m;
+            var leaderCount = studentRadars.Count(s => s.Radar.Pillars.TryGetValue(pillar, out var pAcc) && pAcc.HasLeaderProof);
+
+            var masteryCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tier in ExperienceMasteryTiers.All)
+            {
+                masteryCounts[tier] = studentRadars.Count(s => s.Radar.Pillars.TryGetValue(pillar, out var pAcc) && string.Equals(pAcc.MasteryTier, tier, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return new PillarOverviewResponse(
+                Pillar: pillar,
+                PillarName: RadarPillars.GetVietnameseName(pillar),
+                Description: RadarPillars.GetDescription(pillar),
+                Tau: tau,
+                TotalRawPoints: totalPillarRaw,
+                AverageRawPoints: avgRaw,
+                AverageSaturatedScore: avgSat,
+                StudentCount: studentCount,
+                LeaderCount: leaderCount,
+                MasteryTierCounts: masteryCounts);
+        }).ToArray();
+
+        // Profile titles distribution
+        var profileTitlesDistribution = studentRadars
+            .GroupBy(s => s.Radar.ProfileTitle, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ProfileTitleStatResponse(
+                Title: g.Key,
+                Count: g.Count(),
+                Percentage: totalStudents > 0 ? Math.Round((decimal)g.Count() / totalStudents * 100m, 2) : 0m))
+            .OrderByDescending(x => x.Count)
+            .ToArray();
+
+        // Campuses comparison (computed when target is Global or Admin requests)
+        List<CampusComparisonItemResponse>? campusesComparison = null;
+        if (targetCampus == CampusCodes.Global)
+        {
+            campusesComparison = CampusCodes.FiveCampuses.Select(cCode =>
+            {
+                var campusStudents = studentRadars.Where(s => string.Equals(s.CampusCode, cCode, StringComparison.OrdinalIgnoreCase)).ToList();
+                var campusDecsCount = approvedDeclarations.Count(d => string.Equals(d.CampusCode, cCode, StringComparison.OrdinalIgnoreCase));
+                var cTotal = campusStudents.Count;
+                var cAvgD = cTotal > 0 ? Math.Round(campusStudents.Average(s => s.Radar.D), 4) : 0m;
+                var cAvgJ = cTotal > 0 ? Math.Round(campusStudents.Average(s => s.Radar.J), 4) : 0m;
+                var cAvgM = cTotal > 0 ? Math.Round(campusStudents.Average(s => s.Radar.M), 4) : 1.0m;
+                var cAvgERI = cTotal > 0 ? Math.Round(campusStudents.Average(s => s.Radar.ERI), 4) : 0m;
+
+                string topPillar = RadarPillars.CoreSix[0];
+                decimal topScore = -1m;
+                if (cTotal > 0)
+                {
+                    foreach (var p in RadarPillars.CoreSix)
+                    {
+                        var pAvg = campusStudents.Average(s => s.Radar.Pillars.TryGetValue(p, out var pAcc) ? pAcc.SaturatedScore : 0m);
+                        if (pAvg > topScore)
+                        {
+                            topScore = pAvg;
+                            topPillar = p;
+                        }
+                    }
+                }
+
+                return new CampusComparisonItemResponse(
+                    CampusCode: cCode,
+                    CampusName: CampusCodes.GetDisplayName(cCode),
+                    TotalStudents: cTotal,
+                    TotalApprovedDeclarations: campusDecsCount,
+                    AverageD: cAvgD,
+                    AverageJ: cAvgJ,
+                    AverageM: cAvgM,
+                    AverageERI: cAvgERI,
+                    TopStrengthPillar: topScore > 0m ? RadarPillars.GetVietnameseName(topPillar) : "Chưa có");
+            }).ToList();
+        }
+
+        var response = new CampusRadarOverviewResponse(
+            Scope: targetCampus == CampusCodes.Global ? "GLOBAL" : "CAMPUS",
+            CampusCode: targetCampus,
+            CampusName: CampusCodes.GetDisplayName(targetCampus),
+            SemesterCode: activeBenchmark.SemesterCode,
+            AcademicYear: activeBenchmark.AcademicYear,
+            TotalStudents: totalStudents,
+            TotalApprovedDeclarations: totalApprovedDeclarations,
+            TotalRawPointsAwarded: totalRawPointsAwarded,
+            AverageD: avgD,
+            AverageJ: avgJ,
+            AverageM: avgM,
+            AverageERI: avgERI,
+            Pillars: pillarOverviews,
+            ProfileTitlesDistribution: profileTitlesDistribution,
+            CampusesComparison: campusesComparison);
 
         return Results.Ok(response);
     }

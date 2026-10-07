@@ -139,6 +139,30 @@ public static class RadarPillars
         .. CoreSix,
         PlusOne
     ];
+
+    public static string GetVietnameseName(string pillar) => pillar switch
+    {
+        ExperienceCategories.Academic => "Học tập",
+        ExperienceCategories.Research => "Nghiên cứu",
+        ExperienceCategories.Global => "Quốc tế",
+        ExperienceCategories.CultureSports => "Thể thao & văn hóa",
+        ExperienceCategories.Community => "Cộng đồng",
+        ExperienceCategories.Entrepreneurship => "Khởi nghiệp",
+        ExperienceCategories.RealWorldWork => "Thực chiến dự án (+1)",
+        _ => pillar
+    };
+
+    public static string GetDescription(string pillar) => pillar switch
+    {
+        ExperienceCategories.Academic => "Các hoạt động học thuật, chứng chỉ kỹ năng chuyên môn, hội thảo chuyên ngành và cuộc thi kiến thức.",
+        ExperienceCategories.Research => "Đề tài nghiên cứu khoa học, bài báo công bố, giải thưởng học thuật và lab thực nghiệm.",
+        ExperienceCategories.Global => "Giao lưu quốc tế, chương trình trao đổi sinh viên, hoạt động ngoại ngữ và trải nghiệm đa văn hóa.",
+        ExperienceCategories.CultureSports => "Rèn luyện thể chất, thi đấu thể thao, hoạt động văn nghệ và phát triển bản thân.",
+        ExperienceCategories.Community => "Hoạt động thiện nguyện, phục vụ cộng đồng, phát triển bền vững và trách nhiệm xã hội.",
+        ExperienceCategories.Entrepreneurship => "Dự án khởi nghiệp, đổi mới sáng tạo, chuyển giao công nghệ và phát triển sản phẩm thực tế.",
+        ExperienceCategories.RealWorldWork => "Dự án thực tế tại doanh nghiệp, làm việc chuyên nghiệp (On-the-job training) và hợp tác phát triển.",
+        _ => string.Empty
+    };
 }
 
 public static class ExperienceMasteryTiers
