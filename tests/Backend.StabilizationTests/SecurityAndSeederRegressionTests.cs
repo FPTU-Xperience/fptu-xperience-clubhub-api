@@ -213,6 +213,45 @@ public sealed class SecurityAndSeederRegressionTests
         Assert.Equal(74, await db.Clubs.CountAsync());
     }
 
+    [Fact]
+    public async Task FptuClubRegistry_All73ClubsConformToConstraintsAndSeedIdempotently()
+    {
+        var clubs = FptuClubRegistry.Clubs;
+        Assert.Equal(73, clubs.Count);
+
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in clubs)
+        {
+            Assert.True(codes.Add(c.Code), $"Duplicate code: {c.Code}");
+            Assert.True(c.Code.Length <= 30, $"Code too long: {c.Code}");
+            Assert.False(string.IsNullOrWhiteSpace(c.Name), "Name is empty");
+            Assert.True(c.Name.Length <= 200, $"Name too long: {c.Name}");
+            Assert.Contains(c.Category, ClubCategories.All);
+            Assert.Contains(c.CampusCode, CampusCodes.All);
+            Assert.True(c.Description.Length <= 1000, $"Description too long: {c.Code}");
+            Assert.True(c.ContactEmail.Length <= 200, $"Email too long: {c.Code}");
+            Assert.True(c.ContactPhone.Length <= 40, $"Phone too long: {c.Code}");
+        }
+
+        var fcode = clubs.Single(x => x.Code == "F-CODE");
+        Assert.Equal(CampusCodes.Global, fcode.CampusCode);
+
+        // Test idempotency with ClubDbContext
+        var options = new DbContextOptionsBuilder<ClubDbContext>()
+            .UseInMemoryDatabase($"club-registry-test-{Guid.NewGuid():N}")
+            .Options;
+        await using var db = new ClubDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var firstPass = await ClubSeeder.SeedAsync(db);
+        Assert.Equal(73, firstPass);
+        Assert.Equal(73, await db.Clubs.CountAsync());
+
+        var secondPass = await ClubSeeder.SeedAsync(db);
+        Assert.Equal(0, secondPass);
+        Assert.Equal(73, await db.Clubs.CountAsync());
+    }
+
     private static AuthDbContext CreateAuthDbContext(SqliteConnection connection) =>
         new(new DbContextOptionsBuilder<AuthDbContext>().UseSqlite(connection).Options);
 
