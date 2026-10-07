@@ -35,29 +35,50 @@ public class CampusCodesTests
         Assert.Equal(expected, result);
     }
 
-    [Theory]
-    [InlineData("HE170001", "HAN")]
-    [InlineData("he180002@fpt.edu.vn", "HAN")]
-    [InlineData("ha160003", "HAN")]
-    [InlineData("SE170001", "HCM")]
-    [InlineData("se170002@fpt.edu.vn", "HCM")]
-    [InlineData("sa180003", "HCM")]
-    [InlineData("ia170004", "HCM")]
-    [InlineData("DE170001", "DAN")]
-    [InlineData("de180002@fpt.edu.vn", "DAN")]
-    [InlineData("CE170001", "CAN")]
-    [InlineData("ce180002@fpt.edu.vn", "CAN")]
-    [InlineData("QE170001", "QNH")]
-    [InlineData("qe180002@fpt.edu.vn", "QNH")]
-    [InlineData("ctsv.hcm@fpt.edu.vn", "HCM")]
-    [InlineData("ctsv.dn@fpt.edu.vn", "DAN")]
-    [InlineData("ctsv.ct@fpt.edu.vn", "CAN")]
-    [InlineData("ctsv.qn@fpt.edu.vn", "QNH")]
-    [InlineData("ctsv.hn@fpt.edu.vn", "HAN")]
-    public void InferFromStudentCodeOrEmail_CorrectlyDetectsCampus(string identifier, string expected)
+    [Fact]
+    public void FiveCampuses_ContainsExactlyFiveCampuses()
     {
-        var result = CampusCodes.InferFromStudentCodeOrEmail(identifier);
-        Assert.Equal(expected, result);
+        Assert.Equal(5, CampusCodes.FiveCampuses.Length);
+        Assert.Contains(CampusCodes.Hanoi, CampusCodes.FiveCampuses);
+        Assert.Contains(CampusCodes.HoChiMinh, CampusCodes.FiveCampuses);
+        Assert.Contains(CampusCodes.Danang, CampusCodes.FiveCampuses);
+        Assert.Contains(CampusCodes.CanTho, CampusCodes.FiveCampuses);
+        Assert.Contains(CampusCodes.QuyNhon, CampusCodes.FiveCampuses);
+    }
+
+    [Fact]
+    public void All_ContainsSixCodesIncludingGlobal()
+    {
+        Assert.Equal(6, CampusCodes.All.Length);
+        Assert.Contains(CampusCodes.Global, CampusCodes.All);
+    }
+
+    [Theory]
+    [InlineData("HAN", true)]
+    [InlineData("HCM", true)]
+    [InlineData("DAN", true)]
+    [InlineData("CAN", true)]
+    [InlineData("QNH", true)]
+    [InlineData("GLOBAL", true)]
+    [InlineData("UNKNOWN", false)]
+    [InlineData("HE170001", false)]
+    [InlineData("SE180002", false)]
+    [InlineData(null, false)]
+    public void IsValid_ValidatesCampusCodesIndependentlyOfStudentIds(string? code, bool expected)
+    {
+        Assert.Equal(expected, CampusCodes.IsValid(code));
+    }
+
+    [Theory]
+    [InlineData("HAN", "Hà Nội (Hòa Lạc)")]
+    [InlineData("HCM", "TP. Hồ Chí Minh")]
+    [InlineData("DAN", "Đà Nẵng")]
+    [InlineData("CAN", "Cần Thơ")]
+    [InlineData("QNH", "Quy Nhơn")]
+    [InlineData("GLOBAL", "Toàn trường")]
+    public void GetDisplayName_ReturnsExpectedCampusName(string code, string expected)
+    {
+        Assert.Equal(expected, CampusCodes.GetDisplayName(code));
     }
 
     [Fact]

@@ -66,9 +66,7 @@ public static class DeclarationEndpoints
 
         ValidateSubmission(request);
 
-        var campusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(!string.IsNullOrWhiteSpace(request.CampusCode)
-            ? request.CampusCode
-            : ClubReportHub.Shared.Auth.CampusCodes.InferFromStudentCodeOrEmail(actor.Email ?? actor.SubjectId));
+        var campusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(request.CampusCode);
 
         var declaration = new SelfDeclaration
         {

@@ -106,7 +106,7 @@ public static class AuthSeeder
             return;
         }
 
-        var normalizedCampus = CampusCodes.Normalize(campusCode ?? CampusCodes.InferFromStudentCodeOrEmail(username));
+        var normalizedCampus = CampusCodes.Normalize(campusCode);
         var user = new User
         {
             Username = username,

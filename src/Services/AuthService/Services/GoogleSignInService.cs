@@ -104,7 +104,7 @@ public sealed class GoogleSignInService(
 
         if (string.IsNullOrWhiteSpace(user.CampusCode))
         {
-            user.CampusCode = CampusCodes.Normalize(CampusCodes.InferFromStudentCodeOrEmail(user.Username));
+            user.CampusCode = CampusCodes.Hanoi;
             needsSave = true;
         }
 

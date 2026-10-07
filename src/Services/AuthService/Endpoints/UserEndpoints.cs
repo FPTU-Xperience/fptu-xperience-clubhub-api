@@ -158,9 +158,7 @@ public static class UserEndpoints
             return Results.BadRequest(new { message = "The requested actor role is not available." });
         }
 
-        var campusCode = CampusCodes.Normalize(!string.IsNullOrWhiteSpace(request.CampusCode)
-            ? request.CampusCode
-            : CampusCodes.InferFromStudentCodeOrEmail(username));
+        var campusCode = CampusCodes.Normalize(request.CampusCode);
 
         // Create user
         var user = new User

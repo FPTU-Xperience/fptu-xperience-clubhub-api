@@ -257,10 +257,7 @@ public static class ClubMappers
         application.Code = code;
         application.Name = request.Name.Trim();
         application.Category = Extensions.ValidationExtensions.NormalizeClubCategory(request.Category);
-        application.CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(
-            !string.IsNullOrWhiteSpace(request.CampusCode)
-                ? request.CampusCode
-                : ClubReportHub.Shared.Auth.CampusCodes.InferFromStudentCodeOrEmail(request.FounderEmail));
+        application.CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(request.CampusCode);
         application.Description = request.Description.Trim();
         application.Purpose = request.Purpose.Trim();
         application.Reason = string.Empty;
