@@ -44,6 +44,19 @@ public static class ClubSchemaUpgrader
                     CREATE INDEX [IX_OutboxMessages_Status_ClaimExpiresAtUtc_OccurredAtUtc]
                         ON [dbo].[OutboxMessages] ([Status], [ClaimExpiresAtUtc], [OccurredAtUtc]);
             END
+
+            IF OBJECT_ID(N'[dbo].[ClubCategories]', N'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[ClubCategories] (
+                    [Id] int IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    [Code] nvarchar(64) NOT NULL,
+                    [Name] nvarchar(128) NOT NULL,
+                    [Description] nvarchar(500) NULL,
+                    [CreatedAtUtc] datetimeoffset NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                );
+                CREATE UNIQUE INDEX [IX_ClubCategories_Code] ON [dbo].[ClubCategories] ([Code]);
+                CREATE UNIQUE INDEX [IX_ClubCategories_Name] ON [dbo].[ClubCategories] ([Name]);
+            END
             """;
 
         if (db.Database.IsRelational())

@@ -245,6 +245,32 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/quests" }
       },
+      "semesters": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/semesters/{**catch-all}" }
+      },
+      "semesters-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/semesters" }
+      },
+      "semesters-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/semesters/{**catch-all}" }
+      },
+      "semesters-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/semesters" }
+      },
       "anomalies": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",

@@ -14,6 +14,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<XpAnomaly> XpAnomalies => Set<XpAnomaly>();
     public DbSet<XpLedgerEntry> XpLedgerEntries => Set<XpLedgerEntry>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<Semester> Semesters => Set<Semester>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -288,6 +289,33 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         {
             settingsUpdated.HasPrecision(7);
         }
+
+        var semester = modelBuilder.Entity<Semester>();
+        semester.ToTable("Semesters");
+        semester.HasKey(x => x.Id);
+        semester.Property(x => x.SemesterCode).HasMaxLength(30).IsRequired();
+        semester.Property(x => x.Label).HasMaxLength(100);
+        semester.Property(x => x.AcademicYear).HasMaxLength(30).IsRequired();
+        var semesterStart = semester.Property(x => x.StartDate);
+        var semesterEnd = semester.Property(x => x.EndDate);
+        var semesterCreated = semester.Property(x => x.CreatedAtUtc).IsRequired();
+        var semesterUpdated = semester.Property(x => x.UpdatedAtUtc);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            semesterStart.HasConversion(new DateTimeOffsetToBinaryConverter());
+            semesterEnd.HasConversion(new DateTimeOffsetToBinaryConverter());
+            semesterCreated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            semesterUpdated.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            semesterStart.HasPrecision(7);
+            semesterEnd.HasPrecision(7);
+            semesterCreated.HasPrecision(7);
+            semesterUpdated.HasPrecision(7);
+        }
+        semester.HasIndex(x => x.SemesterCode).IsUnique();
+        semester.HasIndex(x => x.IsActive);
     }
 }
 

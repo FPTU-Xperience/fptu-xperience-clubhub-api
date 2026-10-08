@@ -314,3 +314,21 @@ public sealed record ResolveClubMemberRosterRequest(
     IReadOnlyCollection<int>? MemberIds = null,
     DateTimeOffset? JoinedOnOrBefore = null,
     IReadOnlyCollection<int>? UserIds = null);
+
+// ============================================================================
+// CLUB CATEGORY CATALOG CONTRACTS
+// ============================================================================
+
+public sealed record ClubCategoryResponse(
+    int Id,
+    string Code,
+    string Name,
+    string? Description,
+    int ClubCount,
+    DateTimeOffset CreatedAtUtc);
+
+public sealed record CreateClubCategoryRequest(
+    [Required, MaxLength(128)] string Name,
+    [MaxLength(64)] string? Code = null,
+    [MaxLength(500)] string? Description = null);
+

@@ -12,6 +12,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
     public DbSet<ClubCreationApplication> ClubCreationApplications => Set<ClubCreationApplication>();
     public DbSet<ClubDisbandRequest> ClubDisbandRequests => Set<ClubDisbandRequest>();
     public DbSet<ClubOwnershipTransfer> ClubOwnershipTransfers => Set<ClubOwnershipTransfer>();
+    public DbSet<ClubCategory> ClubCategories => Set<ClubCategory>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -136,6 +137,17 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
                 .HasFilter("[Status] = 'Pending'");
             entity.HasIndex(x => x.Status);
             entity.Property(x => x.Status).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<ClubCategory>(entity =>
+        {
+            entity.ToTable("ClubCategories");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.Code).IsUnique();
+            entity.HasIndex(x => x.Name).IsUnique();
+            entity.Property(x => x.Code).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(500);
         });
 
         modelBuilder.ApplyOutboxConfiguration();

@@ -26,6 +26,17 @@ public static class ClubEndpoints
             .WithName("GetAllClubs")
             .WithDescription("Get all clubs with optional filtering");
 
+        // GET /api/clubs/categories - List all categories with counts
+        clubs.MapGet("/categories", GetClubCategories)
+            .WithName("GetClubCategories")
+            .WithDescription("Get all club categories with counts");
+
+        // POST /api/clubs/categories - Create new category (Admin only)
+        clubs.MapPost("/categories", CreateClubCategory)
+            .WithName("CreateClubCategory")
+            .WithDescription("Create a new club category (Admin only)")
+            .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
+
         // GET /api/clubs/me/managed - Get clubs managed by current user
         clubs.MapGet("/me/managed", GetManagedClubs)
             .WithName("GetManagedClubs")
@@ -298,11 +309,25 @@ public static class ClubEndpoints
         }
 
         var campusCode = CampusCodes.Normalize(request.CampusCode);
+        var normalizedCat = ValidationExtensions.NormalizeClubCategory(request.Category);
+        if (normalizedCat == ClubCategories.Other && !string.IsNullOrWhiteSpace(request.Category))
+        {
+            var matchedCustom = await db.ClubCategories
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.Code == request.Category.Trim() || x.Name == request.Category.Trim(),
+                    cancellationToken);
+            if (matchedCustom is not null)
+            {
+                normalizedCat = matchedCustom.Code;
+            }
+        }
+
         var club = new Club
         {
             Code = code,
             Name = request.Name.Trim(),
-            Category = ValidationExtensions.NormalizeClubCategory(request.Category),
+            Category = normalizedCat,
             CampusCode = campusCode,
             Description = request.Description?.Trim() ?? string.Empty,
             LogoUrl = request.LogoUrl?.Trim(),
@@ -361,7 +386,20 @@ public static class ClubEndpoints
 
         if (request.Category is not null)
         {
-            club.Category = ValidationExtensions.NormalizeClubCategory(request.Category);
+            var normalizedCat = ValidationExtensions.NormalizeClubCategory(request.Category);
+            if (normalizedCat == ClubCategories.Other && !string.IsNullOrWhiteSpace(request.Category))
+            {
+                var matchedCustom = await db.ClubCategories
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x => x.Code == request.Category.Trim() || x.Name == request.Category.Trim(),
+                        cancellationToken);
+                if (matchedCustom is not null)
+                {
+                    normalizedCat = matchedCustom.Code;
+                }
+            }
+            club.Category = normalizedCat;
         }
 
         if (request.Description is not null)
@@ -474,5 +512,110 @@ public static class ClubEndpoints
             clubId, club.Name, reviewerUserId);
 
         return Results.Ok(new { message = "Club deleted successfully", clubId, clubName = club.Name });
+    }
+
+    private static async Task<IResult> GetClubCategories(
+        ClubDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var categories = await db.ClubCategories
+            .AsNoTracking()
+            .OrderBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        if (categories.Count == 0)
+        {
+            var defaultCategories = new List<ClubCategory>
+            {
+                new() { Code = "TECHNOLOGY", Name = "Công nghệ", Description = "Câu lạc bộ công nghệ, kỹ thuật và phần mềm" },
+                new() { Code = "ARTS", Name = "Nghệ thuật", Description = "Câu lạc bộ nghệ thuật, âm nhạc, biểu diễn và thiết kế" },
+                new() { Code = "SPORTS", Name = "Thể thao", Description = "Câu lạc bộ thể thao, rèn luyện thể chất và võ thuật" },
+                new() { Code = "VOLUNTEER", Name = "Tình nguyện", Description = "Câu lạc bộ tình nguyện, công tác xã hội và cộng đồng" },
+                new() { Code = "ACADEMIC", Name = "Học thuật", Description = "Câu lạc bộ học thuật, ngoại ngữ và kỹ năng" },
+                new() { Code = "BUSINESS", Name = "Kinh doanh", Description = "Câu lạc bộ kinh doanh, tài chính và khởi nghiệp" },
+                new() { Code = "OTHER", Name = "Khác", Description = "Các câu lạc bộ sở thích và hoạt động chung khác" }
+            };
+            db.ClubCategories.AddRange(defaultCategories);
+            await db.SaveChangesAsync(cancellationToken);
+            categories = defaultCategories;
+        }
+
+        var activeClubs = await db.Clubs
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .Select(x => x.Category)
+            .ToListAsync(cancellationToken);
+
+        var result = categories.Select(cat =>
+        {
+            var count = activeClubs.Count(c =>
+                string.Equals(c, cat.Code, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(c, cat.Name, StringComparison.OrdinalIgnoreCase));
+
+            return new ClubCategoryResponse(
+                cat.Id,
+                cat.Code,
+                cat.Name,
+                cat.Description,
+                count,
+                cat.CreatedAtUtc);
+        }).ToList();
+
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> CreateClubCategory(
+        CreateClubCategoryRequest request,
+        ClubDbContext db,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.BadRequest(new { message = "Category name is required." });
+        }
+
+        var name = request.Name.Trim();
+        var code = string.IsNullOrWhiteSpace(request.Code)
+            ? ValidationExtensions.NormalizeClubCategory(name)
+            : request.Code.Trim().ToUpperInvariant();
+
+        if (code == ClubCategories.Other && !string.Equals(name, "Khác", StringComparison.OrdinalIgnoreCase))
+        {
+            code = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                code = "CAT_" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            }
+        }
+
+        var existing = await db.ClubCategories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x => x.Name.ToLower() == name.ToLower() || x.Code.ToUpper() == code.ToUpper(),
+                cancellationToken);
+
+        if (existing is not null)
+        {
+            return Results.Conflict(new { message = $"Category '{name}' already exists." });
+        }
+
+        var category = new ClubCategory
+        {
+            Code = code,
+            Name = name,
+            Description = request.Description?.Trim(),
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        db.ClubCategories.Add(category);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Results.Created($"/api/clubs/categories/{category.Id}", new ClubCategoryResponse(
+            category.Id,
+            category.Code,
+            category.Name,
+            category.Description,
+            0,
+            category.CreatedAtUtc));
     }
 }
