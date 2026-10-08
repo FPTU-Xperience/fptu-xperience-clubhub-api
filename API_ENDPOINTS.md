@@ -318,8 +318,22 @@ AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp en
 
 ---
 
+### 13. KIỂM DUYỆT BẤT THƯỜNG & SỔ CÁI XP (ANOMALIES & XP LEDGER)
+* **Base Path:** `{{baseUrl}}/api/v1/student-affairs/anomalies` và `{{baseUrl}}/api/v1/student-affairs/ledger` (hoặc `{{baseUrl}}/api/anomalies`, `{{baseUrl}}/api/ledger`)
+* Phát hiện và xử lý các ca nghi vấn gian lận/bất thường (tăng điểm đột biến, vượt ngưỡng bão hòa, trùng lặp minh chứng), cho phép Cán bộ CTSV ra quyết định đối soát (Giữ nguyên / Điều chỉnh giảm / Thu hồi điểm) và tự động ghi nhận bút toán đảo vào Sổ cái XP bất biến (Append-only Ledger).
+
+| Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/student-affairs/anomalies` | CTSV, Admin | Danh sách các ca bất thường cần đối soát | `?status=open&severity=high&semesterCode=FALL2026` |
+| `GET` | `/api/v1/student-affairs/anomalies/stats` | CTSV, Admin | Thống kê số lượng ca (Cần xem xét, Mức độ cao, Đã xử lý, Tổng số bút toán sổ cái) | *(Không có params)* |
+| `GET` | `/api/v1/student-affairs/anomalies/{id}` | CTSV, Admin | Chi tiết một ca bất thường và minh chứng nghi vấn | *(Param `id` dạng UUID)* |
+| `POST` | `/api/v1/student-affairs/anomalies/{id}/resolve` | CTSV, Admin | Ra quyết định xử lý ca bất thường (Tự động ghi bút toán đảo vào Sổ cái nếu `adjust` hoặc `revoke`) | `{"decision": "adjust", "adjustment": 20, "reason": "Đã đối chiếu danh sách sinh hoạt thực tế, chỉ ghi nhận 20 XP"}` *(decision: "keep" \| "adjust" \| "revoke")* |
+| `GET` | `/api/v1/student-affairs/ledger` | CTSV, Admin | Sổ cái bút toán XP toàn hệ thống (Ghi nhận gốc, Điều chỉnh, Thu hồi) | `?studentUserId=&type=&semesterCode=&page=1&pageSize=50` |
+
+---
+
 # 🚀 MẸO DÀNH CHO BẠN BÈ LÀM FRONTEND
 1. Khi gọi các API nộp file đính kèm (`/api/reports/upload`, `/api/reports/{id}/attachments/upload`), nhớ dùng `FormData` và không set cứng header `Content-Type: application/json` để trình duyệt tự động điền `multipart/form-data; boundary=...`.
 2. Khi gọi các API lấy file xem trước hoặc tải về (`/api/reports/{id}/file/preview`, `/api/exports/{id}/download`), cấu hình `responseType: 'blob'` trong Axios.
-3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 80+ API trên sẽ tự động hoạt động bình thường!
+3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 85+ API trên sẽ tự động hoạt động bình thường!
 

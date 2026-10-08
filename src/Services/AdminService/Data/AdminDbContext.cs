@@ -11,6 +11,8 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<BonusMatrixNode> BonusMatrixNodes => Set<BonusMatrixNode>();
     public DbSet<Quest> Quests => Set<Quest>();
     public DbSet<QuestParticipant> QuestParticipants => Set<QuestParticipant>();
+    public DbSet<XpAnomaly> XpAnomalies => Set<XpAnomaly>();
+    public DbSet<XpLedgerEntry> XpLedgerEntries => Set<XpLedgerEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -204,5 +206,69 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
 
         participant.HasIndex(x => new { x.QuestId, x.StudentUserId }).IsUnique();
         participant.HasIndex(x => x.StudentUserId);
+
+        var anomaly = modelBuilder.Entity<XpAnomaly>();
+        anomaly.ToTable("XpAnomalies");
+        anomaly.HasKey(x => x.Id);
+        anomaly.Property(x => x.Title).HasMaxLength(200).IsRequired();
+        anomaly.Property(x => x.Severity).HasMaxLength(20).IsRequired();
+        anomaly.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        anomaly.Property(x => x.Club).HasMaxLength(150).IsRequired();
+        anomaly.Property(x => x.Student).HasMaxLength(150).IsRequired();
+        anomaly.Property(x => x.Source).HasMaxLength(100).IsRequired();
+        anomaly.Property(x => x.Evidence).HasMaxLength(2000).IsRequired();
+        anomaly.Property(x => x.SemesterCode).HasMaxLength(20).IsRequired();
+        anomaly.Property(x => x.CampusCode).HasMaxLength(20).IsRequired();
+        anomaly.Property(x => x.Decision).HasMaxLength(30);
+        anomaly.Property(x => x.Reason).HasMaxLength(1500);
+        anomaly.Property(x => x.ResolvedByName).HasMaxLength(150);
+
+        var anomCreated = anomaly.Property(x => x.CreatedAtUtc).IsRequired();
+        var anomUpdated = anomaly.Property(x => x.UpdatedAtUtc).IsRequired();
+        var anomResolved = anomaly.Property(x => x.ResolvedAtUtc);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            anomCreated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            anomUpdated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            anomResolved.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            anomCreated.HasPrecision(7);
+            anomUpdated.HasPrecision(7);
+            anomResolved.HasPrecision(7);
+        }
+
+        anomaly.HasIndex(x => x.Status);
+        anomaly.HasIndex(x => x.Severity);
+        anomaly.HasIndex(x => x.SemesterCode);
+        anomaly.HasIndex(x => x.CampusCode);
+
+        var ledger = modelBuilder.Entity<XpLedgerEntry>();
+        ledger.ToTable("XpLedgerEntries");
+        ledger.HasKey(x => x.Id);
+        ledger.Property(x => x.StudentName).HasMaxLength(150).IsRequired();
+        ledger.Property(x => x.Type).HasMaxLength(30).IsRequired();
+        ledger.Property(x => x.Source).HasMaxLength(150).IsRequired();
+        ledger.Property(x => x.Actor).HasMaxLength(150).IsRequired();
+        ledger.Property(x => x.Reason).HasMaxLength(1500).IsRequired();
+        ledger.Property(x => x.PillarCategory).HasMaxLength(50).IsRequired();
+        ledger.Property(x => x.SemesterCode).HasMaxLength(20).IsRequired();
+        ledger.Property(x => x.CampusCode).HasMaxLength(20).IsRequired();
+
+        var ledgerCreated = ledger.Property(x => x.CreatedAtUtc).IsRequired();
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            ledgerCreated.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            ledgerCreated.HasPrecision(7);
+        }
+
+        ledger.HasIndex(x => x.StudentUserId);
+        ledger.HasIndex(x => x.SemesterCode);
+        ledger.HasIndex(x => x.CampusCode);
+        ledger.HasIndex(x => x.CreatedAtUtc);
     }
 }

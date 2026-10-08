@@ -245,6 +245,32 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/quests" }
       },
+      "anomalies": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/anomalies/{**catch-all}" }
+      },
+      "anomalies-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/anomalies" }
+      },
+      "ledger": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/ledger/{**catch-all}" }
+      },
+      "ledger-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/ledger" }
+      },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
