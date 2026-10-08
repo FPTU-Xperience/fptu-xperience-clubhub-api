@@ -193,6 +193,32 @@
         "RateLimiterPolicy": "export",
         "Match": { "Path": "/api/exports" }
       },
+      "bonus-matrix": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/bonus-matrix/{**catch-all}" }
+      },
+      "bonus-matrix-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/bonus-matrix" }
+      },
+      "bonus-matrix-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/bonus-matrix/{**catch-all}" }
+      },
+      "bonus-matrix-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/bonus-matrix" }
+      },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",

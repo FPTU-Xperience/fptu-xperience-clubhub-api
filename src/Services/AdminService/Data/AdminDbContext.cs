@@ -8,6 +8,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
     public DbSet<SelfDeclaration> SelfDeclarations => Set<SelfDeclaration>();
     public DbSet<SemesterBenchmarkConfig> SemesterBenchmarkConfigs => Set<SemesterBenchmarkConfig>();
+    public DbSet<BonusMatrixNode> BonusMatrixNodes => Set<BonusMatrixNode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -114,5 +115,27 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
 
         benchmark.HasIndex(x => x.SemesterCode).IsUnique();
         benchmark.HasIndex(x => x.IsActive);
+
+        var node = modelBuilder.Entity<BonusMatrixNode>();
+        node.ToTable("BonusMatrixNodes");
+        node.HasKey(x => x.Id);
+        node.Property(x => x.Position).IsRequired();
+        node.Property(x => x.Label).HasMaxLength(60).IsRequired();
+        node.Property(x => x.Multiplier).IsRequired();
+
+        var nodeCreated = node.Property(x => x.CreatedAtUtc).IsRequired();
+        var nodeUpdated = node.Property(x => x.UpdatedAtUtc).IsRequired();
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            nodeCreated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            nodeUpdated.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            nodeCreated.HasPrecision(7);
+            nodeUpdated.HasPrecision(7);
+        }
+
+        node.HasIndex(x => x.Position).IsUnique();
     }
 }

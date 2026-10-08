@@ -94,6 +94,7 @@ app.MapGet("/", () => Results.Ok(new
 app.MapAdminEndpoints();
 app.MapDeclarationEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapBonusMatrixEndpoints();
 
 if (app.Environment.IsEnvironment("Test"))
 {

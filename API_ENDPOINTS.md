@@ -279,8 +279,29 @@ AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp en
 
 ---
 
+### 11. MA TRẬN HỆ SỐ BONUS (BONUS MATRIX NODES)
+* **Base Path:** `{{baseUrl}}/api/bonus-matrix` (hoặc `{{baseUrl}}/api/v1/bonus-matrix`)
+* Quản lý các ngưỡng điểm và hệ số nhân để tính điểm cộng thêm cho sinh viên. Mỗi ngưỡng có một `position` (0–200, step 5) và `multiplier` (0–200%, step 5). Không cho phép trùng `position`.
+
+| Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/bonus-matrix` | Public / Auth | Lấy danh sách toàn bộ các ngưỡng bonus, sắp xếp theo `position` tăng dần (tự động khởi tạo 4 ngưỡng mặc định nếu chưa có: 0 [100%], 50 [80%], 100 [60%], 150 [40%]) | *(Không có params)* |
+| `POST` | `/api/bonus-matrix` | CTSV, Admin | Tạo một ngưỡng mới trên trục điểm | `{"position": 75, "label": "Ngưỡng khá", "multiplier": 70}` *(label tùy chọn, mặc định "Ngưỡng {position}")* |
+| `PUT` | `/api/bonus-matrix/{id}` | CTSV, Admin | Cập nhật ngưỡng hiện có (tất cả fields đều optional) | `{"position": 80, "label": "Ngưỡng khá giỏi", "multiplier": 65}` |
+| `DELETE` | `/api/bonus-matrix/{id}` | CTSV, Admin | Xóa một ngưỡng (hệ thống bắt buộc giữ lại ít nhất 1 ngưỡng, nếu chỉ còn 1 sẽ báo lỗi `CANNOT_DELETE_LAST_NODE`) | *(Param `id` dạng UUID)* |
+
+#### Mã lỗi chuẩn hóa (Error Codes Envelope):
+* Format lỗi: `{"success": false, "error": {"code": "...", "message": "..."}}`
+* `INVALID_POSITION` (400): Position không hợp lệ (sai khoảng 0–200, không chia hết cho 5, hoặc bị trùng position với node khác).
+* `INVALID_LABEL` (400): Label vượt quá 60 ký tự.
+* `INVALID_MULTIPLIER` (400): Multiplier không hợp lệ (sai khoảng 0–200 hoặc không chia hết cho 5).
+* `CANNOT_DELETE_LAST_NODE` (400): Không thể xóa khi hệ thống chỉ còn 1 ngưỡng duy nhất.
+* `NOT_FOUND` (404): Không tìm thấy ngưỡng với ID được cung cấp.
+
+---
+
 # 🚀 MẸO DÀNH CHO BẠN BÈ LÀM FRONTEND
 1. Khi gọi các API nộp file đính kèm (`/api/reports/upload`, `/api/reports/{id}/attachments/upload`), nhớ dùng `FormData` và không set cứng header `Content-Type: application/json` để trình duyệt tự động điền `multipart/form-data; boundary=...`.
 2. Khi gọi các API lấy file xem trước hoặc tải về (`/api/reports/{id}/file/preview`, `/api/exports/{id}/download`), cấu hình `responseType: 'blob'` trong Axios.
-3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 65+ API trên sẽ tự động hoạt động bình thường!
+3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 70+ API trên sẽ tự động hoạt động bình thường!
 
