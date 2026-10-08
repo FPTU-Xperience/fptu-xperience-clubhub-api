@@ -113,56 +113,82 @@ public static class ExportEndpoints
             return Results.Forbid();
         }
 
-        if (input.ReportId is null or <= 0)
+        var validationErrors = ExportExtensions.Validate(input);
+        if (validationErrors.Count > 0)
         {
-            return Results.BadRequest(new { message = "ReportId is required." });
+            return Results.ValidationProblem(validationErrors);
         }
 
-        var exportType = ExportTypes.Normalize(input.ExportType);
-        if (exportType is null)
+        var exportType = input.ResolvedExportType;
+        var scope = input.ResolvedScope;
+
+        ExportRequest request;
+
+        if (input.ReportId is not null and > 0)
         {
-            return Results.BadRequest(new { message = "ExportType must be PDF, XLSX, or DOCX." });
+            var client = httpClientFactory.CreateClient("ReportService");
+            if (httpContext.Request.Headers.TryGetValue("Authorization", out var authHeader))
+            {
+                client.DefaultRequestHeaders.Add("Authorization", authHeader.ToString());
+            }
+
+            var response = await client.GetAsync($"/api/reports/{input.ReportId}", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? Results.Forbid()
+                    : Results.NotFound(new { message = "Báo cáo không tồn tại hoặc không có quyền truy cập." });
+            }
+
+            var reportSnapshot = await response.Content.ReadFromJsonAsync<ReportExportSnapshot>(
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                cancellationToken: cancellationToken);
+
+            if (reportSnapshot is null)
+            {
+                return Results.BadRequest(new { message = "Dữ liệu báo cáo không hợp lệ." });
+            }
+
+            var snapshotJson = JsonSerializer.Serialize(reportSnapshot);
+
+            request = new ExportRequest
+            {
+                ExportType = exportType,
+                Scope = scope,
+                Status = ExportStatuses.Pending,
+                Period = reportSnapshot.Period,
+                ClubId = reportSnapshot.ClubId,
+                ReportId = reportSnapshot.Id,
+                RequestedByUserId = user.GetUserId(),
+                RequestedByName = user.GetDisplayName(),
+                CriteriaJson = JsonSerializer.Serialize(new { reportId = reportSnapshot.Id, exportType }),
+                SnapshotJson = snapshotJson,
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            };
         }
-
-        var client = httpClientFactory.CreateClient("ReportService");
-        if (httpContext.Request.Headers.TryGetValue("Authorization", out var authHeader))
+        else
         {
-            client.DefaultRequestHeaders.Add("Authorization", authHeader.ToString());
+            // General / Dashboard / Overview export (allowed for Admin and CTSV)
+            if (!user.IsInRole(AuthRoles.Admin) && !user.IsInRole(AuthRoles.StudentAffairsAdmin))
+            {
+                return Results.BadRequest(new { message = "ReportId is required for club manager exports." });
+            }
+
+            request = new ExportRequest
+            {
+                ExportType = exportType,
+                Scope = scope,
+                Status = ExportStatuses.Pending,
+                Period = input.Period,
+                ClubId = input.ClubId,
+                ReportId = null,
+                RequestedByUserId = user.GetUserId(),
+                RequestedByName = user.GetDisplayName(),
+                CriteriaJson = JsonSerializer.Serialize(new { scope, exportType, period = input.Period, clubId = input.ClubId }),
+                SnapshotJson = null,
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            };
         }
-
-        var response = await client.GetAsync($"/api/reports/{input.ReportId}", cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            return response.StatusCode == System.Net.HttpStatusCode.Forbidden
-                ? Results.Forbid()
-                : Results.NotFound(new { message = "Báo cáo không tồn tại hoặc không có quyền truy cập." });
-        }
-
-        var reportSnapshot = await response.Content.ReadFromJsonAsync<ReportExportSnapshot>(
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
-            cancellationToken: cancellationToken);
-
-        if (reportSnapshot is null)
-        {
-            return Results.BadRequest(new { message = "Dữ liệu báo cáo không hợp lệ." });
-        }
-
-        var snapshotJson = JsonSerializer.Serialize(reportSnapshot);
-
-        var request = new ExportRequest
-        {
-            ExportType = exportType,
-            Scope = "Report",
-            Status = ExportStatuses.Pending,
-            Period = reportSnapshot.Period,
-            ClubId = reportSnapshot.ClubId,
-            ReportId = reportSnapshot.Id,
-            RequestedByUserId = user.GetUserId(),
-            RequestedByName = user.GetDisplayName(),
-            CriteriaJson = JsonSerializer.Serialize(new { reportId = reportSnapshot.Id, exportType }),
-            SnapshotJson = snapshotJson,
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        };
 
         IDbContextTransaction? transaction = null;
         if (db.Database.IsRelational())

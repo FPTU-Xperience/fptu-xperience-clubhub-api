@@ -8,12 +8,14 @@ public static class ExportExtensions
     public static Dictionary<string, string[]> Validate(CreateExportRequest input)
     {
         var errors = new Dictionary<string, string[]>();
-        if (ExportTypes.Normalize(input.ExportType) is null)
+        var exportType = input.ResolvedExportType;
+        if (ExportTypes.Normalize(exportType) is null)
         {
             errors[nameof(input.ExportType)] = ["ExportType must be PDF, XLSX, or DOCX."];
         }
 
-        if (string.IsNullOrWhiteSpace(input.Scope) || input.Scope.Trim().Length > 40)
+        var scope = input.ResolvedScope;
+        if (string.IsNullOrWhiteSpace(scope) || scope.Length > 40)
         {
             errors[nameof(input.Scope)] = ["Scope is required and must not exceed 40 characters."];
         }
@@ -28,7 +30,7 @@ public static class ExportExtensions
             errors[nameof(input.ClubId)] = ["ClubId must be a positive number."];
         }
 
-        if (input.Scope.Trim().Equals("Report", StringComparison.OrdinalIgnoreCase) && input.ReportId is null or <= 0)
+        if (scope.Equals("Report", StringComparison.OrdinalIgnoreCase) && input.ReportId is null or <= 0)
         {
             errors[nameof(input.ReportId)] = ["ReportId is required when Scope is 'Report'."];
         }

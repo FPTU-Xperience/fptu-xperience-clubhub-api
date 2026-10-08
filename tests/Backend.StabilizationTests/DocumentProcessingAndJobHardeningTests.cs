@@ -296,6 +296,57 @@ public sealed class DocumentProcessingAndJobHardeningTests : IDisposable
     }
 
     [Fact]
+    public void CreateExportRequest_WithDashboardType_ResolvesScopeAndFormatCorrectly()
+    {
+        var request = new CreateExportRequest(Type: "dashboard");
+
+        Assert.Equal(ExportTypes.Excel, request.ResolvedExportType);
+        Assert.Equal("Dashboard", request.ResolvedScope);
+
+        var errors = ExportService.Extensions.ExportExtensions.Validate(request);
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void ExportFileGenerator_DashboardScope_GeneratesValidExcelAndPdf()
+    {
+        var generator = new ExportFileGenerator(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Exports:StoragePath"] = _testDirectory
+            })
+            .Build());
+
+        var dashboardExcelRequest = new ExportRequest
+        {
+            Id = 999,
+            ExportType = ExportTypes.Excel,
+            Scope = "Dashboard",
+            RequestedByName = "Admin Test",
+            SnapshotJson = null
+        };
+
+        var excelResult = generator.Generate(dashboardExcelRequest);
+        Assert.NotNull(excelResult);
+        Assert.True(File.Exists(excelResult.FilePath));
+        Assert.True(excelResult.SizeBytes > 0);
+
+        var dashboardPdfRequest = new ExportRequest
+        {
+            Id = 1000,
+            ExportType = ExportTypes.Pdf,
+            Scope = "Dashboard",
+            RequestedByName = "Admin Test",
+            SnapshotJson = null
+        };
+
+        var pdfResult = generator.Generate(dashboardPdfRequest);
+        Assert.NotNull(pdfResult);
+        Assert.True(File.Exists(pdfResult.FilePath));
+        Assert.True(pdfResult.SizeBytes > 0);
+    }
+
+    [Fact]
     public async Task ExportGenerationJob_MalformedSnapshot_SetsFailedStatusAndCleansUp()
     {
         var options = new DbContextOptionsBuilder<ExportDbContext>()

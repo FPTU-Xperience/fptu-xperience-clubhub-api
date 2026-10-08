@@ -228,7 +228,10 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                 else
                 {
                     // Fallback to metadata
-                    page.Header().Text("ClubReportHub - Data Export Report").SemiBold().FontSize(18);
+                    var title = string.Equals(request.Scope, "Dashboard", StringComparison.OrdinalIgnoreCase)
+                        ? "FPTU Xperience - Dashboard Overview Export"
+                        : "ClubReportHub - Data Export Report";
+                    page.Header().Text(title).SemiBold().FontSize(18).FontColor(Colors.Blue.Darken2);
                     page.Content().PaddingVertical(20).Column(column =>
                     {
                         column.Spacing(10);
@@ -316,18 +319,21 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
         }
         else
         {
-            worksheet.Cell("A1").Value = "ClubReportHub - Data Export Report";
-            worksheet.Range("A1:B1").Merge().Style.Font.SetBold().Font.SetFontSize(16);
+            worksheet.Cell("A1").Value = string.Equals(request.Scope, "Dashboard", StringComparison.OrdinalIgnoreCase)
+                ? "FPTU Xperience - Báo cáo tổng quan Dashboard"
+                : "ClubReportHub - Data Export Report";
+            worksheet.Range("A1:C1").Merge().Style.Font.SetBold().Font.SetFontSize(16);
 
             var rows = new (string Label, object Value)[]
             {
-                ("Request ID", request.Id),
-                ("File type", request.ExportType),
-                ("Scope", request.Scope),
-                ("Reporting period", request.Period ?? "All"),
-                ("Club", request.ClubId?.ToString() ?? "All"),
-                ("Requested by", request.RequestedByName),
-                ("Created at", request.CreatedAtUtc.UtcDateTime)
+                ("Mã yêu cầu (Request ID)", request.Id),
+                ("Định dạng (Export Format)", request.ExportType),
+                ("Phạm vi xuất (Scope)", request.Scope),
+                ("Học kỳ (Reporting Period)", request.Period ?? "Toàn bộ"),
+                ("Mã CLB (Club ID)", request.ClubId?.ToString() ?? "Tất cả"),
+                ("Người yêu cầu (Requested by)", request.RequestedByName),
+                ("Thời điểm xuất (Generated at)", request.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'")),
+                ("Trạng thái (Status)", "Hoàn thành")
             };
 
             for (var index = 0; index < rows.Length; index++)
@@ -336,6 +342,13 @@ public sealed class ExportFileGenerator(IConfiguration configuration)
                 worksheet.Cell(r, 1).Value = rows[index].Label;
                 worksheet.Cell(r, 1).Style.Font.Bold = true;
                 worksheet.Cell(r, 2).Value = XLCellValue.FromObject(rows[index].Value);
+            }
+
+            if (string.Equals(request.Scope, "Dashboard", StringComparison.OrdinalIgnoreCase))
+            {
+                var noteRow = rows.Length + 5;
+                worksheet.Cell(noteRow, 1).Value = "Ghi chú: Báo cáo dữ liệu hoạt động & chỉ số tổng quan được khởi tạo từ hệ thống FPTU Xperience.";
+                worksheet.Cell(noteRow, 1).Style.Font.Italic = true;
             }
         }
 
