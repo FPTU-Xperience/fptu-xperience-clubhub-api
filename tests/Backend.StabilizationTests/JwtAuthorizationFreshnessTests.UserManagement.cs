@@ -169,4 +169,88 @@ public sealed partial class JwtAuthorizationFreshnessTests
         Assert.Equal(2, await fixture.Db.UserRoles.CountAsync(x => x.UserId == fixture.UserId));
         Assert.Equal(1, (await fixture.Db.Users.AsNoTracking().SingleAsync(x => x.Id == fixture.UserId)).SecurityVersion);
     }
+
+    [Fact]
+    public async Task RoleEndpoints_GetStats_ReturnsCorrectCountsAndBreakdown()
+    {
+        await using var fixture = await AuthTestFixture.CreateAsync();
+        var adminRole = new Role { Name = AuthRoles.Admin };
+        var managerRole = new Role { Name = AuthRoles.ClubManager };
+        var ctsvRole = new Role { Name = AuthRoles.StudentAffairsAdmin };
+        fixture.Db.Roles.AddRange(adminRole, managerRole, ctsvRole);
+
+        var admin = new User
+        {
+            Username = "admin_user",
+            FullName = "Admin User",
+            Email = "admin@fpt.edu.vn",
+            CampusCode = CampusCodes.Hanoi,
+            IsActive = true,
+            SecurityVersion = 1
+        };
+        var manager = new User
+        {
+            Username = "manager_user",
+            FullName = "Manager User",
+            Email = "manager@fpt.edu.vn",
+            CampusCode = CampusCodes.Hanoi,
+            IsActive = true,
+            SecurityVersion = 1
+        };
+        var ctsv = new User
+        {
+            Username = "ctsv_user",
+            FullName = "CTSV User",
+            Email = "ctsv@fpt.edu.vn",
+            CampusCode = CampusCodes.HoChiMinh,
+            IsActive = true,
+            SecurityVersion = 1
+        };
+        fixture.Db.Users.AddRange(admin, manager, ctsv);
+        await fixture.Db.SaveChangesAsync();
+
+        fixture.Db.UserRoles.AddRange(
+            new UserRole { UserId = admin.Id, RoleId = adminRole.Id },
+            new UserRole { UserId = manager.Id, RoleId = managerRole.Id },
+            new UserRole { UserId = ctsv.Id, RoleId = ctsvRole.Id });
+        await fixture.Db.SaveChangesAsync();
+
+        var adminToken = fixture.TokenFactory.CreateToken(admin.Id, "admin_user", "Admin User",
+            [AuthRoles.Admin], securityVersion: 1);
+        using var client = fixture.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken.AccessToken);
+
+        // 1. GET /api/roles/stats
+        var resp = await client.GetAsync("/api/roles/stats");
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var stats = await resp.Content.ReadFromJsonAsync<RoleStatsResponse>();
+        Assert.NotNull(stats);
+        Assert.True(stats.TotalUsers >= 4); // fixture user + 3 newly created
+        Assert.Equal(1, stats.Admin);
+        Assert.Equal(1, stats.ClubManager);
+        Assert.Equal(1, stats.StudentAffairsAdmin);
+        Assert.NotNull(stats.ByRole);
+        Assert.Equal(1, stats.ByRole["ADMIN"]);
+        Assert.Equal(1, stats.ByRole["CLUB_MANAGER"]);
+        Assert.Equal(1, stats.ByRole["STUDENT_AFFAIRS_ADMIN"]);
+        Assert.NotNull(stats.Items);
+        Assert.True(stats.Items.Count >= 4);
+
+        // 2. GET /api/users/stats/by-role
+        var userStatsResp = await client.GetAsync("/api/users/stats/by-role");
+        Assert.Equal(HttpStatusCode.OK, userStatsResp.StatusCode);
+        var userStats = await userStatsResp.Content.ReadFromJsonAsync<RoleStatsResponse>();
+        Assert.NotNull(userStats);
+        Assert.Equal(stats.TotalUsers, userStats.TotalUsers);
+        Assert.Equal(stats.Admin, userStats.Admin);
+
+        // 3. GET /api/roles/stats?campus=HCM
+        var hcmResp = await client.GetAsync("/api/roles/stats?campus=HCM");
+        Assert.Equal(HttpStatusCode.OK, hcmResp.StatusCode);
+        var hcmStats = await hcmResp.Content.ReadFromJsonAsync<RoleStatsResponse>();
+        Assert.NotNull(hcmStats);
+        Assert.Equal(1, hcmStats.TotalUsers);
+        Assert.Equal(1, hcmStats.StudentAffairsAdmin);
+        Assert.Equal(0, hcmStats.Admin);
+    }
 }

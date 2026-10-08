@@ -15,10 +15,74 @@ public static class RoleEndpoints
             .RequireAuthorization(AuthPolicies.UserDirectoryRead);
 
         roles.MapGet("/", HandleGetRoles);
+        roles.MapGet("/stats", HandleGetRoleStats);
         roles.MapPost("/", HandleCreateRole)
             .RequireAuthorization(AuthPolicies.SystemAdministration);
 
         return app;
+    }
+
+    public static async Task<IResult> HandleGetRoleStats(
+        string? campus,
+        AuthDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var usersQuery = db.Users.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(campus))
+        {
+            var normalizedCampus = CampusCodes.Normalize(campus);
+            if (normalizedCampus != CampusCodes.Global)
+            {
+                usersQuery = usersQuery.Where(u => u.CampusCode == normalizedCampus);
+            }
+        }
+
+        var totalUsers = await usersQuery.CountAsync(cancellationToken);
+        var activeUsers = await usersQuery.CountAsync(u => u.IsActive && !u.IsLocked, cancellationToken);
+        var lockedUsers = await usersQuery.CountAsync(u => u.IsLocked, cancellationToken);
+
+        var userRolesQuery = db.UserRoles.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(campus))
+        {
+            var normalizedCampus = CampusCodes.Normalize(campus);
+            if (normalizedCampus != CampusCodes.Global)
+            {
+                userRolesQuery = userRolesQuery.Where(ur => ur.User.CampusCode == normalizedCampus);
+            }
+        }
+
+        var counts = await userRolesQuery
+            .GroupBy(ur => ur.Role.Name)
+            .Select(g => new { RoleName = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var byRole = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ADMIN"] = 0,
+            ["STUDENT_AFFAIRS_ADMIN"] = 0,
+            ["CLUB_MANAGER"] = 0,
+            ["CLUB_MEMBER"] = 0
+        };
+
+        foreach (var c in counts)
+        {
+            byRole[c.RoleName] = c.Count;
+        }
+
+        var items = byRole
+            .Select(kv => new RoleStatItem(kv.Key, kv.Value))
+            .OrderBy(x => x.Role)
+            .ToList();
+
+        var response = RoleStatsResponse.Create(
+            totalUsers: totalUsers,
+            activeUsers: activeUsers,
+            lockedUsers: lockedUsers,
+            byRole: byRole,
+            items: items);
+
+        return Results.Ok(response);
     }
 
     private static async Task<IResult> HandleGetRoles(AuthDbContext db)

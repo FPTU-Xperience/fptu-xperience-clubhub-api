@@ -25,6 +25,8 @@ public static class UserEndpoints
             .RequireAuthorization(AuthPolicies.UserDirectoryRead);
 
         users.MapGet("/", HandleGetUsers);
+        users.MapGet("/stats", RoleEndpoints.HandleGetRoleStats);
+        users.MapGet("/stats/by-role", RoleEndpoints.HandleGetRoleStats);
         users.MapGet("/{id:int}", HandleGetUser);
         users.MapPost("/", HandleCreateUser).RequireAuthorization(AuthPolicies.SystemAdministration);
         users.MapPut("/{id:int}", HandleUpdateUser).RequireAuthorization(AuthPolicies.SystemAdministration);

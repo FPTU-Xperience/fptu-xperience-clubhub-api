@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace AuthService.Contracts;
 
@@ -47,3 +48,43 @@ public sealed record UpdateUserRequest(
     string? CampusCode = null);
 
 public sealed record CreateRoleRequest([StringLength(50)] string Name);
+
+public sealed record RoleStatItem(
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("count")] int Count);
+
+public sealed record RoleStatsResponse(
+    [property: JsonPropertyName("totalUsers")] int TotalUsers,
+    [property: JsonPropertyName("activeUsers")] int ActiveUsers,
+    [property: JsonPropertyName("lockedUsers")] int LockedUsers,
+    [property: JsonPropertyName("ADMIN")] int Admin,
+    [property: JsonPropertyName("STUDENT_AFFAIRS_ADMIN")] int StudentAffairsAdmin,
+    [property: JsonPropertyName("CLUB_MANAGER")] int ClubManager,
+    [property: JsonPropertyName("CLUB_MEMBER")] int ClubMember,
+    [property: JsonPropertyName("byRole")] IReadOnlyDictionary<string, int> ByRole,
+    [property: JsonPropertyName("items")] IReadOnlyList<RoleStatItem> Items)
+{
+    public static RoleStatsResponse Create(
+        int totalUsers,
+        int activeUsers,
+        int lockedUsers,
+        IReadOnlyDictionary<string, int> byRole,
+        IReadOnlyList<RoleStatItem> items)
+    {
+        var admin = byRole.GetValueOrDefault("ADMIN", 0) + byRole.GetValueOrDefault("SYSTEM_ADMIN", 0);
+        var ctsv = byRole.GetValueOrDefault("STUDENT_AFFAIRS_ADMIN", 0);
+        var manager = byRole.GetValueOrDefault("CLUB_MANAGER", 0);
+        var member = byRole.GetValueOrDefault("CLUB_MEMBER", 0);
+
+        return new RoleStatsResponse(
+            TotalUsers: totalUsers,
+            ActiveUsers: activeUsers,
+            LockedUsers: lockedUsers,
+            Admin: admin,
+            StudentAffairsAdmin: ctsv,
+            ClubManager: manager,
+            ClubMember: member,
+            ByRole: byRole,
+            Items: items);
+    }
+}

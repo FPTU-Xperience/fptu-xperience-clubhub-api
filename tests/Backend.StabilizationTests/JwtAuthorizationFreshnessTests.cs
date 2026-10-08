@@ -377,6 +377,7 @@ public sealed partial class JwtAuthorizationFreshnessTests
 
             app.MapAuthEndpoints();
             app.MapUserEndpoints();
+            app.MapRoleEndpoints();
             app.MapGet("/protected", () => Results.Ok(new { message = "authorized" }))
                 .RequireAuthorization();
 
