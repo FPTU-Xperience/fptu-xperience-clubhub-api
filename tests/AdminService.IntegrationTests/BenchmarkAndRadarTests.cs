@@ -103,6 +103,78 @@ public sealed class BenchmarkAndRadarTests(AdminApiFactory factory) : IClassFixt
     }
 
     [Fact]
+    public async Task Benchmark_SupportsFrontendCapabilitiesPayload_AndActiveFallback()
+    {
+        using var ctsvClient = CreateClient("student-affairs");
+
+        // 1. Get active benchmark -> should return default seeded benchmark with valid non-empty Id
+        var activeResp = await ctsvClient.GetAsync("/api/v1/student-affairs/benchmarks/active");
+        Assert.Equal(HttpStatusCode.OK, activeResp.StatusCode);
+        var active = await activeResp.Content.ReadFromJsonAsync<BenchmarkConfigResponse>(JsonOptions);
+        Assert.NotNull(active);
+        Assert.NotEqual(Guid.Empty, active.Id);
+        Assert.NotNull(active.Capabilities);
+        Assert.Equal(6, active.Capabilities.Count);
+        Assert.Equal(500m, active.BonusCap);
+        Assert.False(string.IsNullOrWhiteSpace(active.Status));
+
+        // 2. Post benchmark from FE format (weights summing to 100%, without raw Taus or academicYear)
+        var feCreate = new CreateBenchmarkConfigRequest(
+            SemesterCode: "SU27",
+            Capabilities: new List<CapabilityWeightItem>
+            {
+                new("ACAD", 25m),
+                new("PROF", 20m),
+                new("COMM", 15m),
+                new("PHYS", 15m),
+                new("GLOB", 15m),
+                new("ETHI", 10m)
+            },
+            BonusCap: 500m,
+            EffectiveDate: "2027-06-01");
+
+        var createResp = await ctsvClient.PostAsJsonAsync("/api/v1/student-affairs/benchmarks", feCreate);
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+        var created = await createResp.Content.ReadFromJsonAsync<BenchmarkConfigResponse>(JsonOptions);
+        Assert.NotNull(created);
+        Assert.Equal("SU27", created.SemesterCode);
+        Assert.Equal("2027-2028", created.AcademicYear);
+        Assert.Equal(1250m, created.TauAcademic); // 25 * 50
+        Assert.Equal(1000m, created.TauEntrepreneurship); // 20 * 50
+        Assert.Equal(750m, created.TauCommunity); // 15 * 50
+        Assert.Equal(500m, created.TauResearch); // 10 * 50
+        Assert.NotNull(created.Capabilities);
+        Assert.Equal(6, created.Capabilities.Count);
+
+        // 3. Update benchmark with new weights
+        var feUpdate = new UpdateBenchmarkConfigRequest(
+            Capabilities: new List<CapabilityWeightItem>
+            {
+                new("ACAD", 30m),
+                new("PROF", 20m),
+                new("COMM", 10m),
+                new("PHYS", 15m),
+                new("GLOB", 15m),
+                new("ETHI", 10m)
+            });
+
+        var updateResp = await ctsvClient.PutAsJsonAsync($"/api/v1/student-affairs/benchmarks/{created.Id}", feUpdate);
+        Assert.Equal(HttpStatusCode.OK, updateResp.StatusCode);
+        var updated = await updateResp.Content.ReadFromJsonAsync<BenchmarkConfigResponse>(JsonOptions);
+        Assert.NotNull(updated);
+        Assert.Equal(1500m, updated.TauAcademic); // 30 * 50
+        Assert.Equal(500m, updated.TauCommunity); // 10 * 50
+
+        // 4. Posting create again for the same semester code (unlocked) updates the existing benchmark
+        var duplicateCreateResp = await ctsvClient.PostAsJsonAsync("/api/v1/student-affairs/benchmarks", feCreate);
+        Assert.Equal(HttpStatusCode.OK, duplicateCreateResp.StatusCode);
+        var duplicateUpdated = await duplicateCreateResp.Content.ReadFromJsonAsync<BenchmarkConfigResponse>(JsonOptions);
+        Assert.NotNull(duplicateUpdated);
+        Assert.Equal(created.Id, duplicateUpdated.Id);
+        Assert.Equal(1250m, duplicateUpdated.TauAcademic);
+    }
+
+    [Fact]
     public async Task StudentRadar_ComputesProperlyFromApprovedDeclarations()
     {
         // 1. Student 1 queries radar initially -> Unexplored

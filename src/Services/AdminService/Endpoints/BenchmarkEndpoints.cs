@@ -90,13 +90,36 @@ public static class BenchmarkEndpoints
 
         if (config is null)
         {
-            // Fallback default FA26 benchmark if none created yet
-            config = new SemesterBenchmarkConfig
+            config = await dbContext.SemesterBenchmarkConfigs
+                .AsNoTracking()
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (config is null)
+        {
+            // Seed a default FA26 benchmark into the DB so subsequent updates and locks have a valid Id
+            var fallback = new SemesterBenchmarkConfig
             {
                 SemesterCode = "FA26",
                 AcademicYear = "2026-2027",
-                IsActive = true
+                IsActive = true,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                CreatedByName = "System"
             };
+
+            try
+            {
+                dbContext.SemesterBenchmarkConfigs.Add(fallback);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                config = fallback;
+            }
+            catch
+            {
+                config = await dbContext.SemesterBenchmarkConfigs
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(cancellationToken) ?? fallback;
+            }
         }
 
         return Results.Ok(BenchmarkConfigResponse.From(config));
@@ -111,12 +134,54 @@ public static class BenchmarkEndpoints
     {
         ValidateCreateRequest(request);
 
-        var normalizedCode = request.SemesterCode.Trim().ToUpperInvariant();
+        var (tauAcad, tauEthi, tauGlob, tauPhys, tauComm, tauProf, tauReal) = request.ResolveTaus();
+        var academicYear = request.ResolveAcademicYear();
+        var normalizedCode = (request.SemesterCode ?? "FALL2026").Trim().ToUpperInvariant();
+
         var existing = await dbContext.SemesterBenchmarkConfigs
-            .AnyAsync(x => x.SemesterCode == normalizedCode, cancellationToken);
-        if (existing)
+            .FirstOrDefaultAsync(x => x.SemesterCode == normalizedCode, cancellationToken);
+        if (existing is not null)
         {
-            throw new ResourceConflictException($"Benchmark configuration for semester '{normalizedCode}' already exists.");
+            if (existing.IsLocked)
+            {
+                throw new ResourceConflictException($"Benchmark configuration for semester '{normalizedCode}' already exists and is locked.");
+            }
+
+            if (request.IsActive && !existing.IsActive)
+            {
+                await DeactivateOtherBenchmarksAsync(dbContext, existing.Id, cancellationToken);
+            }
+
+            existing.AcademicYear = academicYear;
+            existing.IsActive = request.IsActive;
+            existing.TauAcademic = tauAcad;
+            existing.TauResearch = tauEthi;
+            existing.TauGlobal = tauGlob;
+            existing.TauCultureSports = tauPhys;
+            existing.TauCommunity = tauComm;
+            existing.TauEntrepreneurship = tauProf;
+            existing.TauRealWorldWork = tauReal;
+            existing.ThresholdStarter = request.ThresholdStarter;
+            existing.ThresholdPractitioner = request.ThresholdPractitioner;
+            existing.ThresholdLeader = request.ThresholdLeader;
+            existing.MinPillarScoreAllRounder = request.MinPillarScoreAllRounder;
+            existing.MinJAllRounder = request.MinJAllRounder;
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            await auditService.WriteAsync(new AuditWriteRequest(
+                Action: "BENCHMARK_CONFIG_UPDATED",
+                ResourceType: "SemesterBenchmarkConfig",
+                ResourceId: existing.Id.ToString(),
+                Outcome: AuditOutcomes.Succeeded,
+                Metadata: new Dictionary<string, string?>
+                {
+                    ["SemesterCode"] = existing.SemesterCode,
+                    ["AcademicYear"] = existing.AcademicYear,
+                    ["IsActive"] = existing.IsActive.ToString()
+                }), cancellationToken);
+
+            return Results.Ok(BenchmarkConfigResponse.From(existing));
         }
 
         if (request.IsActive)
@@ -127,16 +192,16 @@ public static class BenchmarkEndpoints
         var config = new SemesterBenchmarkConfig
         {
             SemesterCode = normalizedCode,
-            AcademicYear = request.AcademicYear.Trim(),
+            AcademicYear = academicYear,
             IsActive = request.IsActive,
             IsLocked = false,
-            TauAcademic = request.TauAcademic,
-            TauResearch = request.TauResearch,
-            TauGlobal = request.TauGlobal,
-            TauCultureSports = request.TauCultureSports,
-            TauCommunity = request.TauCommunity,
-            TauEntrepreneurship = request.TauEntrepreneurship,
-            TauRealWorldWork = request.TauRealWorldWork,
+            TauAcademic = tauAcad,
+            TauResearch = tauEthi,
+            TauGlobal = tauGlob,
+            TauCultureSports = tauPhys,
+            TauCommunity = tauComm,
+            TauEntrepreneurship = tauProf,
+            TauRealWorldWork = tauReal,
             ThresholdStarter = request.ThresholdStarter,
             ThresholdPractitioner = request.ThresholdPractitioner,
             ThresholdLeader = request.ThresholdLeader,
@@ -184,19 +249,21 @@ public static class BenchmarkEndpoints
 
         ValidateUpdateRequest(request);
 
+        var (tauAcad, tauEthi, tauGlob, tauPhys, tauComm, tauProf, tauReal) = request.ResolveTaus();
+
         if (request.IsActive && !config.IsActive)
         {
             await DeactivateOtherBenchmarksAsync(dbContext, config.Id, cancellationToken);
         }
 
         config.IsActive = request.IsActive;
-        config.TauAcademic = request.TauAcademic;
-        config.TauResearch = request.TauResearch;
-        config.TauGlobal = request.TauGlobal;
-        config.TauCultureSports = request.TauCultureSports;
-        config.TauCommunity = request.TauCommunity;
-        config.TauEntrepreneurship = request.TauEntrepreneurship;
-        config.TauRealWorldWork = request.TauRealWorldWork;
+        config.TauAcademic = tauAcad;
+        config.TauResearch = tauEthi;
+        config.TauGlobal = tauGlob;
+        config.TauCultureSports = tauPhys;
+        config.TauCommunity = tauComm;
+        config.TauEntrepreneurship = tauProf;
+        config.TauRealWorldWork = tauReal;
         config.ThresholdStarter = request.ThresholdStarter;
         config.ThresholdPractitioner = request.ThresholdPractitioner;
         config.ThresholdLeader = request.ThresholdLeader;
@@ -630,13 +697,15 @@ public static class BenchmarkEndpoints
         else if (request.SemesterCode.Length > 20)
             details.Add(new ErrorDetail("semesterCode", "Semester code cannot exceed 20 characters."));
 
-        if (string.IsNullOrWhiteSpace(request.AcademicYear))
+        var academicYear = request.ResolveAcademicYear();
+        if (string.IsNullOrWhiteSpace(academicYear))
             details.Add(new ErrorDetail("academicYear", "Academic year is required."));
-        else if (request.AcademicYear.Length > 20)
+        else if (academicYear.Length > 20)
             details.Add(new ErrorDetail("academicYear", "Academic year cannot exceed 20 characters."));
 
-        ValidateTaus(request.TauAcademic, request.TauResearch, request.TauGlobal, request.TauCultureSports,
-            request.TauCommunity, request.TauEntrepreneurship, request.TauRealWorldWork, details);
+        var (tauAcad, tauEthi, tauGlob, tauPhys, tauComm, tauProf, tauReal) = request.ResolveTaus();
+
+        ValidateTaus(tauAcad, tauEthi, tauGlob, tauPhys, tauComm, tauProf, tauReal, details);
 
         if (details.Count > 0)
             throw new RequestValidationException(details);
@@ -646,8 +715,9 @@ public static class BenchmarkEndpoints
     {
         var details = new List<ErrorDetail>();
 
-        ValidateTaus(request.TauAcademic, request.TauResearch, request.TauGlobal, request.TauCultureSports,
-            request.TauCommunity, request.TauEntrepreneurship, request.TauRealWorldWork, details);
+        var (tauAcad, tauEthi, tauGlob, tauPhys, tauComm, tauProf, tauReal) = request.ResolveTaus();
+
+        ValidateTaus(tauAcad, tauEthi, tauGlob, tauPhys, tauComm, tauProf, tauReal, details);
 
         if (details.Count > 0)
             throw new RequestValidationException(details);
