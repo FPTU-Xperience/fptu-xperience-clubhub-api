@@ -13,6 +13,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<QuestParticipant> QuestParticipants => Set<QuestParticipant>();
     public DbSet<XpAnomaly> XpAnomalies => Set<XpAnomaly>();
     public DbSet<XpLedgerEntry> XpLedgerEntries => Set<XpLedgerEntry>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -270,5 +271,23 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         ledger.HasIndex(x => x.SemesterCode);
         ledger.HasIndex(x => x.CampusCode);
         ledger.HasIndex(x => x.CreatedAtUtc);
+
+        var settings = modelBuilder.Entity<PlatformSettings>();
+        settings.ToTable("PlatformSettings");
+        settings.HasKey(x => x.Id);
+        settings.Property(x => x.GoogleDomain).HasMaxLength(253).IsRequired();
+        settings.Property(x => x.TimetableUrl).HasMaxLength(2000);
+        settings.Property(x => x.Digest).HasMaxLength(30).IsRequired();
+        settings.Property(x => x.UpdatedBy).HasMaxLength(150);
+        var settingsUpdated = settings.Property(x => x.UpdatedAtUtc).IsRequired();
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            settingsUpdated.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            settingsUpdated.HasPrecision(7);
+        }
     }
 }
+

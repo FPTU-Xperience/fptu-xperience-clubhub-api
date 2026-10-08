@@ -97,6 +97,7 @@ app.MapBenchmarkEndpoints();
 app.MapBonusMatrixEndpoints();
 app.MapQuestEndpoints();
 app.MapAnomalyEndpoints();
+app.MapSettingsEndpoints();
 
 if (app.Environment.IsEnvironment("Test"))
 {

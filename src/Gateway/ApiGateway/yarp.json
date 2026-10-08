@@ -271,6 +271,72 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/ledger" }
       },
+      "settings": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/settings/{**catch-all}" }
+      },
+      "settings-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/settings" }
+      },
+      "admin-settings": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/admin/settings/{**catch-all}" }
+      },
+      "admin-settings-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/admin/settings" }
+      },
+      "audit-events": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/audit-events/{**catch-all}" }
+      },
+      "audit-events-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/audit-events" }
+      },
+      "admin-audit-events": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/admin/audit-events/{**catch-all}" }
+      },
+      "admin-audit-events-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/admin/audit-events" }
+      },
+      "health-stats-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/health/stats" }
+      },
+      "admin-health-stats-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/admin/health/stats" }
+      },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",

@@ -332,8 +332,24 @@ AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp en
 
 ---
 
+### 14. CẤU HÌNH HỆ THỐNG, TÌNH TRẠNG & NHẬT KÝ HOẠT ĐỘNG (PLATFORM SETTINGS, HEALTH & AUDIT)
+* **Base Path:** `{{baseUrl}}/api/v1/admin` (hoặc các direct alias `{{baseUrl}}/api/settings`, `{{baseUrl}}/api/health/stats`, `{{baseUrl}}/api/audit-events`)
+* Phục vụ các màn hình Quản trị hệ thống: Cấu hình nền tảng, Tích hợp trường học (Google Workspace, Thời khóa biểu FAP), Giám sát tình trạng kết nối các microservices, và Tra cứu/Lọc nhật ký đối soát hoạt động.
+
+| Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/settings` | BackofficeUser | Lấy cấu hình nền tảng hiện tại (Tên miền Google cho phép, URL thời khóa biểu, thiết lập thông báo, tần suất tổng hợp digest, giới hạn tốc độ rate limit, thời gian lưu trữ retention) | *(Có alias `/api/settings`, `/api/admin/settings`)* |
+| `PUT` | `/api/v1/admin/settings` | Admin | Cập nhật cấu hình nền tảng & các tham số vận hành (Tự động ghi nhận nhật ký quản trị `UPDATE_PLATFORM_SETTINGS`) | `{"googleDomain": "fpt.edu.vn", "timetableUrl": "https://fap.fpt.edu.vn/api/schedule", "inAppNotifications": true, "emailNotifications": true, "digest": "weekly", "rateLimit": 100, "retention": 365}` |
+| `GET` | `/api/v1/admin/health/stats` | BackofficeUser | Thống kê số lượng thực thể (Tài khoản, CLB, Bút toán sổ cái, Sự kiện nhật ký) & Tình trạng kết nối từng Microservice (API Gateway, Auth/SSO, KPI Engine, Report Service) | *(Có alias `/api/health/stats`, `/api/admin/health/stats`)* |
+| `GET` | `/api/health` | Public | Endpoint kiểm tra nhanh tình trạng cổng API Gateway & Platform Backend (200 Healthy) | *(Không có params)* |
+| `GET` | `/api/v1/admin/audit-events` | Admin | Tra cứu nhật ký hoạt động hệ thống (Hỗ trợ phân trang, tìm kiếm từ khóa, và lọc theo khu vực: `all`, `admin`, `affairs`, `system`) | `?search=Fall&area=affairs&page=1&pageSize=20` *(Có alias `/api/audit-events`, `/api/admin/audit-events`)* |
+| `GET` | `/api/v1/admin/audit-events/{id}` | Admin | Xem chi tiết 1 sự kiện nhật ký kiểm toán | *(Param `id` dạng UUID)* |
+
+---
+
 # 🚀 MẸO DÀNH CHO BẠN BÈ LÀM FRONTEND
 1. Khi gọi các API nộp file đính kèm (`/api/reports/upload`, `/api/reports/{id}/attachments/upload`), nhớ dùng `FormData` và không set cứng header `Content-Type: application/json` để trình duyệt tự động điền `multipart/form-data; boundary=...`.
 2. Khi gọi các API lấy file xem trước hoặc tải về (`/api/reports/{id}/file/preview`, `/api/exports/{id}/download`), cấu hình `responseType: 'blob'` trong Axios.
-3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 85+ API trên sẽ tự động hoạt động bình thường!
+3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 90+ API trên sẽ tự động hoạt động bình thường!
+
 

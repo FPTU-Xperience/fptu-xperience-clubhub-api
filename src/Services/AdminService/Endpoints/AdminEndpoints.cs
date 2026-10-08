@@ -38,6 +38,11 @@ public static class AdminEndpoints
             .WithName("GetAuditEvent")
             .Produces<AuditEventResponse>();
 
+        // Direct alias for audit events
+        api.MapGet("/audit-events", GetAuditEventsAsync)
+            .RequireAuthorization(AdminPolicies.BackofficeUser)
+            .ExcludeFromDescription();
+
         api.MapGroup("/student-affairs")
             .WithTags("Student Affairs")
             .RequireAuthorization(AdminPolicies.StudentAffairsOnly)
@@ -86,12 +91,63 @@ public static class AdminEndpoints
     private static async Task<PagedResult<AuditEventResponse>> GetAuditEventsAsync(
         int? page,
         int? pageSize,
+        string? search,
+        string? area,
         AdminDbContext dbContext,
         CancellationToken cancellationToken)
     {
         var request = new PageRequest(page ?? 1, pageSize ?? 20);
         request.Validate();
-        var query = dbContext.AuditRecords.AsNoTracking().OrderByDescending(record => record.TimestampUtc);
+        await EnsureDefaultAuditRecordsAsync(dbContext, cancellationToken);
+
+        var query = dbContext.AuditRecords.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            query = query.Where(record =>
+                record.Action.Contains(s) ||
+                record.ResourceType.Contains(s) ||
+                (record.ResourceId != null && record.ResourceId.Contains(s)) ||
+                (record.ActorEmail != null && record.ActorEmail.Contains(s)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(area) && !string.Equals(area, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var a = area.Trim().ToLowerInvariant();
+            if (a == "affairs")
+            {
+                query = query.Where(record =>
+                    record.Action.Contains("QUEST") ||
+                    record.Action.Contains("ANOMALY") ||
+                    record.Action.Contains("BENCHMARK") ||
+                    record.Action.Contains("DECLARATION") ||
+                    record.ResourceType.Contains("QUEST") ||
+                    record.ResourceType.Contains("ANOMALY") ||
+                    record.ResourceType.Contains("BENCHMARK") ||
+                    record.ResourceType.Contains("DECLARATION") ||
+                    record.ActorRolesJson.Contains("STUDENT_AFFAIRS_ADMIN"));
+            }
+            else if (a == "admin")
+            {
+                query = query.Where(record =>
+                    record.Action.Contains("SETTING") ||
+                    record.Action.Contains("USER") ||
+                    record.Action.Contains("ACCOUNT") ||
+                    record.Action.Contains("ROLE") ||
+                    record.ResourceType.Contains("SETTING") ||
+                    record.ActorRolesJson.Contains("ADMIN"));
+            }
+            else if (a == "system")
+            {
+                query = query.Where(record =>
+                    record.ActorRolesJson.Contains("SYSTEM") ||
+                    record.Action.Contains("INIT") ||
+                    record.ResourceType.Contains("SYSTEM"));
+            }
+        }
+
+        query = query.OrderByDescending(record => record.TimestampUtc);
         var total = await query.CountAsync(cancellationToken);
         var records = await query
             .Skip((request.Page - 1) * request.PageSize)
@@ -102,6 +158,64 @@ public static class AdminEndpoints
             .Select(AuditEventResponse.From)
             .ToArray();
         return PagedResult<AuditEventResponse>.Create(items, request.Page, request.PageSize, total);
+    }
+
+    private static async Task EnsureDefaultAuditRecordsAsync(AdminDbContext dbContext, CancellationToken cancellationToken)
+    {
+        if (await dbContext.AuditRecords.AnyAsync(cancellationToken))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var initialRecords = new List<AuditRecord>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorSubjectId = "system",
+                ActorEmail = "system@fpt.edu.vn",
+                ActorRolesJson = "[\"SYSTEM\"]",
+                Action = "SYSTEM_INITIALIZE",
+                ResourceType = "SystemPlatform",
+                ResourceId = "core",
+                CorrelationId = Guid.NewGuid().ToString("N"),
+                TimestampUtc = now.AddHours(-12),
+                Outcome = AuditOutcomes.Succeeded,
+                MetadataJson = "{\"reason\":\"Khởi tạo hạ tầng nền tảng FPTU ClubHub API\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorSubjectId = "admin-sys-01",
+                ActorEmail = "admin@fpt.edu.vn",
+                ActorRolesJson = "[\"ADMIN\"]",
+                Action = "CONFIG_PLATFORM_SETTINGS",
+                ResourceType = "PlatformSettings",
+                ResourceId = "default",
+                CorrelationId = Guid.NewGuid().ToString("N"),
+                TimestampUtc = now.AddHours(-6),
+                Outcome = AuditOutcomes.Succeeded,
+                MetadataJson = "{\"reason\":\"Thiết lập tên miền Google Workspace fpt.edu.vn và giới hạn lưu trữ\"}"
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                ActorSubjectId = "ctsv-hanoi-01",
+                ActorEmail = "ctsv.hanoi@fpt.edu.vn",
+                ActorRolesJson = "[\"STUDENT_AFFAIRS_ADMIN\"]",
+                Action = "UPDATE_SEMESTER_BENCHMARK",
+                ResourceType = "SemesterBenchmark",
+                ResourceId = "FA24",
+                CorrelationId = Guid.NewGuid().ToString("N"),
+                TimestampUtc = now.AddHours(-2),
+                Outcome = AuditOutcomes.Succeeded,
+                MetadataJson = "{\"reason\":\"Cập nhật ngưỡng chuẩn trải nghiệm học kỳ Fall 2024 cơ sở Hà Nội\"}"
+            }
+        };
+
+        dbContext.AuditRecords.AddRange(initialRecords);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task<AuditEventResponse> GetAuditEventAsync(
