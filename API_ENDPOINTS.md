@@ -300,8 +300,26 @@ AdminService chỉ xác thực JWT do AuthService cấp và không cung cấp en
 
 ---
 
+### 12. NHIỆM VỤ & CHIẾN DỊCH TRẢI NGHIỆM (QUESTS & CAMPAIGNS)
+* **Base Path:** `{{baseUrl}}/api/v1/quests` (hoặc `{{baseUrl}}/api/quests`)
+* Cho phép Cán bộ CTSV và Admin thiết lập các nhiệm vụ toàn trường gắn liền với 6+1 trụ trải nghiệm, thưởng điểm XP, đặt mục tiêu số lượng sinh viên tham gia, mở cổng đăng ký và xác thực hoàn thành.
+
+| Method | Endpoint | Quyền hạn | Mô tả | Request Body / Query Params |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/quests` | Public / Auth | Danh sách nhiệm vụ và chiến dịch toàn trường (có thể lọc theo kỳ, trạng thái, lĩnh vực, tìm kiếm) | `?semester=FALL2026&status=published&category=&search=` |
+| `GET` | `/api/v1/quests/{id}` | Public / Auth | Chi tiết một nhiệm vụ và tiến độ đăng ký/hoàn thành | *(Param `id` dạng UUID)* |
+| `POST` | `/api/v1/quests` | CTSV, Admin | Tạo một nhiệm vụ / chiến dịch mới toàn trường | `{"title": "Workshop AI", "description": "...", "category": "Entrepreneurship", "kind": "Cá nhân", "scope": "Toàn bộ sinh viên", "rewardXp": 50, "targetParticipants": 120, "semesterCode": "FALL2026", "deadline": "2026-11-30", "status": "published"}` |
+| `PUT` | `/api/v1/quests/{id}` | CTSV, Admin | Cập nhật thông tin nhiệm vụ | Các trường tương tự lúc tạo (optional) |
+| `PATCH` | `/api/v1/quests/{id}/status` | CTSV, Admin | Đổi trạng thái nhanh (`published`, `paused`, `draft`, `completed`) | `{"status": "paused"}` *(hoặc "published")* |
+| `DELETE` | `/api/v1/quests/{id}` | CTSV, Admin | Xóa nhiệm vụ (chặn xóa nếu đã có sinh viên được xác nhận hoàn thành) | *(Param `id` dạng UUID)* |
+| `POST` | `/api/v1/quests/{id}/join` | Sinh viên (Tất cả) | Sinh viên đăng ký tham gia nhiệm vụ | `{"note": "Em đăng ký tham gia"}` |
+| `POST` | `/api/v1/quests/{id}/complete` | Sinh viên, CTSV | Xác nhận hoàn thành nhiệm vụ và ghi nhận điểm XP | `{"note": "Đã hoàn thành xuất sắc"}` |
+| `GET` | `/api/v1/quests/me` | Sinh viên (Tất cả) | Xem danh sách các nhiệm vụ bản thân đã đăng ký và kết quả hoàn thành | *(Không có params)* |
+
+---
+
 # 🚀 MẸO DÀNH CHO BẠN BÈ LÀM FRONTEND
 1. Khi gọi các API nộp file đính kèm (`/api/reports/upload`, `/api/reports/{id}/attachments/upload`), nhớ dùng `FormData` và không set cứng header `Content-Type: application/json` để trình duyệt tự động điền `multipart/form-data; boundary=...`.
 2. Khi gọi các API lấy file xem trước hoặc tải về (`/api/reports/{id}/file/preview`, `/api/exports/{id}/download`), cấu hình `responseType: 'blob'` trong Axios.
-3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 70+ API trên sẽ tự động hoạt động bình thường!
+3. Khi deploy sang máy khác, **chỉ cần đổi duy nhất 1 dòng `VITE_API_BASE_URL` trong file `.env` của Frontend** là xong, toàn bộ 80+ API trên sẽ tự động hoạt động bình thường!
 

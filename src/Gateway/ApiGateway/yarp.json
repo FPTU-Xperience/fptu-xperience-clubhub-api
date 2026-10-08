@@ -219,6 +219,32 @@
         "RateLimiterPolicy": "general-api",
         "Match": { "Path": "/api/v1/bonus-matrix" }
       },
+      "quests": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/quests/{**catch-all}" }
+      },
+      "quests-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/quests" }
+      },
+      "quests-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/quests/{**catch-all}" }
+      },
+      "quests-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Anonymous",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/v1/quests" }
+      },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",

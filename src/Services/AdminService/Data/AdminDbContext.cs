@@ -9,6 +9,8 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<SelfDeclaration> SelfDeclarations => Set<SelfDeclaration>();
     public DbSet<SemesterBenchmarkConfig> SemesterBenchmarkConfigs => Set<SemesterBenchmarkConfig>();
     public DbSet<BonusMatrixNode> BonusMatrixNodes => Set<BonusMatrixNode>();
+    public DbSet<Quest> Quests => Set<Quest>();
+    public DbSet<QuestParticipant> QuestParticipants => Set<QuestParticipant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -137,5 +139,70 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         }
 
         node.HasIndex(x => x.Position).IsUnique();
+
+        var quest = modelBuilder.Entity<Quest>();
+        quest.ToTable("Quests");
+        quest.HasKey(x => x.Id);
+        quest.Property(x => x.Title).HasMaxLength(120).IsRequired();
+        quest.Property(x => x.Description).HasMaxLength(2000).IsRequired();
+        quest.Property(x => x.Category).HasMaxLength(50).IsRequired();
+        quest.Property(x => x.Kind).HasMaxLength(50).IsRequired();
+        quest.Property(x => x.Scope).HasMaxLength(50).IsRequired();
+        quest.Property(x => x.SemesterCode).HasMaxLength(20).IsRequired();
+        quest.Property(x => x.CampusCode).HasMaxLength(20).IsRequired();
+        quest.Property(x => x.Icon).HasMaxLength(30).IsRequired();
+        quest.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        quest.Property(x => x.CreatedByName).HasMaxLength(150);
+
+        var questCreated = quest.Property(x => x.CreatedAtUtc).IsRequired();
+        var questUpdated = quest.Property(x => x.UpdatedAtUtc).IsRequired();
+        var questDeadline = quest.Property(x => x.DeadlineUtc);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            questCreated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            questUpdated.HasConversion(new DateTimeOffsetToBinaryConverter());
+            questDeadline.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            questCreated.HasPrecision(7);
+            questUpdated.HasPrecision(7);
+            questDeadline.HasPrecision(7);
+        }
+
+        quest.HasIndex(x => x.SemesterCode);
+        quest.HasIndex(x => x.Status);
+        quest.HasIndex(x => x.CampusCode);
+
+        quest.HasMany(x => x.Participants)
+            .WithOne(x => x.Quest)
+            .HasForeignKey(x => x.QuestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var participant = modelBuilder.Entity<QuestParticipant>();
+        participant.ToTable("QuestParticipants");
+        participant.HasKey(x => x.Id);
+        participant.Property(x => x.StudentName).HasMaxLength(150).IsRequired();
+        participant.Property(x => x.StudentEmail).HasMaxLength(320).IsRequired();
+        participant.Property(x => x.CampusCode).HasMaxLength(20).IsRequired();
+        participant.Property(x => x.Status).HasMaxLength(20).IsRequired();
+        participant.Property(x => x.VerifiedByName).HasMaxLength(150);
+        participant.Property(x => x.Note).HasMaxLength(500);
+
+        var partJoined = participant.Property(x => x.JoinedAtUtc).IsRequired();
+        var partCompleted = participant.Property(x => x.CompletedAtUtc);
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            partJoined.HasConversion(new DateTimeOffsetToBinaryConverter());
+            partCompleted.HasConversion(new DateTimeOffsetToBinaryConverter());
+        }
+        else
+        {
+            partJoined.HasPrecision(7);
+            partCompleted.HasPrecision(7);
+        }
+
+        participant.HasIndex(x => new { x.QuestId, x.StudentUserId }).IsUnique();
+        participant.HasIndex(x => x.StudentUserId);
     }
 }
