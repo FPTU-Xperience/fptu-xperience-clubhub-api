@@ -290,13 +290,13 @@ public static class DeclarationEndpoints
 
         ValidateReview(request);
 
-        var decision = request.Decision.Trim();
+        var decision = NormalizeDecision(request.Decision);
         if (string.Equals(decision, DeclarationDecisions.Approved, StringComparison.OrdinalIgnoreCase))
         {
-            var tier = request.Tier!.Trim();
-            var role = request.Role!.Trim();
-            var scale = request.Scale!.Trim();
-            var bonusResult = string.IsNullOrWhiteSpace(request.BonusResult) ? null : request.BonusResult.Trim();
+            var tier = !string.IsNullOrWhiteSpace(request.Tier) ? request.Tier.Trim() : (declaration.Tier ?? EffortTiers.T1);
+            var role = !string.IsNullOrWhiteSpace(request.Role) ? request.Role.Trim() : (declaration.Role ?? ContributionRoles.Participant);
+            var scale = !string.IsNullOrWhiteSpace(request.Scale) ? request.Scale.Trim() : (declaration.Scale ?? ActivityScales.Club);
+            var bonusResult = !string.IsNullOrWhiteSpace(request.BonusResult) ? request.BonusResult.Trim() : declaration.BonusResult;
 
             var rawPoints = ExperienceScoringCalculator.CalculateRawPoints(tier, role, scale, bonusResult);
 
@@ -421,35 +421,35 @@ public static class DeclarationEndpoints
     {
         var details = new List<ErrorDetail>();
 
-        if (string.IsNullOrWhiteSpace(request.Decision) || !DeclarationDecisions.IsValid(request.Decision))
+        var normalizedDecision = NormalizeDecision(request.Decision);
+        if (string.IsNullOrWhiteSpace(normalizedDecision) || !DeclarationDecisions.IsValid(normalizedDecision))
         {
             details.Add(new ErrorDetail(
                 "decision",
-                $"Decision must be one of: {string.Join(", ", DeclarationDecisions.All)}."));
+                $"Decision must be one of: {string.Join(", ", DeclarationDecisions.All)} (or NEED_CLARIFICATION)."));
         }
 
-        var decision = request.Decision?.Trim();
-        if (string.Equals(decision, DeclarationDecisions.Approved, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(normalizedDecision, DeclarationDecisions.Approved, StringComparison.OrdinalIgnoreCase))
         {
-            if (string.IsNullOrWhiteSpace(request.Tier) || !EffortTiers.IsValid(request.Tier))
+            if (!string.IsNullOrWhiteSpace(request.Tier) && !EffortTiers.IsValid(request.Tier))
             {
                 details.Add(new ErrorDetail(
                     "tier",
-                    $"Approved declarations require a valid tier: {string.Join(", ", EffortTiers.All)}."));
+                    $"Tier must be one of: {string.Join(", ", EffortTiers.All)}."));
             }
 
-            if (string.IsNullOrWhiteSpace(request.Role) || !ContributionRoles.IsValid(request.Role))
+            if (!string.IsNullOrWhiteSpace(request.Role) && !ContributionRoles.IsValid(request.Role))
             {
                 details.Add(new ErrorDetail(
                     "role",
-                    $"Approved declarations require a valid role: {string.Join(", ", ContributionRoles.All)}."));
+                    $"Role must be one of: {string.Join(", ", ContributionRoles.All)}."));
             }
 
-            if (string.IsNullOrWhiteSpace(request.Scale) || !ActivityScales.IsValid(request.Scale))
+            if (!string.IsNullOrWhiteSpace(request.Scale) && !ActivityScales.IsValid(request.Scale))
             {
                 details.Add(new ErrorDetail(
                     "scale",
-                    $"Approved declarations require a valid scale: {string.Join(", ", ActivityScales.All)}."));
+                    $"Scale must be one of: {string.Join(", ", ActivityScales.All)}."));
             }
 
             if (!string.IsNullOrWhiteSpace(request.BonusResult) && !BonusResults.IsValid(request.BonusResult))
@@ -481,4 +481,17 @@ public static class DeclarationEndpoints
             throw new RequestValidationException(details);
         }
     }
+
+    private static string NormalizeDecision(string? decision)
+    {
+        if (string.IsNullOrWhiteSpace(decision)) return string.Empty;
+        var trimmed = decision.Trim();
+        if (string.Equals(trimmed, "NEED_CLARIFICATION", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, "CLARIFICATION", StringComparison.OrdinalIgnoreCase))
+        {
+            return DeclarationDecisions.RevisionRequested;
+        }
+        return trimmed;
+    }
 }
+

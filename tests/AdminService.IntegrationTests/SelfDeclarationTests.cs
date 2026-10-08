@@ -340,6 +340,57 @@ public sealed class SelfDeclarationTests(AdminApiFactory factory) : IClassFixtur
         Assert.Equal("https://example.com/v2-updated", updated.EvidenceUrl);
     }
 
+    [Fact]
+    public async Task Ctsv_CanReview_WithNeedClarification_And_DefaultApproval()
+    {
+        using var student = CreateClient("student-1");
+        var submitRequest = new SubmitDeclarationRequest(
+            Title: "Clarification Test Event",
+            Category: ExperienceCategories.Academic,
+            OrganizationSource: "Coursera",
+            IsOutsideClub: true,
+            ClubId: null,
+            EvidenceUrl: "https://example.com/cert",
+            EvidenceDescription: "Certificate proof",
+            RoleProposed: ContributionRoles.Participant,
+            StartDate: new DateOnly(2026, 8, 1),
+            EndDate: new DateOnly(2026, 8, 2));
+
+        var submitResp = await student.PostAsJsonAsync("/api/v1/declarations", submitRequest);
+        var created = await submitResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
+        Assert.NotNull(created);
+
+        // Review with NEED_CLARIFICATION (alias for RevisionRequested used by DeclarationsQueue.jsx)
+        using var ctsv = CreateClient("student-affairs");
+        var clarifyReq = new ReviewDeclarationRequest(
+            Decision: "NEED_CLARIFICATION",
+            ReviewNote: "Vui lòng đính kèm chứng chỉ định dạng PDF có mã xác thực.");
+
+        var clarifyResp = await ctsv.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{created.Id}/review", clarifyReq);
+        Assert.Equal(HttpStatusCode.OK, clarifyResp.StatusCode);
+
+        var clarified = await clarifyResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
+        Assert.NotNull(clarified);
+        Assert.Equal(DeclarationStatuses.RevisionRequested, clarified.Status);
+
+        // Student updates
+        await student.PutAsJsonAsync($"/api/v1/declarations/{created.Id}", submitRequest with { EvidenceUrl = "https://example.com/valid.pdf" });
+
+        // CTSV Approves without explicit tier/role/scale (defaults applied gracefully)
+        var approveReq = new ReviewDeclarationRequest(
+            Decision: "APPROVED",
+            ReviewNote: "Hồ sơ đã đầy đủ chứng chỉ hợp lệ.");
+
+        var approveResp = await ctsv.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{created.Id}/review", approveReq);
+        Assert.Equal(HttpStatusCode.OK, approveResp.StatusCode);
+
+        var approved = await approveResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
+        Assert.NotNull(approved);
+        Assert.Equal(DeclarationStatuses.Approved, approved.Status);
+        Assert.NotNull(approved.RawPoints);
+        Assert.True(approved.RawPoints > 0);
+    }
+
     private HttpClient CreateClient(string token)
     {
         var client = factory.CreateClient();
