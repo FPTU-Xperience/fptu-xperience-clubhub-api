@@ -6,466 +6,756 @@
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "auth-login",
-        "Match": { "Path": "/api/auth/google" }
+        "Match": {
+          "Path": "/api/auth/google"
+        }
       },
       "auth-dev-login": {
         "Order": 1,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "auth-login",
-        "Match": { "Path": "/api/auth/dev-login" }
+        "Match": {
+          "Path": "/api/auth/dev-login"
+        }
       },
       "auth-refresh": {
         "Order": 1,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "auth-refresh",
-        "Match": { "Path": "/api/auth/refresh" }
+        "Match": {
+          "Path": "/api/auth/refresh"
+        }
       },
       "auth": {
         "Order": 10,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/auth/{**catch-all}" }
+        "Match": {
+          "Path": "/api/auth/{**catch-all}"
+        }
       },
       "users": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/users/{**catch-all}" }
+        "Match": {
+          "Path": "/api/users/{**catch-all}"
+        }
       },
       "users-root": {
         "Order": 1,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/users" }
+        "Match": {
+          "Path": "/api/users"
+        }
       },
       "roles": {
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/roles/{**catch-all}" }
+        "Match": {
+          "Path": "/api/roles/{**catch-all}"
+        }
       },
       "roles-root": {
         "Order": 1,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/roles" }
+        "Match": {
+          "Path": "/api/roles"
+        }
       },
       "clubs": {
         "ClusterId": "club-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/clubs/{**catch-all}" }
+        "Match": {
+          "Path": "/api/clubs/{**catch-all}"
+        }
       },
       "clubs-root": {
         "Order": 1,
         "ClusterId": "club-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/clubs" }
+        "Match": {
+          "Path": "/api/clubs"
+        }
       },
       "club-activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/clubs/{clubId}/activities" }
+        "Match": {
+          "Path": "/api/clubs/{clubId}/activities"
+        }
       },
       "club-activity-management": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/clubs/{clubId}/activities/{**catch-all}" }
+        "Match": {
+          "Path": "/api/clubs/{clubId}/activities/{**catch-all}"
+        }
       },
       "activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/activities/{**catch-all}" }
+        "Match": {
+          "Path": "/api/activities/{**catch-all}"
+        }
       },
       "activities-root": {
         "Order": 1,
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/activities" }
+        "Match": {
+          "Path": "/api/activities"
+        }
       },
       "report-upload": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "upload",
-        "Match": { "Path": "/api/reports/upload" }
+        "Match": {
+          "Path": "/api/reports/upload"
+        }
       },
       "report-file-replace": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "upload",
-        "Match": { "Path": "/api/reports/{reportId}/uploaded-file" }
+        "Match": {
+          "Path": "/api/reports/{reportId}/uploaded-file"
+        }
       },
       "report-attachment-upload": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "upload",
-        "Match": { "Path": "/api/reports/{id}/attachments/upload" }
+        "Match": {
+          "Path": "/api/reports/{id}/attachments/upload"
+        }
       },
       "report-file-alias": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "upload",
-        "Match": { "Path": "/api/reports/{reportId}/file" }
+        "Match": {
+          "Path": "/api/reports/{reportId}/file"
+        }
       },
       "reports": {
         "Order": 10,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/reports/{**catch-all}" }
+        "Match": {
+          "Path": "/api/reports/{**catch-all}"
+        }
       },
       "reports-root": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/reports" }
+        "Match": {
+          "Path": "/api/reports"
+        }
       },
       "deadlines": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/deadlines/{**catch-all}" }
+        "Match": {
+          "Path": "/api/deadlines/{**catch-all}"
+        }
       },
       "deadlines-root": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/deadlines" }
+        "Match": {
+          "Path": "/api/deadlines"
+        }
       },
       "reporting-deadlines": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/reporting-deadlines" }
+        "Match": {
+          "Path": "/api/reporting-deadlines"
+        }
       },
       "kpis": {
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/kpis/{**catch-all}" }
+        "Match": {
+          "Path": "/api/kpis/{**catch-all}"
+        }
       },
       "kpis-root": {
         "Order": 1,
         "ClusterId": "report-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/kpis" }
+        "Match": {
+          "Path": "/api/kpis"
+        }
       },
       "finance": {
         "ClusterId": "finance-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/finance/{**catch-all}" }
+        "Match": {
+          "Path": "/api/finance/{**catch-all}"
+        }
       },
       "finance-root": {
         "Order": 1,
         "ClusterId": "finance-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/finance" }
+        "Match": {
+          "Path": "/api/finance"
+        }
       },
       "exports": {
         "ClusterId": "export-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "export",
-        "Match": { "Path": "/api/exports/{**catch-all}" }
+        "Match": {
+          "Path": "/api/exports/{**catch-all}"
+        }
       },
       "exports-root": {
         "Order": 1,
         "ClusterId": "export-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "export",
-        "Match": { "Path": "/api/exports" }
+        "Match": {
+          "Path": "/api/exports"
+        }
       },
       "bonus-matrix": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/bonus-matrix/{**catch-all}" }
+        "Match": {
+          "Path": "/api/bonus-matrix/{**catch-all}"
+        }
       },
       "bonus-matrix-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/bonus-matrix" }
+        "Match": {
+          "Path": "/api/bonus-matrix"
+        }
       },
       "bonus-matrix-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/bonus-matrix/{**catch-all}" }
+        "Match": {
+          "Path": "/api/v1/bonus-matrix/{**catch-all}"
+        }
       },
       "bonus-matrix-v1-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/bonus-matrix" }
+        "Match": {
+          "Path": "/api/v1/bonus-matrix"
+        }
       },
       "quests": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/quests/{**catch-all}" }
+        "Match": {
+          "Path": "/api/quests/{**catch-all}"
+        }
       },
       "quests-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/quests" }
+        "Match": {
+          "Path": "/api/quests"
+        }
       },
       "quests-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/quests/{**catch-all}" }
+        "Match": {
+          "Path": "/api/v1/quests/{**catch-all}"
+        }
       },
       "quests-v1-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/quests" }
+        "Match": {
+          "Path": "/api/v1/quests"
+        }
       },
       "semesters": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/semesters/{**catch-all}" }
+        "Match": {
+          "Path": "/api/semesters/{**catch-all}"
+        }
       },
       "semesters-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/semesters" }
+        "Match": {
+          "Path": "/api/semesters"
+        }
       },
       "semesters-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/semesters/{**catch-all}" }
+        "Match": {
+          "Path": "/api/v1/semesters/{**catch-all}"
+        }
       },
       "semesters-v1-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/semesters" }
+        "Match": {
+          "Path": "/api/v1/semesters"
+        }
       },
       "anomalies": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/anomalies/{**catch-all}" }
+        "Match": {
+          "Path": "/api/anomalies/{**catch-all}"
+        }
       },
       "anomalies-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/anomalies" }
+        "Match": {
+          "Path": "/api/anomalies"
+        }
       },
       "ledger": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/ledger/{**catch-all}" }
+        "Match": {
+          "Path": "/api/ledger/{**catch-all}"
+        }
       },
       "ledger-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/ledger" }
+        "Match": {
+          "Path": "/api/ledger"
+        }
       },
       "settings": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/settings/{**catch-all}" }
+        "Match": {
+          "Path": "/api/settings/{**catch-all}"
+        }
       },
       "settings-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/settings" }
+        "Match": {
+          "Path": "/api/settings"
+        }
       },
       "admin-settings": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/admin/settings/{**catch-all}" }
+        "Match": {
+          "Path": "/api/admin/settings/{**catch-all}"
+        }
       },
       "admin-settings-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/admin/settings" }
+        "Match": {
+          "Path": "/api/admin/settings"
+        }
       },
       "audit-events": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/audit-events/{**catch-all}" }
+        "Match": {
+          "Path": "/api/audit-events/{**catch-all}"
+        }
       },
       "audit-events-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/audit-events" }
+        "Match": {
+          "Path": "/api/audit-events"
+        }
       },
       "admin-audit-events": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/admin/audit-events/{**catch-all}" }
+        "Match": {
+          "Path": "/api/admin/audit-events/{**catch-all}"
+        }
       },
       "admin-audit-events-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/admin/audit-events" }
+        "Match": {
+          "Path": "/api/admin/audit-events"
+        }
       },
       "health-stats-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/health/stats" }
+        "Match": {
+          "Path": "/api/health/stats"
+        }
       },
       "admin-health-stats-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/admin/health/stats" }
+        "Match": {
+          "Path": "/api/admin/health/stats"
+        }
       },
       "admin-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/admin/{**catch-all}" }
+        "Match": {
+          "Path": "/api/v1/admin/{**catch-all}"
+        }
       },
       "admin-v1-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/admin" }
+        "Match": {
+          "Path": "/api/v1/admin"
+        }
       },
       "student-affairs-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/student-affairs/{**catch-all}" }
+        "Match": {
+          "Path": "/api/v1/student-affairs/{**catch-all}"
+        }
       },
       "student-affairs-v1-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/student-affairs" }
+        "Match": {
+          "Path": "/api/v1/student-affairs"
+        }
       },
       "declarations-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/declarations/{**catch-all}" }
+        "Match": {
+          "Path": "/api/v1/declarations/{**catch-all}"
+        }
       },
       "declarations-v1-root": {
         "Order": 1,
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/declarations" }
+        "Match": {
+          "Path": "/api/v1/declarations"
+        }
       },
       "backoffice-me-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/v1/me" }
+        "Match": {
+          "Path": "/api/v1/me"
+        }
       },
       "notifications": {
         "ClusterId": "notification-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/notifications/{**catch-all}" }
+        "Match": {
+          "Path": "/api/notifications/{**catch-all}"
+        }
       },
       "notifications-root": {
         "Order": 1,
         "ClusterId": "notification-service",
         "AuthorizationPolicy": "Default",
         "RateLimiterPolicy": "general-api",
-        "Match": { "Path": "/api/notifications" }
+        "Match": {
+          "Path": "/api/notifications"
+        }
+      },
+      "experience-media": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "auth-service",
+        "Match": {
+          "Path": "/api/media/{**catch-all}"
+        }
+      },
+      "experience-contributions": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/contributions/{**catch-all}"
+        }
+      },
+      "experience-activity-contributions": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/activities/{activityId}/contributions/{**catch-all}"
+        }
+      },
+      "experience-manual": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/activities/{activityId}/sessions/{sessionId}/manual-attendance-requests/{**catch-all}"
+        }
+      },
+      "experience-own-contributions": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/users/me/contributions"
+        }
+      },
+      "experience-own-ledger": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/users/me/experience-ledger"
+        }
+      },
+      "experience-verification-queue": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/verifications/{**catch-all}"
+        }
+      },
+      "experience-verification-assignments": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/verification-assignments/{**catch-all}"
+        }
+      },
+      "experience-club-statistics": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "admin-service",
+        "Match": {
+          "Path": "/api/clubs/{clubId}/experience-statistics"
+        }
+      },
+      "experience-club-reports": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "export-service",
+        "Match": {
+          "Path": "/api/clubs/{clubId}/experience-reports/{**catch-all}"
+        }
+      },
+      "experience-pdf-status": {
+        "AuthorizationPolicy": "Default",
+        "Order": -20,
+        "RateLimiterPolicy": "general-api",
+        "ClusterId": "export-service",
+        "Match": {
+          "Path": "/api/club-experience-reports/{**catch-all}"
+        }
+      },
+      "student-discovery-feed": {
+        "Order": -30,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/activities/feed"
+        }
+      },
+      "student-discovery-detail": {
+        "Order": -30,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/activities/{activityId}"
+        }
+      },
+      "student-recommendations": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/recommendations/activities"
+        }
+      },
+      "student-experience-summary": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/users/me/experience-summary"
+        }
+      },
+      "student-activity-history": {
+        "Order": -30,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/users/me/activity-history"
+        }
       }
     },
     "Clusters": {
       "auth-service": {
         "Destinations": {
-          "primary": { "Address": "http://auth-service:8080/" }
+          "primary": {
+            "Address": "http://auth-service:8080/"
+          }
         }
       },
       "club-service": {
         "Destinations": {
-          "primary": { "Address": "http://club-service:8080/" }
+          "primary": {
+            "Address": "http://club-service:8080/"
+          }
         }
       },
       "activity-service": {
         "Destinations": {
-          "primary": { "Address": "http://activity-service:8080/" }
+          "primary": {
+            "Address": "http://activity-service:8080/"
+          }
         }
       },
       "report-service": {
         "Destinations": {
-          "primary": { "Address": "http://report-service:8080/" }
+          "primary": {
+            "Address": "http://report-service:8080/"
+          }
         }
       },
       "finance-service": {
         "Destinations": {
-          "primary": { "Address": "http://finance-service:8080/" }
+          "primary": {
+            "Address": "http://finance-service:8080/"
+          }
         }
       },
       "export-service": {
         "Destinations": {
-          "primary": { "Address": "http://export-service:8080/" }
+          "primary": {
+            "Address": "http://export-service:8080/"
+          }
         }
       },
       "notification-service": {
         "Destinations": {
-          "primary": { "Address": "http://notification-service:8080/" }
+          "primary": {
+            "Address": "http://notification-service:8080/"
+          }
         }
       },
       "admin-service": {
         "Destinations": {
-          "primary": { "Address": "http://admin-service:8080/" }
+          "primary": {
+            "Address": "http://admin-service:8080/"
+          }
         }
       },
       "kpi-grpc-service": {
         "Destinations": {
-          "primary": { "Address": "http://kpi-grpc-service:8080/" }
+          "primary": {
+            "Address": "http://kpi-grpc-service:8080/"
+          }
         }
       }
     }

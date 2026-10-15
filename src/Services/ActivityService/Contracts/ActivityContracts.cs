@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ClubReportHub.Shared.Experience;
 
 namespace ActivityService.Contracts;
 
@@ -16,7 +17,25 @@ public sealed record ActivityResponse(
     int CreatedByUserId,
     DateTimeOffset CreatedAtUtc,
     IReadOnlyCollection<ActivityParticipantResponse> Participants,
-    IReadOnlyCollection<ActivityAttendanceResponse> Attendances);
+    IReadOnlyCollection<ActivityAttendanceResponse> Attendances)
+{
+    public Guid Version { get; init; }
+    public string PublicationStatus { get; init; } = "LEGACY";
+    public string DiscoveryVisibility { get; init; } = "CLUB_ONLY";
+    public string? SemesterId { get; init; }
+    public int? Capacity { get; init; }
+    public DateTimeOffset? RegistrationOpensAt { get; init; }
+    public DateTimeOffset? RegistrationClosesAt { get; init; }
+    public string Eligibility { get; init; } = "CLUB_MEMBER";
+    public IReadOnlyList<PillarWeight> PillarWeights { get; init; } = [];
+    public string? CoverImageUrl { get; init; }
+    public int RegisteredCount { get; init; }
+    public int VerifiedAttendanceCount { get; init; }
+    public string EffortTier { get; init; } = "T1";
+    public string Scale { get; init; } = "Club";
+    public Guid? PolicyVersion { get; init; }
+    public string? EvidenceRequirements { get; init; }
+}
 
 public sealed record ActivityParticipantResponse(
     int Id,
@@ -33,7 +52,15 @@ public sealed record ActivityAttendanceResponse(
     string Status,
     string? Note,
     DateTimeOffset? CheckedInAtUtc,
-    int? CheckedInByUserId);
+    int? CheckedInByUserId)
+{
+    public int? SessionId { get; init; }
+    public Guid Version { get; init; }
+    public string VerificationStatus { get; init; } = "UNVERIFIED";
+    public string? VerificationMethod { get; init; }
+    public string RecognitionStatus { get; init; } = "NOT_REQUESTED";
+    public Guid? ContributionId { get; init; }
+}
 
 public sealed record CreateActivityRequest(
     int ClubId,
@@ -46,7 +73,10 @@ public sealed record CreateActivityRequest(
     IReadOnlyCollection<int>? MeetingDays,
     string? Name = null,
     DateTimeOffset? StartAt = null,
-    DateTimeOffset? EndAt = null);
+    DateTimeOffset? EndAt = null, string? SemesterId = null, string? EffortTier = null, string? Scale = null,
+    IReadOnlyList<PillarWeight>? PillarWeights = null, Guid? PolicyVersion = null, int? Capacity = null,
+    DateTimeOffset? RegistrationOpensAt = null, DateTimeOffset? RegistrationClosesAt = null,
+    string? Eligibility = null, string? EvidenceRequirements = null, string DiscoveryVisibility = "CLUB_ONLY");
 
 public sealed record CreateActivityFromApprovedReportRequest(
     int ReportId,
@@ -77,7 +107,12 @@ public sealed record UpdateActivityDetailsRequest(
     DateTimeOffset? EndTimeUtc = null,
     DateTimeOffset? EndAt = null,
     string? Location = null,
-    IReadOnlyCollection<int>? MeetingDays = null);
+    IReadOnlyCollection<int>? MeetingDays = null,
+    string? Operation = null, Guid? ExpectedVersion = null, string? SemesterId = null,
+    string? EffortTier = null, string? Scale = null, IReadOnlyList<PillarWeight>? PillarWeights = null,
+    Guid? PolicyVersion = null, int? Capacity = null, DateTimeOffset? RegistrationOpensAt = null,
+    DateTimeOffset? RegistrationClosesAt = null, string? Eligibility = null, string? EvidenceRequirements = null,
+    string? DiscoveryVisibility = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RegisterActivityParticipantRequest(int? UserId, string? FullName);
@@ -89,9 +124,13 @@ public sealed record MemberStatisticsDetailQuery(int UserId, DateTimeOffset Join
 public sealed record MemberActivityHistoryResponse(int ActivityId, string Title, DateTimeOffset StartTimeUtc, string ActivityStatus, string AttendanceStatus);
 public sealed record MemberStatisticsDetailResponse(MemberStatisticsResponse Statistics, IReadOnlyCollection<MemberActivityHistoryResponse> Items, int Page, int PageSize, int TotalItems, int TotalPages);
 
-public sealed record UpdateMemberAttendanceRequest(string Status, string? Note);
-public sealed record BulkAttendanceItemRequest(int MemberId, string Status, string? Note);
-public sealed record BulkUpdateAttendanceRequest(IReadOnlyCollection<BulkAttendanceItemRequest> Items);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record UpdateMemberAttendanceRequest(string Status, string? Note, int? SessionId = null,
+    Guid? ExpectedVersion = null, Guid? ExpectedSessionVersion = null, string? Reason = null);
+public sealed record BulkAttendanceItemRequest(int MemberId, string Status, string? Note, Guid? ExpectedVersion = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record BulkUpdateAttendanceRequest(IReadOnlyCollection<BulkAttendanceItemRequest> Items,
+    int? SessionId = null, Guid? ExpectedSessionVersion = null, string? Reason = null);
 public sealed record AttendanceMemberResponse(int MemberId, int UserId, string FullName, string Email, string PhoneNumber, string Role, DateTimeOffset JoinedAtUtc, string Status, string? Note, DateTimeOffset? CheckedInAtUtc, int? CheckedInByUserId);
 public sealed record ActivityAttendanceManagementResponse(int ActivityId, int ClubId, string Title, DateTimeOffset StartTimeUtc, string ActivityStatus, IReadOnlyCollection<AttendanceMemberResponse> Items, int Page, int PageSize, int TotalItems, int TotalPages, int PresentCount, int AbsentCount, int ExcusedCount, int LateCount, int NotMarkedCount);
 

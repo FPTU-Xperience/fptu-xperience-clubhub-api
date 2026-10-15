@@ -5,6 +5,9 @@ using ActivityService.Infrastructure;
 using ActivityService.Models;
 using ActivityService.Services;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Experience;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using static ActivityService.Endpoints.ActivityEndpointHelpers;
@@ -35,6 +38,8 @@ internal static class ActivityWriteEndpoints
         var activity = await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (activity is null) return Results.NotFound();
+        if (activity.PublicationStatus != "LEGACY")
+            return await ActivityTransitionEndpoints.ApplyAsync(id, true, db, httpContext, clubAccess, cancellationToken);
         if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess,
                 httpContext, cancellationToken, bypassCache: true))
             return Results.Forbid();
@@ -69,6 +74,13 @@ internal static class ActivityWriteEndpoints
     {
         var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (activity is null) return Results.NotFound();
+        if (request.Operation is not null || activity.PublicationStatus != "LEGACY")
+        {
+            var authority = httpContext.RequestServices.GetService<ExperienceAuthorityClient>();
+            if (authority is null) return ApiOperations.Error(503, "EXPERIENCE_SERVICE_UNAVAILABLE", "Scoring policy service is unavailable.");
+            return await ActivityLifecycleEndpoints.UpdateAsync(id, request, db, httpContext, clubAccess, authority,
+                httpContext.RequestServices.GetRequiredService<IConfiguration>(), cancellationToken);
+        }
         if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess, httpContext, cancellationToken, bypassCache: true))
             return Results.Forbid();
         if (activity.Status != ActivityStatuses.Scheduled || activity.SourceReportId.HasValue)
@@ -143,7 +155,15 @@ internal static class ActivityWriteEndpoints
         DateTimeOffset joinedAt;
         try
         {
-            if (targetUserId == actorId)
+            if (activity.PublicationStatus != "LEGACY" && activity.Eligibility == "CAMPUS_PUBLIC")
+            {
+                if (targetUserId != actorId) return Results.Forbid();
+                var account = await ActivityEligibility.ResolveAsync(activity, actorId, activity.StartTimeUtc,
+                    httpContext.RequestServices.GetRequiredService<CurrentUserProfileClient>(),
+                    httpContext.RequestServices.GetRequiredService<ClubExperienceAuthorityClient>(), cancellationToken);
+                if (account is null) return Results.Forbid(); fullName = account.DisplayName; joinedAt = DateTimeOffset.MinValue;
+            }
+            else if (targetUserId == actorId)
             {
                 var member = await roster.GetMyApprovedMembershipAsync(activity.ClubId, actorId, bearerToken, cancellationToken);
                 if (member is null) return Results.Forbid();
@@ -168,6 +188,26 @@ internal static class ActivityWriteEndpoints
 
         if (string.IsNullOrWhiteSpace(fullName) || fullName.Length > 200 || joinedAt > activity.StartTimeUtc)
             return Results.Forbid();
+        if (activity.PublicationStatus != "LEGACY")
+        {
+            if (targetUserId != actorId) return ApiOperations.Error(403, "SELF_REGISTRATION_ONLY", "Register using your own account.");
+            return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
+            {
+                var current = await db.Activities.SingleAsync(x => x.Id == id, cancellationToken);
+                var now = ActivitySessionEndpoints.Now(httpContext);
+                var registered = await db.ActivityParticipants.SingleOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
+                if (registered is not null) return Results.Ok(new { success = true, participant = ToParticipantResponse(registered) });
+                if (current.PublicationStatus != "PUBLISHED" || current.Status != ActivityStatuses.Scheduled
+                    || now < current.RegistrationOpensAt || now >= current.RegistrationClosesAt)
+                    return ApiOperations.Error(409, "REGISTRATION_CLOSED", "Registration is not open.");
+                if (current.Capacity.HasValue && current.RegisteredCount >= current.Capacity)
+                    return ApiOperations.Error(409, "ACTIVITY_FULL", "The activity has no available seats.");
+                current.RegisteredCount++; current.Version = Guid.NewGuid();
+                var participant = new ActivityParticipant { ActivityId = id, UserId = targetUserId, FullName = fullName };
+                db.ActivityParticipants.Add(participant); await db.SaveChangesAsync(cancellationToken);
+                return Results.Ok(new { success = true, participant = ToParticipantResponse(participant) });
+            }, cancellationToken);
+        }
         var existing = await db.ActivityParticipants.AsNoTracking()
             .FirstOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
         if (existing is not null) return Results.Ok(new { success = true, participant = ToParticipantResponse(existing) });
@@ -197,11 +237,19 @@ internal static class ActivityWriteEndpoints
         CancellationToken cancellationToken)
     {
         if (httpContext.Request.ContentLength is > 0 || httpContext.Request.Headers.ContainsKey("Transfer-Encoding"))
-            return Results.BadRequest(new { message = "Check-in does not accept client-supplied identity, time or date." });
+        {
+            SessionCheckInRequest? request;
+            try { request = await httpContext.Request.ReadFromJsonAsync<SessionCheckInRequest>(cancellationToken); }
+            catch (JsonException) { return Results.BadRequest(new { message = "Provide only sessionId, challenge and location." }); }
+            if (request is null) return Results.BadRequest();
+            return await SessionAttendanceEndpoints.CheckInAsync(id, request, db, httpContext, roster,
+                httpContext.RequestServices.GetRequiredService<IConfiguration>(), cancellationToken);
+        }
         var actorId = user.GetUserId();
         var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (activity is null) return Results.NotFound();
         var now = httpContext.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
+        if (activity.PublicationStatus != "LEGACY") return ApiOperations.Error(400, "QR_REQUIRED", "Provide sessionId and its attendance challenge.");
         if (activity.Status != ActivityStatuses.Scheduled || now < activity.StartTimeUtc || now > activity.EndTimeUtc)
             return Results.Conflict(new { message = "Check-in is not open for this activity." });
         MyClubMembership? member;
@@ -288,6 +336,8 @@ internal static class ActivityWriteEndpoints
     {
         var activity = await db.Activities.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (activity is null) return Results.NotFound();
+        if (activity.PublicationStatus != "LEGACY")
+            return await ActivityTransitionEndpoints.ApplyAsync(id, false, db, httpContext, clubAccess, cancellationToken);
         if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess, httpContext, cancellationToken, bypassCache: true))
             return Results.Forbid();
         if (activity.Status == ActivityStatuses.Completed)
@@ -308,5 +358,13 @@ internal static class ActivityWriteEndpoints
 
     private static ActivityAttendanceResponse ToAttendanceResponse(ActivityAttendance row) =>
         new(row.Id, row.UserId, row.FullName, row.AttendanceDate, row.Status, row.Note,
-            row.CheckedInAtUtc, row.CheckedInByUserId);
+            row.CheckedInAtUtc, row.CheckedInByUserId)
+        {
+            SessionId = row.SessionId,
+            Version = row.Version,
+            VerificationStatus = row.VerificationStatus,
+            VerificationMethod = row.VerificationMethod,
+            RecognitionStatus = row.RecognitionStatus,
+            ContributionId = row.ContributionId
+        };
 }

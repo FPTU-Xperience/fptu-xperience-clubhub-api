@@ -64,16 +64,14 @@ public sealed class SelfDeclarationTests(AdminApiFactory factory) : IClassFixtur
         // Fetch personal declarations
         var meResponse = await client.GetAsync("/api/v1/declarations/me");
         Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
-        var myList = await meResponse.Content.ReadFromJsonAsync<List<DeclarationResponse>>(JsonOptions);
-        Assert.NotNull(myList);
-        Assert.Contains(myList, d => d.Id == created.Id);
+        var myList = await meResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Contains(myList.GetProperty("items").EnumerateArray(), d => d.GetProperty("id").GetGuid() == created.Id);
 
         // Student 2 cannot see Student 1's declaration in /me
         using var client2 = CreateClient("student-2");
         var student2Me = await client2.GetAsync("/api/v1/declarations/me");
-        var student2List = await student2Me.Content.ReadFromJsonAsync<List<DeclarationResponse>>(JsonOptions);
-        Assert.NotNull(student2List);
-        Assert.DoesNotContain(student2List, d => d.Id == created.Id);
+        var student2List = await student2Me.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.DoesNotContain(student2List.GetProperty("items").EnumerateArray(), d => d.GetProperty("id").GetGuid() == created.Id);
 
         // Student 2 cannot fetch Student 1's declaration by ID (403 Forbidden)
         var student2Detail = await client2.GetAsync($"/api/v1/declarations/{created.Id}");

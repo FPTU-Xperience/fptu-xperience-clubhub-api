@@ -161,13 +161,14 @@ public sealed class ArchitectureResilienceTests
         Assert.Equal(2, pagedResult.TotalItems);
         Assert.Equal(2, pagedResult.Items.Count);
 
-        // Participation stats degrade to 0 without breaking the member management page
+        // Keep the management page available without reporting missing data as zero.
         foreach (var item in pagedResult.Items)
         {
             Assert.NotNull(item.Participation);
-            Assert.Equal(0, item.Participation.EligibleActivities);
-            Assert.Equal(0, item.Participation.AttendedActivities);
-            Assert.Equal(0m, item.Participation.ParticipationRate);
+            Assert.False(item.Participation.Available);
+            Assert.Null(item.Participation.EligibleActivities);
+            Assert.Null(item.Participation.AttendedActivities);
+            Assert.Null(item.Participation.ParticipationRate);
         }
 
         await app.StopAsync();
@@ -269,8 +270,9 @@ public sealed class ArchitectureResilienceTests
         var detail = await response.Content.ReadFromJsonAsync<ClubMemberDetailResponse>();
         Assert.NotNull(detail);
         Assert.Equal(50, detail.Member.UserId);
-        Assert.Equal(0, detail.Participation.EligibleActivities);
-        Assert.Equal(0, detail.Participation.AttendedActivities);
+        Assert.False(detail.Participation.Available);
+        Assert.Null(detail.Participation.EligibleActivities);
+        Assert.Null(detail.Participation.AttendedActivities);
         Assert.Empty(detail.ActivityHistory);
 
         await app.StopAsync();

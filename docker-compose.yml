@@ -90,6 +90,14 @@ services:
       sqlserver:
         condition: service_healthy
     environment:
+      Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
+      Services__ClubService__BaseUrl: "http://club-service:8080/"
+      Services__ActivityService__BaseUrl: "http://activity-service:8080/"
+      Media__R2__Endpoint: "${R2_ENDPOINT:-}"
+      Media__R2__Bucket: "${R2_BUCKET:-}"
+      Media__R2__AccessKeyId: "${R2_ACCESS_KEY_ID:-}"
+      Media__R2__SecretAccessKey: "${R2_SECRET_ACCESS_KEY:-}"
+      Media__R2__PublicOrigin: "${R2_PUBLIC_ORIGIN:-https://pub-3092f35e8d664b8caf203e269232769a.r2.dev}"
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
       Cors__AllowedOrigins__0: "${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}"
@@ -132,6 +140,9 @@ services:
       redis:
         condition: service_healthy
     environment:
+      Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
+      Services__AuthService__BaseUrl: "http://auth-service:8080/"
+      Services__AdminService__BaseUrl: "http://admin-service:8080/"
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Club;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
@@ -165,6 +176,10 @@ services:
       redis:
         condition: service_healthy
     environment:
+      Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
+      Services__AuthService__BaseUrl: "http://auth-service:8080/"
+      Services__AdminService__BaseUrl: "http://admin-service:8080/"
+      Attendance__SigningKey: "${ATTENDANCE_SIGNING_KEY:?ATTENDANCE_SIGNING_KEY is required}"
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Activity;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
@@ -319,6 +334,9 @@ services:
     volumes:
       - export_storage:/app/exports
     environment:
+      Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
+      Services__AuthService__BaseUrl: "http://auth-service:8080/"
+      Services__AdminService__BaseUrl: "http://admin-service:8080/"
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
       Cors__AllowedOrigins__0: "${FRONTEND_ORIGIN:?FRONTEND_ORIGIN is required}"
@@ -357,6 +375,12 @@ services:
       sqlserver:
         condition: service_healthy
     environment:
+      Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
+      Services__AuthService__BaseUrl: "http://auth-service:8080/"
+      Services__ClubService__BaseUrl: "http://club-service:8080/"
+      Services__ActivityService__BaseUrl: "http://activity-service:8080/"
+      Redis__ConnectionString: "redis:6379"
+      Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_gcServer: "0"
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Admin;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"

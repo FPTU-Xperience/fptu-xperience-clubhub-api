@@ -9,6 +9,7 @@ using ClubService.Extensions;
 using ClubService.Mappers;
 using ClubService.Models;
 using ClubService.Services;
+using ClubReportHub.Shared.Experience;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -63,6 +64,7 @@ public static class MembershipEndpoints
         int id,
         JoinClubRequest request,
         ClaimsPrincipal user,
+        HttpContext http,
         ClubDbContext db,
         CancellationToken cancellationToken)
     {
@@ -77,6 +79,21 @@ public static class MembershipEndpoints
         }
 
         var userId = user.GetUserId();
+        var profiles = http.RequestServices.GetService<CurrentUserProfileClient>();
+        if (profiles is null) return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account client is unconfigured.");
+        InternalUserProfile? profile;
+        try { profile = (await profiles.GetAsync([userId], cancellationToken)).GetValueOrDefault(userId); }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or TaskCanceledException)
+        { return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account service is unavailable."); }
+        if (profile is null || !profile.IsActive || profile.IsLocked) return Results.Forbid();
+        if (club.CampusCode != CampusCodes.Global && club.CampusCode != profile.CampusCode) return Results.Forbid();
+        request = request with
+        {
+            FullName = profile.DisplayName,
+            Email = profile.Email,
+            PhoneNumber = profile.PhoneNumber ?? string.Empty,
+            Gender = request.Gender ?? string.Empty
+        };
         if (club.ManagerAssignments.Any(x => x.ManagerUserId == userId && x.IsActive))
         {
             return Results.Conflict(new { message = "Club owner is already attached to this club." });
@@ -88,54 +105,59 @@ public static class MembershipEndpoints
             return Results.BadRequest(new { message = validationError });
         }
 
-        var existing = await db.ClubMemberships.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(x => x.ClubId == id && x.UserId == userId, cancellationToken);
-
-        if (existing is not null)
+        return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
-            if (existing.Status == ClubMembershipStatuses.Pending &&
-                (!existing.AcceptedClubRules || !existing.CommittedToParticipate))
+            var existing = await db.ClubMemberships.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.ClubId == id && x.UserId == userId, cancellationToken);
+
+            if (existing is not null)
             {
-                ClubMappers.ApplyJoinRequest(existing, request);
-                existing.RequestedAtUtc = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(cancellationToken);
-                return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
+                if (existing.Status == ClubMembershipStatuses.Pending &&
+                    (!existing.AcceptedClubRules || !existing.CommittedToParticipate))
+                {
+                    ClubMappers.ApplyJoinRequest(existing, request);
+                    existing.ConcurrencyToken = Guid.NewGuid();
+                    existing.RequestedAtUtc = DateTimeOffset.UtcNow;
+                    await db.SaveChangesAsync(cancellationToken);
+                    return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
+                }
+
+                if (existing.Status == ClubMembershipStatuses.Rejected || existing.IsDeleted)
+                {
+                    existing.IsDeleted = false;
+                    existing.DeletedAtUtc = null;
+                    existing.DeletedByUserId = null;
+                    existing.Status = ClubMembershipStatuses.Pending;
+                    existing.Role = ClubMemberRoles.Member;
+                    existing.ConcurrencyToken = Guid.NewGuid();
+                    existing.TreasurerSlot = null;
+                    ClubMappers.ApplyJoinRequest(existing, request);
+                    existing.ReviewNote = null;
+                    existing.RequestedAtUtc = DateTimeOffset.UtcNow;
+                    existing.ReviewedAtUtc = null;
+                    existing.ReviewedByUserId = null;
+                    await db.SaveChangesAsync(cancellationToken);
+                    return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
+                }
+
+                return Results.Conflict(new { message = $"Membership request already exists with status {existing.Status}." });
             }
 
-            if (existing.Status == ClubMembershipStatuses.Rejected || existing.IsDeleted)
+            var membership = new ClubMembership
             {
-                existing.IsDeleted = false;
-                existing.DeletedAtUtc = null;
-                existing.DeletedByUserId = null;
-                existing.Status = ClubMembershipStatuses.Pending;
-                existing.Role = ClubMemberRoles.Member;
-                existing.TreasurerSlot = null;
-                ClubMappers.ApplyJoinRequest(existing, request);
-                existing.ReviewNote = null;
-                existing.RequestedAtUtc = DateTimeOffset.UtcNow;
-                existing.ReviewedAtUtc = null;
-                existing.ReviewedByUserId = null;
-                await db.SaveChangesAsync(cancellationToken);
-                return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
-            }
+                ClubId = id,
+                UserId = userId,
+                Role = ClubMemberRoles.Member,
+                Status = ClubMembershipStatuses.Pending
+            };
 
-            return Results.Conflict(new { message = $"Membership request already exists with status {existing.Status}." });
-        }
+            ClubMappers.ApplyJoinRequest(membership, request);
+            db.ClubMemberships.Add(membership);
+            await db.SaveChangesAsync(cancellationToken);
 
-        var membership = new ClubMembership
-        {
-            ClubId = id,
-            UserId = userId,
-            Role = ClubMemberRoles.Member,
-            Status = ClubMembershipStatuses.Pending
-        };
-
-        ClubMappers.ApplyJoinRequest(membership, request);
-        db.ClubMemberships.Add(membership);
-        await db.SaveChangesAsync(cancellationToken);
-
-        membership.Club = club;
-        return Results.Created($"/api/clubs/memberships/{membership.Id}", ClubMappers.ToMembershipResponse(membership));
+            membership.Club = club;
+            return Results.Created($"/api/clubs/memberships/{membership.Id}", ClubMappers.ToMembershipResponse(membership));
+        }, cancellationToken, required: false);
     }
 
     private static async Task<IResult> GetClubMemberships(
@@ -187,31 +209,37 @@ public static class MembershipEndpoints
             return Results.Forbid();
         }
 
-        if (membership.Status != ClubMembershipStatuses.Pending)
+        return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
         {
-            return Results.Conflict(new { message = "Only pending membership requests can be approved." });
-        }
+            if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken)) return Results.Forbid();
+            if (request.ExpectedVersion.HasValue && request.ExpectedVersion != membership.ConcurrencyToken)
+                return ApiOperations.Error(409, "STALE_VERSION", "Reload the membership request.");
+            if (membership.Status != ClubMembershipStatuses.Pending)
+            {
+                return Results.Conflict(new { message = "Only pending membership requests can be approved." });
+            }
 
-        if (!membership.AcceptedClubRules || !membership.CommittedToParticipate)
-        {
-            return Results.Conflict(new { message = "The invited member must personally accept the club rules before approval." });
-        }
+            if (!membership.AcceptedClubRules || !membership.CommittedToParticipate)
+            {
+                return Results.Conflict(new { message = "The invited member must personally accept the club rules before approval." });
+            }
 
-        membership.Status = ClubMembershipStatuses.Approved;
-        membership.Role = ClubMemberRoles.Member;
-        membership.ReviewNote = request.Note?.Trim();
-        membership.ReviewedAtUtc = DateTimeOffset.UtcNow;
-        membership.ReviewedByUserId = user.GetUserId();
+            membership.Status = ClubMembershipStatuses.Approved;
+            membership.Role = ClubMemberRoles.Member;
+            membership.ReviewNote = request.Note?.Trim();
+            membership.ReviewedAtUtc = DateTimeOffset.UtcNow;
+            membership.ReviewedByUserId = user.GetUserId();
 
-        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            membership.ClubId,
-            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+            db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                membership.ClubId,
+                [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
 
-        await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ClubMappers.ToMembershipResponse(membership));
+            return Results.Ok(ClubMappers.ToMembershipResponse(membership));
+        }, cancellationToken, required: false);
     }
 
     private static async Task<IResult> RejectMembership(
@@ -241,27 +269,33 @@ public static class MembershipEndpoints
             return Results.Forbid();
         }
 
-        if (membership.Status != ClubMembershipStatuses.Pending)
+        return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
         {
-            return Results.Conflict(new { message = "Only pending membership requests can be rejected." });
-        }
+            if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken)) return Results.Forbid();
+            if (request.ExpectedVersion.HasValue && request.ExpectedVersion != membership.ConcurrencyToken)
+                return ApiOperations.Error(409, "STALE_VERSION", "Reload the membership request.");
+            if (membership.Status != ClubMembershipStatuses.Pending)
+            {
+                return Results.Conflict(new { message = "Only pending membership requests can be rejected." });
+            }
 
-        membership.Status = ClubMembershipStatuses.Rejected;
-        membership.Role = ClubMemberRoles.Member;
-        membership.TreasurerSlot = null;
-        membership.ReviewNote = request.Note?.Trim();
-        membership.ReviewedAtUtc = DateTimeOffset.UtcNow;
-        membership.ReviewedByUserId = user.GetUserId();
+            membership.Status = ClubMembershipStatuses.Rejected;
+            membership.Role = ClubMemberRoles.Member;
+            membership.TreasurerSlot = null;
+            membership.ReviewNote = request.Note?.Trim();
+            membership.ReviewedAtUtc = DateTimeOffset.UtcNow;
+            membership.ReviewedByUserId = user.GetUserId();
 
-        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            membership.ClubId,
-            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+            db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                membership.ClubId,
+                [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
 
-        await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
 
-        return Results.Ok(ClubMappers.ToMembershipResponse(membership));
+            return Results.Ok(ClubMappers.ToMembershipResponse(membership));
+        }, cancellationToken, required: false);
     }
 
 
@@ -390,12 +424,13 @@ public static class MembershipEndpoints
 
     private static async Task<IResult> RemoveMembership(
         int membershipId,
+        Guid? expectedVersion,
         ClaimsPrincipal user,
         ClubDbContext db,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var membership = await db.ClubMemberships
+        var membership = await db.ClubMemberships.IgnoreQueryFilters()
             .Include(x => x.Club)
             .FirstOrDefaultAsync(x => x.Id == membershipId, cancellationToken);
 
@@ -409,21 +444,7 @@ public static class MembershipEndpoints
             return Results.Forbid();
         }
 
-        membership.IsDeleted = true;
-        membership.DeletedAtUtc = DateTimeOffset.UtcNow;
-        membership.DeletedByUserId = user.GetUserId();
-        membership.Status = ClubMembershipStatuses.Inactive;
-        membership.TreasurerSlot = null;
-        membership.Club.ConcurrencyToken = Guid.NewGuid();
-
-        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            membership.ClubId,
-            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        return Results.NoContent();
+        return await MemberManagementEndpoints.RemoveMember(membership.ClubId, membershipId, expectedVersion, db, user,
+            httpContext, httpContext.RequestServices.GetRequiredService<ILogger<Program>>(), cancellationToken);
     }
 }

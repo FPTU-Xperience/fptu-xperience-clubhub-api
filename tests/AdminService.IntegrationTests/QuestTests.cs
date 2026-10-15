@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using AdminService.Contracts;
 using Xunit;
 
@@ -14,6 +15,20 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
     [Fact]
     public async Task GetQuests_Anonymous_Returns200WithDefaultQuests()
     {
+        await factory.EnsureStudentPolicyAsync();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AdminService.Data.AdminDbContext>();
+            db.Quests.Add(new AdminService.Data.Quest
+            {
+                Title = "Explicit test seed",
+                Description = "GET must not seed data",
+                SemesterCode = "FA26",
+                CriteriaVersion = Guid.NewGuid(),
+                CriteriaSnapshotJson = JsonSerializer.Serialize(new QuestCriteria("Academic", [1], factory.StudentPolicyVersion), JsonOptions)
+            });
+            await db.SaveChangesAsync();
+        }
         using var client = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/quests");
@@ -46,7 +61,7 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
             Reward: null,
             TargetParticipants: 100,
             Target: null,
-            SemesterCode: "FALL2026",
+            SemesterCode: "FA26",
             Period: null,
             CampusCode: "GLOBAL",
             Icon: "sparkles",
@@ -76,7 +91,7 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
             Reward: null,
             TargetParticipants: 100,
             Target: null,
-            SemesterCode: "FALL2026",
+            SemesterCode: "FA26",
             Period: null,
             CampusCode: "GLOBAL",
             Icon: "sparkles",
@@ -91,6 +106,7 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
     [Fact]
     public async Task Ctsv_CanCreateUpdateAndToggleStatusOfQuest()
     {
+        await factory.EnsureStudentPolicyAsync();
         using var client = CreateClient("student-affairs");
 
         // 1. Create a quest
@@ -107,7 +123,7 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
             Reward: null,
             TargetParticipants: 50,
             Target: null,
-            SemesterCode: "FALL2026",
+            SemesterCode: "FA26",
             Period: null,
             CampusCode: "HAN",
             Icon: "leaf",
@@ -147,7 +163,8 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
             Icon: null,
             Deadline: null,
             DueDate: null,
-            Status: null);
+            Status: null)
+        { ExpectedVersion = created.Version, Criteria = new QuestCriteria("Community", [1], factory.StudentPolicyVersion) };
 
         var updateResponse = await client.PutAsJsonAsync($"/api/v1/quests/{id}", updateRequest);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
@@ -182,6 +199,7 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
     [Fact]
     public async Task Student_CanJoinAndCompleteQuest()
     {
+        await factory.EnsureStudentPolicyAsync();
         using var adminClient = CreateClient("admin");
         using var studentClient = CreateClient("student-1");
 
@@ -199,13 +217,14 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
             Reward: null,
             TargetParticipants: 30,
             Target: null,
-            SemesterCode: "FALL2026",
+            SemesterCode: "FA26",
             Period: null,
             CampusCode: "GLOBAL",
             Icon: "sparkles",
             Deadline: "2026-12-15",
             DueDate: null,
-            Status: "published");
+            Status: "published")
+        { Criteria = new QuestCriteria("Academic", [1], factory.StudentPolicyVersion) };
 
         var createResponse = await adminClient.PostAsJsonAsync("/api/v1/quests", createRequest);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
@@ -230,10 +249,11 @@ public sealed class QuestTests(AdminApiFactory factory) : IClassFixture<AdminApi
             new JoinQuestRequest(null));
         Assert.Equal(HttpStatusCode.OK, dupResponse.StatusCode);
 
-        // 4. Student completes quest
+        await factory.SeedStudentQuestProofAsync();
+        // 4. Student completes only after a verified contribution
         var completeResponse = await studentClient.PostAsJsonAsync(
             $"/api/v1/quests/{questId}/complete",
-            new CompleteQuestRequest(null, "Đã hoàn thành xuất sắc."));
+            new CompleteQuestRequest(null, "Đã hoàn thành xuất sắc.") { ExpectedVersion = participant.Version });
         Assert.Equal(HttpStatusCode.OK, completeResponse.StatusCode);
 
         var completedPart = await completeResponse.Content.ReadFromJsonAsync<QuestParticipantResponse>(JsonOptions);

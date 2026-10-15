@@ -11,9 +11,11 @@ public sealed class Club
     public string CampusCode { get; set; } = ClubReportHub.Shared.Auth.CampusCodes.Hanoi;
     public string Description { get; set; } = string.Empty;
     public string? LogoUrl { get; set; }
+    public string? CoverImageUrl { get; set; }
     public string ContactEmail { get; set; } = string.Empty;
     public string ContactPhone { get; set; } = string.Empty;
     public string? ScheduleLabel { get; set; }
+    public string? ScheduleJson { get; set; }
     public bool IsRecruiting { get; set; } = false;
     public bool IsActive { get; set; } = true;
     [ConcurrencyCheck]

@@ -3,6 +3,8 @@ using ActivityService.Contracts;
 using ActivityService.Infrastructure;
 using ActivityService.Models;
 using ActivityService.Services;
+using System.Text.Json;
+using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Auth;
 
 namespace ActivityService.Endpoints;
@@ -17,7 +19,7 @@ internal static class ActivityEndpointHelpers
     }
 
     internal static ActivityResponse ToResponse(
-        ClubActivity activity)
+        ClubActivity activity, int? visibleUserId = null)
     {
         return new ActivityResponse(
             activity.Id,
@@ -33,6 +35,7 @@ internal static class ActivityEndpointHelpers
             activity.CreatedByUserId,
             activity.CreatedAtUtc,
             activity.Participants
+                .Where(x => visibleUserId == null || x.UserId == visibleUserId)
                 .OrderBy(x => x.RegisteredAtUtc)
                 .Select(x => new ActivityParticipantResponse(
                     x.Id,
@@ -42,6 +45,7 @@ internal static class ActivityEndpointHelpers
                     x.RegisteredAtUtc))
                 .ToArray(),
             activity.Attendances
+                .Where(x => visibleUserId == null || x.UserId == visibleUserId)
                 .OrderByDescending(x => x.AttendanceDate)
                 .ThenBy(x => x.FullName)
                 .Select(x => new ActivityAttendanceResponse(
@@ -52,8 +56,34 @@ internal static class ActivityEndpointHelpers
                     x.Status,
                     x.Note,
                     x.CheckedInAtUtc,
-                    x.CheckedInByUserId))
-                .ToArray());
+                    x.CheckedInByUserId)
+                {
+                    SessionId = x.SessionId,
+                    Version = x.Version,
+                    VerificationStatus = x.VerificationStatus,
+                    VerificationMethod = x.VerificationMethod,
+                    RecognitionStatus = x.RecognitionStatus,
+                    ContributionId = x.ContributionId
+                })
+                .ToArray())
+        {
+            Version = activity.Version,
+            PublicationStatus = activity.PublicationStatus,
+            DiscoveryVisibility = activity.DiscoveryVisibility,
+            SemesterId = activity.SemesterId,
+            Capacity = activity.Capacity,
+            RegistrationOpensAt = activity.RegistrationOpensAt,
+            RegistrationClosesAt = activity.RegistrationClosesAt,
+            Eligibility = activity.Eligibility,
+            CoverImageUrl = activity.CoverImageUrl,
+            RegisteredCount = activity.Participants.Count,
+            VerifiedAttendanceCount = activity.Attendances.Count(x => x.VerificationStatus == "VERIFIED"),
+            EffortTier = activity.EffortTier,
+            Scale = activity.Scale,
+            PolicyVersion = activity.PolicyVersion,
+            EvidenceRequirements = activity.EvidenceRequirements,
+            PillarWeights = JsonSerializer.Deserialize<List<PillarWeight>>(activity.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? []
+        };
     }
 
     internal static IReadOnlyList<int> NormalizeMeetingDays(

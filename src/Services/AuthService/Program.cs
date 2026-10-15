@@ -6,11 +6,19 @@ using ClubReportHub.Shared.Errors;
 using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Security;
 using ClubReportHub.Shared.Tracing;
+using ClubReportHub.Shared.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add all services
 builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+builder.Services.AddClubAccessClient(builder.Configuration);
+builder.Services.AddScoped<AuthService.Services.IPublicMediaStorage, AuthService.Services.PublicMediaStorage>();
+builder.Services.AddHttpClient("MediaActivity", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:ActivityService:BaseUrl"] ?? "http://activity-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 
 var app = builder.Build();
 
@@ -55,6 +63,9 @@ app.MapGet("/", () => Results.Ok(new { service = "Auth Service", status = "runni
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapCanonicalProfileEndpoints();
+app.MapInternalAccountEndpoints();
+app.MapPublicMediaEndpoints();
 app.MapRoleEndpoints();
 
 // ============================================================================

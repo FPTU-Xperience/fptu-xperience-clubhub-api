@@ -18,8 +18,7 @@ public static class AuthEndpoints
     {
         var auth = app.MapGroup("/api/auth").WithTags("Authentication");
 
-        // Password login and public registration are intentionally absent.
-        // Accounts are provisioned by an ADMIN and enter through Google only.
+        // Google login remains available for provisioned legacy accounts.
         auth.MapPost("/google", HandleGoogleSignIn)
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
@@ -103,6 +102,9 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var logger = loggerFactory.CreateLogger("AuthService.DevLogin");
+        var environment = httpContext.RequestServices.GetRequiredService<IHostEnvironment>();
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing") && !environment.IsEnvironment("Test"))
+            return Results.NotFound();
         var correlationId = httpContext.GetCorrelationId();
         var clientIp = httpContext.Connection.RemoteIpAddress?.ToString();
 

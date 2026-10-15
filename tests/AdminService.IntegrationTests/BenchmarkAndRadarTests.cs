@@ -177,6 +177,7 @@ public sealed class BenchmarkAndRadarTests(AdminApiFactory factory) : IClassFixt
     [Fact]
     public async Task StudentRadar_ComputesProperlyFromApprovedDeclarations()
     {
+        await factory.EnsureStudentPolicyAsync();
         // 1. Student 1 queries radar initially -> Unexplored
         using var studentClient = CreateClient("student-1");
         var initialRadarResp = await studentClient.GetAsync("/api/v1/declarations/me/radar");
@@ -224,14 +225,15 @@ public sealed class BenchmarkAndRadarTests(AdminApiFactory factory) : IClassFixt
         Assert.Equal(HttpStatusCode.OK, afterRadarResp.StatusCode);
         var afterRadar = await afterRadarResp.Content.ReadFromJsonAsync<StudentRadarResponse>(JsonOptions);
         Assert.NotNull(afterRadar);
-        Assert.Equal(1, afterRadar.ApprovedDeclarationsCount);
-        Assert.True(afterRadar.D > 0m);
-        Assert.True(afterRadar.ERI > 0m);
-        Assert.Equal("Thế mạnh Academic", afterRadar.ProfileTitle);
+        Assert.Equal(0, afterRadar.ApprovedDeclarationsCount);
+        Assert.Equal(0m, afterRadar.D);
+        Assert.Equal(0m, afterRadar.ERI);
+        Assert.True(afterRadar.LegacyPreviewCount > 0);
+        Assert.True(afterRadar.IsAuthoritative);
 
         var academicPillar = Assert.Single(afterRadar.Pillars, p => p.Pillar == ExperienceCategories.Academic);
-        Assert.Equal(96.0m, academicPillar.RawPointsSum);
-        Assert.True(academicPillar.SaturatedScore > 0m);
+        Assert.Equal(0m, academicPillar.RawPointsSum);
+        Assert.Equal(0m, academicPillar.SaturatedScore);
 
         // 5. CTSV inspects student radar via /student-affairs/students/301/radar
         var ctsvInspectResp = await ctsvClient.GetAsync("/api/v1/student-affairs/students/301/radar?semester=FA26");

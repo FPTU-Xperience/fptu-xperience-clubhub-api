@@ -26,7 +26,8 @@ public static class MemberActivityStatisticsCalculator
         var attended = attendances
             .Where(x => x.UserId == member.UserId
                 && eligibleIds.Contains(x.ActivityId)
-                && string.Equals(x.Status, AttendanceStatuses.Present, StringComparison.OrdinalIgnoreCase))
+                && (string.Equals(x.Status, AttendanceStatuses.Present, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(x.Status, AttendanceStatuses.Late, StringComparison.OrdinalIgnoreCase)))
             .Select(x => x.ActivityId)
             .Distinct()
             .Count();
@@ -55,6 +56,7 @@ public sealed class MemberActivityStatisticsService(ActivityDbContext db)
             .Where(x => x.ClubId == clubId
                 && x.StartTimeUtc >= earliestJoin
                 && x.StartTimeUtc <= now
+                && (x.PublicationStatus == "LEGACY" || x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED" || x.PublicationStatus == "COMPLETED")
                 && x.Status != ActivityStatuses.Cancelled)
             .Select(x => new EligibleActivity(x.Id, x.ClubId, x.Title, x.StartTimeUtc, x.Status))
             .ToListAsync(cancellationToken);
@@ -64,7 +66,8 @@ public sealed class MemberActivityStatisticsService(ActivityDbContext db)
         var attendances = activityIds.Length == 0
             ? []
             : await db.ActivityAttendances.AsNoTracking()
-                .Where(x => activityIds.Contains(x.ActivityId) && userIds.Contains(x.UserId))
+                .Where(x => activityIds.Contains(x.ActivityId) && userIds.Contains(x.UserId)
+                    && (x.SessionId == null || x.VerificationStatus == "VERIFIED"))
                 .Select(x => new RecordedAttendance(x.ActivityId, x.UserId, x.Status))
                 .ToListAsync(cancellationToken);
 
@@ -86,6 +89,7 @@ public sealed class MemberActivityStatisticsService(ActivityDbContext db)
             .Where(x => x.ClubId == clubId
                 && x.StartTimeUtc >= request.JoinedAtUtc
                 && x.StartTimeUtc <= now
+                && (x.PublicationStatus == "LEGACY" || x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED" || x.PublicationStatus == "COMPLETED")
                 && x.Status != ActivityStatuses.Cancelled)
             .OrderByDescending(x => x.StartTimeUtc)
             .Select(x => new EligibleActivity(x.Id, x.ClubId, x.Title, x.StartTimeUtc, x.Status))
@@ -95,7 +99,8 @@ public sealed class MemberActivityStatisticsService(ActivityDbContext db)
         var attendances = activityIds.Length == 0
             ? []
             : await db.ActivityAttendances.AsNoTracking()
-                .Where(x => activityIds.Contains(x.ActivityId) && x.UserId == request.UserId)
+                .Where(x => activityIds.Contains(x.ActivityId) && x.UserId == request.UserId
+                    && (x.SessionId == null || x.VerificationStatus == "VERIFIED"))
                 .Select(x => new RecordedAttendance(x.ActivityId, x.UserId, x.Status))
                 .ToListAsync(cancellationToken);
 

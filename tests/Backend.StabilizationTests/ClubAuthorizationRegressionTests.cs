@@ -108,6 +108,9 @@ public sealed class ClubAuthorizationRegressionTests
         builder.Services.AddDbContext<ClubDbContext>(options =>
             options.UseInMemoryDatabase(databaseName));
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
+        builder.Configuration["Security:InternalWorkflowToken"] = "CANONICAL-MEMBERSHIP-TEST-ONLY-TOKEN";
+        builder.Services.AddSingleton(new ClubReportHub.Shared.Experience.CurrentUserProfileClient(
+            new HttpClient(new CanonicalMembershipProfileHandler()) { BaseAddress = new Uri("http://profile-fixture.invalid/") }, builder.Configuration));
         await using var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
@@ -161,7 +164,8 @@ public sealed class ClubAuthorizationRegressionTests
         var stored = await verifyScope.ServiceProvider.GetRequiredService<ClubDbContext>()
             .ClubMemberships.SingleAsync(x => x.Id == membershipId);
         Assert.Equal(202, stored.UserId);
-        Assert.Equal("Confirmed name", stored.FullName);
+        Assert.Equal("Auth verified member", stored.FullName);
+        Assert.Equal("canonical-member@example.edu", stored.Email);
         Assert.True(stored.AcceptedClubRules);
         Assert.True(stored.CommittedToParticipate);
         Assert.Equal(ClubMembershipStatuses.Approved, stored.Status);
@@ -233,6 +237,16 @@ public sealed class ClubAuthorizationRegressionTests
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         await verifyScope.ServiceProvider.GetRequiredService<ClubDbContext>().Entry(stored).ReloadAsync();
         Assert.Equal("Updated Robotics Club", stored.Name);
+    }
+
+    private sealed class CanonicalMembershipProfileHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new[] { new ClubReportHub.Shared.Experience.InternalUserProfile(202,
+                    "Auth verified member", "canonical-member@example.edu", CampusCodes.Hanoi, true, false, null) })
+            });
     }
 
     private static Club CreateClub(string code, string name) => new()

@@ -19,7 +19,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ExportDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
+builder.Services.AddCurrentAccountValidation(builder.Configuration, builder.Environment);
 builder.Services.AddClubReportTracing();
+builder.Services.AddClubAccessClient(builder.Configuration);
+builder.Services.AddHttpClient("ExperienceAdmin", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddCorrelationIdForwarding();
+builder.Services.AddHostedService<ClubExperienceReportWorker>();
 builder.Services.AddRedisStreamEventBus(builder.Configuration);
 builder.Services.AddTransactionalOutbox<ExportDbContext>();
 builder.Services.AddSingleton<ExportFileGenerator>();
@@ -91,6 +99,7 @@ app.MapGlobalErrorEndpoint();
 app.MapGet("/", () => Results.Ok(new { service = "Export Service", status = "running" }));
 
 app.MapExportEndpoints();
+app.MapClubExperienceReportEndpoints();
 
 using (var scope = app.Services.CreateScope())
 {

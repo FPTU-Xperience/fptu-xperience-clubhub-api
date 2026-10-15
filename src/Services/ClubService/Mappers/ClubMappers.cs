@@ -105,14 +105,18 @@ public static class ClubMappers
             club.LogoUrl,
             club.ScheduleLabel,
             club.IsRecruiting,
-            null,
+            club.CoverImageUrl,
             null,
             memberCount,
             club.ContactEmail,
             club.ContactPhone,
             publicLeaders,
             club.IsActive,
-            club.CampusCode);
+            club.CampusCode)
+        {
+            Version = club.ConcurrencyToken,
+            Schedule = club.ScheduleJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(club.ScheduleJson)
+        };
     }
 
     // ========================================================================
@@ -154,7 +158,8 @@ public static class ClubMappers
             membership.ReviewNote,
             membership.RequestedAtUtc,
             membership.ReviewedAtUtc,
-            membership.ReviewedByUserId);
+            membership.ReviewedByUserId)
+        { Version = membership.ConcurrencyToken };
     }
 
     // ========================================================================

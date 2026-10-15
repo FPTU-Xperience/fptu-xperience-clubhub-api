@@ -14,6 +14,15 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
     public DbSet<ClubOwnershipTransfer> ClubOwnershipTransfers => Set<ClubOwnershipTransfer>();
     public DbSet<ClubCategory> ClubCategories => Set<ClubCategory>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ClubSemesterPlan> SemesterPlans => Set<ClubSemesterPlan>();
+    public DbSet<ClubPlanRevision> PlanRevisions => Set<ClubPlanRevision>();
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<ClubMembership>().Where(x => x.State == EntityState.Modified))
+            entry.Entity.ConcurrencyToken = Guid.NewGuid();
+        return base.SaveChangesAsync(cancellationToken);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,6 +37,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.Property(x => x.CampusCode).HasMaxLength(20).HasDefaultValue(ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
             entity.Property(x => x.Description).HasMaxLength(1000);
             entity.Property(x => x.LogoUrl).HasMaxLength(1000);
+            entity.Property(x => x.CoverImageUrl).HasMaxLength(1000);
             entity.Property(x => x.ContactEmail).HasMaxLength(200);
             entity.Property(x => x.ContactPhone).HasMaxLength(40);
             entity.Property(x => x.ScheduleLabel).HasMaxLength(500);
@@ -58,6 +68,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
         modelBuilder.Entity<ClubMembership>(entity =>
         {
+            entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken();
             entity.HasIndex(x => new { x.ClubId, x.UserId }).IsUnique();
             entity.HasIndex(x => new { x.UserId, x.Status });
             entity.HasIndex(x => new { x.ClubId, x.Role, x.Status });
@@ -151,5 +162,19 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
         });
 
         modelBuilder.ApplyOutboxConfiguration();
+        modelBuilder.ApplyApiOperationConfiguration();
+        modelBuilder.Entity<ClubSemesterPlan>(entity =>
+        {
+            entity.HasIndex(x => new { x.ClubId, x.SemesterId }).IsUnique();
+            entity.Property(x => x.SemesterId).HasMaxLength(40);
+            entity.Property(x => x.Title).HasMaxLength(200);
+            entity.Property(x => x.Version).IsConcurrencyToken();
+            entity.HasOne<Club>().WithMany().HasForeignKey(x => x.ClubId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<ClubPlanRevision>(entity =>
+        {
+            entity.HasIndex(x => new { x.PlanId, x.Version }).IsUnique();
+            entity.HasOne<ClubSemesterPlan>().WithMany().HasForeignKey(x => x.PlanId).OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }

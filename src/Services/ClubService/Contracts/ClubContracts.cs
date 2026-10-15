@@ -39,7 +39,11 @@ public sealed record ClubPublicDetailResponse(
     string ContactPhone,
     IReadOnlyCollection<PublicLeaderResponse> PublicLeaders,
     bool IsActive,
-    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
+{
+    public Guid Version { get; init; }
+    public System.Text.Json.JsonElement? Schedule { get; init; }
+}
 
 public sealed record ClubResponse(
     int Id,
@@ -93,7 +97,10 @@ public sealed record ClubMembershipResponse(
     string? ReviewNote,
     DateTimeOffset RequestedAtUtc,
     DateTimeOffset? ReviewedAtUtc,
-    int? ReviewedByUserId);
+    int? ReviewedByUserId)
+{
+    public Guid Version { get; init; }
+}
 
 public sealed record ClubAccessResponse(
     int ClubId,
@@ -191,7 +198,7 @@ public sealed record JoinClubRequest(
     bool CommittedToParticipate,
     [StringLength(1000)] string? Message);
 
-public sealed record ReviewClubMembershipRequest([StringLength(1000)] string? Note);
+public sealed record ReviewClubMembershipRequest([StringLength(1000)] string? Note, Guid? ExpectedVersion = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record UpdateClubMemberProfileRequest(
@@ -303,11 +310,18 @@ public sealed record ClubMemberForTransferResponse(
     DateTimeOffset JoinedAtUtc
 );
 
-public sealed record MemberParticipationResponse(int EligibleActivities, int AttendedActivities, decimal ParticipationRate);
-public sealed record ClubMemberListItemResponse(int Id, int ClubId, int UserId, string FullName, string Email, string PhoneNumber, string Role, string Status, DateTimeOffset JoinedAtUtc, MemberParticipationResponse Participation);
+public sealed record MemberParticipationResponse(int? EligibleActivities, int? AttendedActivities, decimal? ParticipationRate)
+{ public bool Available { get; init; } = true; }
+public sealed record ClubMemberListItemResponse(int Id, int ClubId, int UserId, string FullName, string Email, string PhoneNumber, string Role, string Status, DateTimeOffset JoinedAtUtc, MemberParticipationResponse Participation)
+{ public string ProfileSource { get; init; } = "application-snapshot"; }
 public sealed record PagedClubMembersResponse(IReadOnlyCollection<ClubMemberListItemResponse> Items, int Page, int PageSize, int TotalItems, int TotalPages);
 public sealed record MemberActivityHistoryItemResponse(int ActivityId, string Title, DateTimeOffset StartTimeUtc, string ActivityStatus, string AttendanceStatus);
-public sealed record ClubMemberDetailResponse(ClubMembershipResponse Member, DateTimeOffset JoinedAtUtc, MemberParticipationResponse Participation, IReadOnlyCollection<MemberActivityHistoryItemResponse> ActivityHistory, int HistoryPage, int HistoryPageSize, int HistoryTotalItems, int HistoryTotalPages);
+public sealed record ClubMemberDetailResponse(ClubMembershipResponse Member, DateTimeOffset JoinedAtUtc, MemberParticipationResponse Participation, IReadOnlyCollection<MemberActivityHistoryItemResponse> ActivityHistory, int HistoryPage, int HistoryPageSize, int HistoryTotalItems, int HistoryTotalPages)
+{
+    public string ProfileSource { get; init; } = "application-snapshot";
+    public ClubMembershipResponse? ApplicationSnapshot { get; init; }
+    public System.Text.Json.JsonElement? CurrentProfile { get; init; }
+}
 public sealed record ClubMemberRosterItemResponse(int Id, int UserId, string FullName, string Email, string PhoneNumber, string Role, string Status, DateTimeOffset JoinedAtUtc);
 public sealed record PagedClubMemberRosterResponse(IReadOnlyCollection<ClubMemberRosterItemResponse> Items, int Page, int PageSize, int TotalItems, int TotalPages);
 public sealed record ResolveClubMemberRosterRequest(

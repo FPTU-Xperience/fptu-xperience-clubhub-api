@@ -1,4 +1,5 @@
 using AdminService.Data;
+using ClubReportHub.Shared.Experience;
 
 namespace AdminService.Contracts;
 
@@ -13,7 +14,9 @@ public sealed record SubmitDeclarationRequest(
     string? RoleProposed,
     DateOnly StartDate,
     DateOnly EndDate,
-    string? CampusCode = null);
+    string? CampusCode = null, string? SemesterId = null, DateTimeOffset? OccurredAt = null,
+    ContributionAttributes? ProposedAttributes = null, IReadOnlyList<Guid>? EvidenceRefs = null,
+    Guid? ExpectedVersion = null, Guid? PolicyVersion = null);
 
 public sealed record ReviewDeclarationRequest(
     string Decision,
@@ -22,7 +25,8 @@ public sealed record ReviewDeclarationRequest(
     string? Tier = null,
     string? Role = null,
     string? Scale = null,
-    string? BonusResult = null);
+    string? BonusResult = null, Guid? ExpectedVersion = null, string? Reason = null,
+    ContributionAttributes? VerifiedAttributes = null);
 
 public sealed record DeclarationResponse(
     Guid Id,

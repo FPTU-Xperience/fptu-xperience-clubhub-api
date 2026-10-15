@@ -50,21 +50,22 @@ public static class ExperienceIndexCalculator
     /// Contributor: 50 &lt;= X &lt; 80
     /// Leader: X &gt;= 80 AND hasLeaderProof (otherwise capped at Contributor)
     /// </summary>
-    public static string DetermineMasteryTier(decimal saturatedScore, bool hasLeaderProof)
+    public static string DetermineMasteryTier(decimal saturatedScore, bool hasLeaderProof,
+        decimal starterThreshold = 20m, decimal practitionerThreshold = 50m, decimal leaderThreshold = 80m)
     {
         if (saturatedScore <= 0m)
         {
             return ExperienceMasteryTiers.Unexplored;
         }
-        if (saturatedScore < 20m)
+        if (saturatedScore < starterThreshold)
         {
             return ExperienceMasteryTiers.Starter;
         }
-        if (saturatedScore < 50m)
+        if (saturatedScore < practitionerThreshold)
         {
             return ExperienceMasteryTiers.Practitioner;
         }
-        if (saturatedScore < 80m)
+        if (saturatedScore < leaderThreshold)
         {
             return ExperienceMasteryTiers.Contributor;
         }
@@ -81,7 +82,9 @@ public static class ExperienceIndexCalculator
     public static RadarIndexResult ComputeRadar(
         IReadOnlyDictionary<string, decimal> rawScoresByPillar,
         IReadOnlyDictionary<string, decimal> tauByPillar,
-        ISet<string>? pillarsWithLeaderProof = null)
+        ISet<string>? pillarsWithLeaderProof = null,
+        decimal starterThreshold = 20m, decimal practitionerThreshold = 50m, decimal leaderThreshold = 80m,
+        decimal allRounderMinimum = 20m, decimal allRounderEvenness = 0.90m)
     {
         var pillars = new Dictionary<string, PillarAccumulation>(StringComparer.OrdinalIgnoreCase);
 
@@ -91,7 +94,7 @@ public static class ExperienceIndexCalculator
             var tau = tauByPillar.TryGetValue(pillar, out var tVal) && tVal > 0m ? tVal : 1000m;
             var sat = CalculateSaturatedScore(raw, tau);
             var hasLeader = pillarsWithLeaderProof?.Contains(pillar) ?? false;
-            var tier = DetermineMasteryTier(sat, hasLeader);
+            var tier = DetermineMasteryTier(sat, hasLeader, starterThreshold, practitionerThreshold, leaderThreshold);
 
             pillars[pillar] = new PillarAccumulation(pillar, raw, tau, sat, tier, hasLeader);
         }
@@ -145,7 +148,7 @@ public static class ExperienceIndexCalculator
         {
             profileTitle = ExperienceTitles.Unexplored;
         }
-        else if (coreSatScores.All(s => s >= 20m) && j >= 0.90m)
+        else if (coreSatScores.All(s => s >= allRounderMinimum) && j >= allRounderEvenness)
         {
             profileTitle = ExperienceTitles.WellRounded;
         }

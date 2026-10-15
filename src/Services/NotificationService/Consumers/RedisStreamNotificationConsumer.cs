@@ -434,6 +434,14 @@ public sealed class RedisStreamNotificationConsumer : BackgroundService
 
     internal static IReadOnlyList<Notification> CreateNotifications(string routingKey, JsonElement root)
     {
+        if (routingKey == ClubReportHub.Shared.Events.ExperienceRoutingKeys.Notification)
+            return GetIntArray(root, "recipientUserIds").Distinct().Where(x => x > 0).Select(userId => new Notification
+            {
+                RecipientUserId = userId,
+                EventType = GetString(root, "kind"),
+                Title = GetString(root, "title"),
+                Message = GetString(root, "title")
+            }).ToArray();
         if (routingKey == EventRoutingKeys.ActivityCreated)
         {
             var recipients = GetIntArray(root, "recipientUserIds");

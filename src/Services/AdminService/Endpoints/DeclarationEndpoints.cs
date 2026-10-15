@@ -6,6 +6,8 @@ using AdminService.Security;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Experience;
 using Microsoft.EntityFrameworkCore;
+using AdminService.Services;
+using ClubReportHub.Shared.Data;
 
 namespace AdminService.Endpoints;
 
@@ -26,7 +28,7 @@ public static class DeclarationEndpoints
 
         declarations.MapGet("/me", GetMyDeclarationsAsync)
             .WithName("GetMyDeclarations")
-            .Produces<IReadOnlyList<DeclarationResponse>>();
+            .Produces<StudentContributionPage>();
 
         declarations.MapGet("/{id:guid}", GetDeclarationByIdAsync)
             .WithName("GetDeclarationById")
@@ -39,7 +41,7 @@ public static class DeclarationEndpoints
         // CTSV (Student Affairs) verification queue and review endpoints
         var studentAffairs = api.MapGroup("/student-affairs/declarations")
             .WithTags("Student Affairs Declarations")
-            .RequireAuthorization(AdminPolicies.BackofficeUser);
+            .RequireAuthorization(AdminPolicies.AnyActor);
 
         studentAffairs.MapGet("/", GetDeclarationsQueueAsync)
             .WithName("GetDeclarationsQueue")
@@ -57,8 +59,11 @@ public static class DeclarationEndpoints
         ICurrentActor actor,
         AdminDbContext dbContext,
         IAuditService auditService,
+        HttpContext http,
         CancellationToken cancellationToken)
     {
+        if (request.SemesterId is not null || request.ProposedAttributes is not null || request.EvidenceRefs is not null)
+            return await DeclarationExperienceBridge.SubmitAsync(request, dbContext, http, cancellationToken);
         if (!actor.UserId.HasValue)
         {
             throw new OperationForbiddenException("An authenticated user ID is required to submit a declaration.");
@@ -107,6 +112,7 @@ public static class DeclarationEndpoints
     }
 
     private static async Task<IResult> GetMyDeclarationsAsync(
+        string? semesterId, string? status, string? pillar, int? page, int? pageSize,
         ICurrentActor actor,
         AdminDbContext dbContext,
         CancellationToken cancellationToken)
@@ -116,22 +122,19 @@ public static class DeclarationEndpoints
             throw new OperationForbiddenException("An authenticated user ID is required to query declarations.");
         }
 
-        var items = await dbContext.SelfDeclarations
-            .AsNoTracking()
-            .Where(x => x.StudentId == actor.UserId.Value)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
-
-        var responses = items.Select(DeclarationResponse.From).ToArray();
-        return Results.Ok(responses);
+        return await StudentContributionReadService.PageAsync(actor.UserId.Value, semesterId, status, pillar,
+            page, pageSize, dbContext, cancellationToken, declarationsOnly: true);
     }
 
     private static async Task<IResult> GetDeclarationByIdAsync(
         Guid id,
         ICurrentActor actor,
         AdminDbContext dbContext,
+        HttpContext http,
         CancellationToken cancellationToken)
     {
+        if (await dbContext.Contributions.AnyAsync(x => x.Id == id && x.SourceType != "CLUB", cancellationToken))
+            return await VerifiedContributionEndpoints.GetAsync(id, dbContext, http, cancellationToken);
         var declaration = await dbContext.SelfDeclarations
             .AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
@@ -142,7 +145,9 @@ public static class DeclarationEndpoints
             string.Equals(r, AuthRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(r, AuthRoles.StudentAffairsAdmin, StringComparison.OrdinalIgnoreCase));
 
-        if (!isStaff && declaration.StudentId != actor.UserId)
+        var grant = await ExperienceAuthorization.FindAsync(dbContext, actor.UserId ?? 0,
+            declaration.IsOutsideClub ? "EXTERNAL" : "CLUB", declaration.ClubId, "contribution.review", cancellationToken);
+        if (declaration.StudentId != actor.UserId && grant is null && (!isStaff || !declaration.IsOutsideClub))
         {
             throw new OperationForbiddenException("You do not have permission to view declarations of another student.");
         }
@@ -156,8 +161,17 @@ public static class DeclarationEndpoints
         ICurrentActor actor,
         AdminDbContext dbContext,
         IAuditService auditService,
+        HttpContext http,
         CancellationToken cancellationToken)
     {
+        if (await dbContext.Contributions.AnyAsync(x => x.Id == id && x.SourceType != "CLUB", cancellationToken))
+        {
+            if (!request.ExpectedVersion.HasValue || request.ProposedAttributes is null || request.EvidenceRefs is null)
+                return ApiOperations.Error(400, "DECLARATION_REVISION_REQUIRED", "Provide expectedVersion, attributes and evidence.");
+            return await VerifiedContributionEndpoints.ReviseAsync(id, new ReviseClubContributionRequest(request.ExpectedVersion.Value,
+                request.ProposedAttributes, request.EvidenceDescription ?? "", request.EvidenceRefs), dbContext, http,
+                http.RequestServices.GetRequiredService<ActivitySourceClient>(), cancellationToken);
+        }
         if (!actor.UserId.HasValue)
         {
             throw new OperationForbiddenException("An authenticated user ID is required to update a declaration.");
@@ -213,7 +227,7 @@ public static class DeclarationEndpoints
         return Results.Ok(DeclarationResponse.From(declaration));
     }
 
-    private static async Task<PagedResult<DeclarationResponse>> GetDeclarationsQueueAsync(
+    private static async Task<IResult> GetDeclarationsQueueAsync(
         int? page,
         int? pageSize,
         string? status,
@@ -221,12 +235,22 @@ public static class DeclarationEndpoints
         string? campus,
         bool? isOutsideClub,
         AdminDbContext dbContext,
+        ICurrentActor actor,
         CancellationToken cancellationToken)
     {
         var request = new PageRequest(page ?? 1, pageSize ?? 20);
         request.Validate();
 
         var query = dbContext.SelfDeclarations.AsNoTracking().AsQueryable();
+        var clubs = await ExperienceAuthorization.ClubsAsync(dbContext, actor.UserId ?? 0, "contribution.review", cancellationToken);
+        var external = await ExperienceAuthorization.FindAsync(dbContext, actor.UserId ?? 0, "EXTERNAL", null, "contribution.review", cancellationToken) is not null;
+        var realWorld = await ExperienceAuthorization.FindAsync(dbContext, actor.UserId ?? 0, "REAL_WORLD", null, "contribution.review", cancellationToken) is not null;
+        var staff = actor.Roles.Any(role => role is AuthRoles.Admin or AuthRoles.StudentAffairsAdmin);
+        if (!staff && clubs.Count == 0 && !external && !realWorld) return Results.Forbid();
+        query = query.Where(x => x.StudentId != actor.UserId &&
+            (x.ClubId != null && clubs.Contains(x.ClubId.Value) ||
+             dbContext.Contributions.Any(c => c.Id == x.Id && (external && c.SourceType == "EXTERNAL" || realWorld && c.SourceType == "REAL_WORLD")) ||
+             staff && x.IsOutsideClub && !dbContext.Contributions.Any(c => c.Id == x.Id)));
 
         if (!string.IsNullOrWhiteSpace(campus))
         {
@@ -261,8 +285,11 @@ public static class DeclarationEndpoints
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
 
-        var responses = items.Select(DeclarationResponse.From).ToArray();
-        return PagedResult<DeclarationResponse>.Create(responses, request.Page, request.PageSize, total);
+        var ids = items.Select(x => x.Id).ToArray();
+        var canonical = await dbContext.Contributions.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
+        var responses = items.Select(item => canonical.TryGetValue(item.Id, out var row)
+            ? (object)VerifiedExperienceService.Response(row) : DeclarationResponse.From(item)).ToArray();
+        return Results.Ok(PagedResult<object>.Create(responses, request.Page, request.PageSize, total));
     }
 
     private static async Task<IResult> ReviewDeclarationAsync(
@@ -271,11 +298,22 @@ public static class DeclarationEndpoints
         ICurrentActor actor,
         AdminDbContext dbContext,
         IAuditService auditService,
+        HttpContext http,
         CancellationToken cancellationToken)
     {
+        if (await dbContext.Contributions.AnyAsync(x => x.Id == id && x.SourceType != "CLUB", cancellationToken))
+        {
+            if (!request.ExpectedVersion.HasValue) return ApiOperations.Error(400, "EXPECTED_VERSION_REQUIRED", "Provide the declaration version.");
+            var canonicalDecision = request.Decision.ToUpperInvariant() switch { "APPROVED" => "APPROVE", "REJECTED" => "REJECT", "REVISIONREQUESTED" => "REQUEST_REVISION", var value => value };
+            return await VerifiedContributionEndpoints.ReviewAsync(id, new ReviewContributionRequest(canonicalDecision,
+                request.Reason ?? request.ReviewNote ?? "", request.ExpectedVersion.Value, request.VerifiedAttributes), dbContext, http,
+                http.RequestServices.GetRequiredService<ActivitySourceClient>(), http.RequestServices.GetRequiredService<IConfiguration>(), cancellationToken);
+        }
         var declaration = await dbContext.SelfDeclarations
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new ResourceNotFoundException("The requested declaration was not found.");
+        if (!declaration.IsOutsideClub || !actor.Roles.Any(role => role is AuthRoles.Admin or AuthRoles.StudentAffairsAdmin))
+            return ApiOperations.Error(409, "LEGACY_SOURCE_MIGRATION_REQUIRED", "Legacy records need a linked, versioned source before review. Use the contribution workflow for club sessions.");
 
         // SOD Invariant: Reviewer cannot self-approve their own declaration (Appendix B & NFR01)
         if (actor.UserId.HasValue && declaration.StudentId == actor.UserId.Value)

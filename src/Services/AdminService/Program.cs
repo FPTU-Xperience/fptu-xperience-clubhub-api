@@ -6,6 +6,9 @@ using AdminService.Middleware;
 using AdminService.Observability;
 using AdminService.OpenApi;
 using AdminService.Security;
+using AdminService.Services;
+using ClubReportHub.Shared.Experience;
+using ClubReportHub.Shared.Messaging;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Health;
@@ -27,6 +30,7 @@ builder.Services.AddDbContext<AdminDbContext>(options => options.UseSqlServer(
         errorNumbersToAdd: null)));
 
 builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
+builder.Services.AddCurrentAccountValidation(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(AdminPolicies.AdminOnly, policy =>
@@ -43,6 +47,30 @@ builder.Services.AddAuthorization(options =>
             AuthRoles.ClubMember));
 });
 builder.Services.AddClubReportTracing();
+builder.Services.AddScoped<StudentExperienceSourceClient>();
+builder.Services.AddClubAccessClient(builder.Configuration);
+builder.Services.AddHttpClient<CurrentUserProfileClient>(client =>
+{ client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/"); client.Timeout = TimeSpan.FromSeconds(10); });
+builder.Services.AddHttpClient<ClubExperienceAuthorityClient>(client =>
+{ client.BaseAddress = new Uri(builder.Configuration["Services:ClubService:BaseUrl"] ?? "http://club-service:8080/"); client.Timeout = TimeSpan.FromSeconds(10); });
+foreach (var service in new[] { "Activity", "Club" })
+    builder.Services.AddHttpClient("Experience" + service, client =>
+    {
+        client.BaseAddress = new Uri(builder.Configuration[$"Services:{service}Service:BaseUrl"] ?? $"http://{service.ToLowerInvariant()}-service:8080/");
+        client.Timeout = TimeSpan.FromSeconds(15);
+    }).AddCorrelationIdForwarding();
+builder.Services.AddHttpClient<ActivitySourceClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:ActivityService:BaseUrl"] ?? "http://activity-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+}).AddCorrelationIdForwarding();
+if (!builder.Environment.IsEnvironment("Test") && !builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddRedisStreamEventBus(builder.Configuration);
+    builder.Services.AddTransactionalOutbox<AdminDbContext>();
+    builder.Services.AddScoped<AdminExperienceEventHandler>();
+    builder.Services.AddHostedService<ExperienceStreamConsumer<AdminExperienceEventHandler>>();
+}
 builder.Services.AddScoped<ICurrentActor, HttpCurrentActor>();
 builder.Services.AddScoped<ICorrelationContext, HttpCorrelationContext>();
 builder.Services.AddScoped<IAuditService, EfAuditService>();
@@ -99,6 +127,13 @@ app.MapQuestEndpoints();
 app.MapAnomalyEndpoints();
 app.MapSettingsEndpoints();
 app.MapSemesterEndpoints();
+app.MapExperiencePolicyEndpoints();
+app.MapVerificationAssignmentEndpoints();
+app.MapVerifiedContributionEndpoints();
+app.MapManualAttendanceEndpoints();
+app.MapPrivateEvidenceEndpoints();
+app.MapClubExperienceStatisticsEndpoints();
+app.MapStudentExperienceEndpoints();
 
 if (app.Environment.IsEnvironment("Test"))
 {

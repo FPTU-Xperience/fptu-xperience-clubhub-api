@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ClubReportHub.Shared.Data;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AdminService.Data;
@@ -11,13 +12,52 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<BonusMatrixNode> BonusMatrixNodes => Set<BonusMatrixNode>();
     public DbSet<Quest> Quests => Set<Quest>();
     public DbSet<QuestParticipant> QuestParticipants => Set<QuestParticipant>();
+    public DbSet<QuestCompletionRecord> QuestCompletionRecords => Set<QuestCompletionRecord>();
     public DbSet<XpAnomaly> XpAnomalies => Set<XpAnomaly>();
     public DbSet<XpLedgerEntry> XpLedgerEntries => Set<XpLedgerEntry>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<Semester> Semesters => Set<Semester>();
+    public DbSet<VerificationAssignment> VerificationAssignments => Set<VerificationAssignment>();
+    public DbSet<VerifiedContribution> Contributions => Set<VerifiedContribution>();
+    public DbSet<ContributionRevision> ContributionRevisions => Set<ContributionRevision>();
+    public DbSet<ContributionDecision> ContributionDecisions => Set<ContributionDecision>();
+    public DbSet<ContributionUpgradeRequest> ContributionUpgradeRequests => Set<ContributionUpgradeRequest>();
+    public DbSet<ExperienceLedgerEffect> ExperienceLedgerEffects => Set<ExperienceLedgerEffect>();
+    public DbSet<ExperienceLedgerAllocation> ExperienceLedgerAllocations => Set<ExperienceLedgerAllocation>();
+    public DbSet<PrivateContributionEvidence> ContributionEvidence => Set<PrivateContributionEvidence>();
+    public DbSet<ManualAttendanceRequest> ManualAttendanceRequests => Set<ManualAttendanceRequest>();
+    public DbSet<ExperienceInbox> ExperienceInbox => Set<ExperienceInbox>();
+    public DbSet<InvalidatedExperienceSource> InvalidatedExperienceSources => Set<InvalidatedExperienceSource>();
+    public DbSet<ApprovedExperiencePolicy> ApprovedExperiencePolicies => Set<ApprovedExperiencePolicy>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public override int SaveChanges() => SaveChanges(true);
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ValidateAppendOnlyRecords();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => SaveChangesAsync(true, cancellationToken);
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ValidateAppendOnlyRecords();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+    private void ValidateAppendOnlyRecords()
+    {
+        ChangeTracker.DetectChanges();
+        if (ChangeTracker.Entries<ExperienceLedgerEffect>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<ExperienceLedgerAllocation>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<ContributionRevision>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<ContributionDecision>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<QuestCompletionRecord>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<ApprovedExperiencePolicy>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Experience ledger, revisions, decisions and approved policies are append-only.");
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        VerifiedExperienceModel.Apply(modelBuilder, Database.ProviderName);
         var audit = modelBuilder.Entity<AuditRecord>();
         audit.ToTable("AuditRecords");
         audit.HasKey(record => record.Id);
@@ -87,6 +127,10 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         var benchmark = modelBuilder.Entity<SemesterBenchmarkConfig>();
         benchmark.ToTable("SemesterBenchmarkConfigs");
         benchmark.HasKey(x => x.Id);
+        benchmark.Property(x => x.Version).IsConcurrencyToken();
+        benchmark.Property(x => x.ApprovalStatus).HasMaxLength(20);
+        benchmark.Property(x => x.Environment).HasMaxLength(20);
+        benchmark.Property(x => x.ApprovalBasis).HasMaxLength(1000);
         benchmark.Property(x => x.SemesterCode).HasMaxLength(20).IsRequired();
         benchmark.Property(x => x.AcademicYear).HasMaxLength(20).IsRequired();
         benchmark.Property(x => x.CreatedByName).HasMaxLength(150);
@@ -207,6 +251,17 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         }
 
         participant.HasIndex(x => new { x.QuestId, x.StudentUserId }).IsUnique();
+        participant.Property(x => x.Version).IsConcurrencyToken();
+        participant.Property(x => x.LinkedContributionIdsJson).HasDefaultValue("[]");
+        modelBuilder.Entity<Quest>().Property(x => x.Version).IsConcurrencyToken();
+        modelBuilder.Entity<QuestCompletionRecord>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.ParticipantId, x.CriteriaVersion, x.LedgerRevision }).IsUnique();
+            entity.HasOne<QuestParticipant>().WithMany().HasForeignKey(x => x.ParticipantId).OnDelete(DeleteBehavior.Restrict);
+            if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+                entity.Property(x => x.RecordedAt).HasConversion(new DateTimeOffsetToBinaryConverter());
+        });
         participant.HasIndex(x => x.StudentUserId);
 
         var anomaly = modelBuilder.Entity<XpAnomaly>();

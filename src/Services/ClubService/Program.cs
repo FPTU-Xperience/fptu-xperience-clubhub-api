@@ -2,6 +2,7 @@ using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Cors;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Errors;
+using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
 using ClubReportHub.Shared.Security;
@@ -12,6 +13,11 @@ using ClubService.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHttpClient<ClubReportHub.Shared.Experience.MediaAttachmentClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 // Database
 builder.Services.AddDbContext<ClubDbContext>(options =>
@@ -19,11 +25,22 @@ builder.Services.AddDbContext<ClubDbContext>(options =>
 
 // Authentication & Authorization
 builder.Services.AddClubReportJwt(builder.Configuration, builder.Environment);
+builder.Services.AddCurrentAccountValidation(builder.Configuration, builder.Environment);
+builder.Services.AddHttpClient<CurrentUserProfileClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddClubReportTracing();
 
 // Event Bus (Redis Streams)
 builder.Services.AddRedisStreamEventBus(builder.Configuration);
 builder.Services.AddTransactionalOutbox<ClubDbContext>();
+builder.Services.AddHttpClient<SemesterCatalogClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+}).AddCorrelationIdForwarding();
 
 // HTTP Client for Activity Service
 builder.Services.AddHttpClient<ActivityStatisticsClient>(client =>

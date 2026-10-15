@@ -29,6 +29,10 @@ public static class ActivityEndpoints
         MapCreateActivity(activities);
         MapCreateFromApprovedReport(activities);
         activities.MapActivityWriteEndpoints();
+        app.MapActivitySessionEndpoints();
+        app.MapActivityExperienceSourceEndpoints();
+        app.MapActivityExperienceMetricsEndpoints();
+        app.MapActivityCoverImageEndpoints();
 
         return app;
     }
@@ -51,11 +55,12 @@ public static class ActivityEndpoints
                 .AsNoTracking()
                 .AsQueryable();
 
+            var managedClubIds = new HashSet<int>();
             if (!CanReviewAllActivities(user))
             {
                 var access = await clubAccess.GetMyAccessAsync(
                     httpContext.GetBearerToken(),
-                    cancellationToken);
+                    cancellationToken, true);
 
                 var visibleClubIds = access
                     .Where(x => x.CanView)
@@ -64,6 +69,9 @@ public static class ActivityEndpoints
 
                 query = query.Where(
                     x => visibleClubIds.Contains(x.ClubId));
+                var managed = access.Where(x => x.CanManage).Select(x => x.ClubId).ToArray();
+                managedClubIds = managed.ToHashSet();
+                query = query.Where(x => x.PublicationStatus != "DRAFT" || managed.Contains(x.ClubId));
             }
 
             if (clubId.HasValue)
@@ -98,7 +106,7 @@ public static class ActivityEndpoints
                 .ToListAsync(cancellationToken);
 
             return Results.Ok(
-                rows.Select(ToResponse));
+                rows.Select(row => ToResponse(row, CanReviewAllActivities(user) || managedClubIds.Contains(row.ClubId) ? null : user.GetUserId())));
         });
     }
 
@@ -125,20 +133,23 @@ public static class ActivityEndpoints
                 return Results.NotFound();
             }
 
-            if (!CanReviewAllActivities(user))
+            var canManage = CanReviewAllActivities(user);
+            if (!canManage)
             {
                 var access = await clubAccess.GetMyAccessAsync(
                     httpContext.GetBearerToken(),
-                    cancellationToken);
+                    cancellationToken, true);
 
                 var canView = access.Any(x => x.ClubId == activity.ClubId && x.CanView);
+                canManage = access.Any(x => x.ClubId == activity.ClubId && x.CanManage);
+                if (activity.PublicationStatus == "DRAFT" && !access.Any(x => x.ClubId == activity.ClubId && x.CanManage)) return Results.Forbid();
                 if (!canView)
                 {
                     return Results.Forbid();
                 }
             }
 
-            return Results.Ok(ToResponse(activity));
+            return Results.Ok(ToResponse(activity, canManage ? null : user.GetUserId()));
         });
     }
 
@@ -193,10 +204,24 @@ public static class ActivityEndpoints
                 return Results.Forbid();
             }
 
+            var managedClub = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true))
+                .FirstOrDefault(x => x.ClubId == request.ClubId && x.CanManage);
+            var canonicalClubName = managedClub?.ClubName;
+            if (canonicalClubName is null)
+            {
+                var authority = httpContext.RequestServices.GetService<ClubReportHub.Shared.Experience.ClubExperienceAuthorityClient>();
+                if (authority is null) return ApiOperations.Error(503, "CLUB_AUTHORITY_UNAVAILABLE", "Current club authority is unavailable.");
+                ClubReportHub.Shared.Experience.ClubExperienceAuthority? club;
+                try { club = await authority.GetAsync(request.ClubId, null, cancellationToken); }
+                catch (HttpRequestException) { return ApiOperations.Error(503, "CLUB_AUTHORITY_UNAVAILABLE", "Current club authority is unavailable."); }
+                if (club is null) return Results.NotFound();
+                if (!club.IsActive) return ApiOperations.Error(409, "CLUB_INACTIVE", "The club is inactive.");
+                canonicalClubName = club.Name;
+            }
             var activity = new ClubActivity
             {
                 ClubId = request.ClubId,
-                ClubName = request.ClubName.Trim(),
+                ClubName = canonicalClubName,
                 Title = title.Trim(),
                 Description = request.Description.Trim(),
                 StartTimeUtc = start!.Value,
@@ -204,37 +229,31 @@ public static class ActivityEndpoints
                 MeetingDaysCsv = string.Join(',', NormalizeMeetingDays(request.MeetingDays)),
                 Location = request.Location.Trim(),
                 Status = ActivityStatuses.Scheduled,
-                CreatedByUserId = user.GetUserId()
+                PublicationStatus = "DRAFT",
+                DiscoveryVisibility = request.DiscoveryVisibility,
+                CreatedByUserId = user.GetUserId(),
+                SemesterId = request.SemesterId,
+                EffortTier = request.EffortTier ?? "T1",
+                Scale = request.Scale ?? "Club",
+                PillarWeightsJson = System.Text.Json.JsonSerializer.Serialize(request.PillarWeights ?? [], ActivitySessionEndpoints.JsonOptions),
+                PolicyVersion = request.PolicyVersion,
+                Capacity = request.Capacity,
+                RegistrationOpensAt = request.RegistrationOpensAt,
+                RegistrationClosesAt = request.RegistrationClosesAt,
+                Eligibility = request.Eligibility ?? "CLUB_MEMBER",
+                EvidenceRequirements = request.EvidenceRequirements
             };
 
-            IDbContextTransaction? transaction = null;
-            if (db.Database.IsRelational())
+            return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
             {
-                transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-            }
-
-            db.Activities.Add(activity);
-            await db.SaveChangesAsync(cancellationToken);
-
-            db.AddOutboxMessage(
-                new ActivityCreatedEvent(
-                    Guid.NewGuid(),
-                    DateTimeOffset.UtcNow,
-                    activity.Id,
-                    activity.ClubId,
-                    activity.ClubName,
-                    activity.Title,
-                    activity.StartTimeUtc),
-                EventRoutingKeys.ActivityCreated);
-
-            await db.SaveChangesAsync(cancellationToken);
-
-            if (transaction != null)
-            {
-                await transaction.CommitAsync(cancellationToken);
-            }
-
-            return Results.Created($"/api/activities/{activity.Id}", ToResponse(activity));
+                if (activity.Capacity is <= 0 || activity.Eligibility is not ("CLUB_MEMBER" or "CAMPUS_PUBLIC")
+                    || activity.DiscoveryVisibility is not ("CLUB_ONLY" or "CAMPUS_PUBLIC")) return Results.BadRequest();
+                db.Activities.Add(activity); await db.SaveChangesAsync(cancellationToken);
+                db.AddOutboxMessage(new ActivityCreatedEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, activity.Id,
+                    activity.ClubId, activity.ClubName, activity.Title, activity.StartTimeUtc, [user.GetUserId()]), EventRoutingKeys.ActivityCreated);
+                await db.SaveChangesAsync(cancellationToken);
+                return Results.Created($"/api/activities/{activity.Id}", ToResponse(activity));
+            }, cancellationToken, required: false);
         })
         .WithName("CreateActivity")
         .WithDescription("Create an activity for a managed club.");

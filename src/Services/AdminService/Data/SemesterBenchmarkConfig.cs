@@ -5,6 +5,12 @@ namespace AdminService.Data;
 public sealed class SemesterBenchmarkConfig
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Version { get; set; } = Guid.NewGuid();
+    public string ApprovalStatus { get; set; } = "DRAFT";
+    public string Environment { get; set; } = "PROJECT";
+    public int? ApprovedByUserId { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
+    public string? ApprovalBasis { get; set; }
 
     /// <summary>
     /// Semester code, e.g. "FA26", "SP27", "SU27".

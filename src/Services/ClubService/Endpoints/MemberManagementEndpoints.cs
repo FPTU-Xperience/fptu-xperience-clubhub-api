@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Messaging;
 using ClubService.Contracts;
@@ -172,6 +173,7 @@ public static class MemberManagementEndpoints
             .ToListAsync(cancellationToken);
 
         var statisticsClient = httpContext.RequestServices.GetService<ActivityStatisticsClient>();
+        var statisticsAvailable = statisticsClient is not null;
         IReadOnlyDictionary<int, ActivityMemberStatistics> statistics;
         try
         {
@@ -186,19 +188,29 @@ public static class MemberManagementEndpoints
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             var logger = httpContext.RequestServices.GetService<ILogger<ActivityStatisticsClient>>();
-            logger?.LogWarning(exception, "Activity statistics are temporarily unavailable for club {ClubId}. Falling back to default statistics.", clubId);
+            logger?.LogWarning(exception, "Activity statistics are temporarily unavailable for club {ClubId}.", clubId);
+            statisticsAvailable = false;
             statistics = new Dictionary<int, ActivityMemberStatistics>();
         }
 
+        IReadOnlyDictionary<int, InternalUserProfile> profiles = new Dictionary<int, InternalUserProfile>();
+        var profileClient = httpContext.RequestServices.GetService<CurrentUserProfileClient>();
+        if (profileClient is not null)
+            try { profiles = await profileClient.GetAsync(memberships.Select(x => x.UserId), cancellationToken); }
+            catch (HttpRequestException) { return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "Current member profiles are unavailable."); }
         var items = memberships.Select(x =>
         {
             var item = statistics.GetValueOrDefault(x.UserId, new ActivityMemberStatistics(x.UserId, 0, 0, 0));
+            profiles.TryGetValue(x.UserId, out var profile);
             return new ClubMemberListItemResponse(
-                x.Id, x.ClubId, x.UserId, x.FullName, x.Email, x.PhoneNumber,
+                x.Id, x.ClubId, x.UserId, profile?.DisplayName ?? x.FullName, profile?.Email ?? x.Email, profile is null ? x.PhoneNumber : profile.PhoneNumber ?? "",
                 ClubMemberRoleRules.ResolveDisplayRole(x.Role, activeManagerUserIds.Contains(x.UserId)),
                 x.Status,
                 x.ReviewedAtUtc ?? x.RequestedAtUtc,
-                new MemberParticipationResponse(item.EligibleActivities, item.AttendedActivities, item.ParticipationRate));
+                new MemberParticipationResponse(statisticsAvailable ? item.EligibleActivities : null, statisticsAvailable ? item.AttendedActivities : null,
+                    statisticsAvailable ? item.ParticipationRate : null)
+                { Available = statisticsAvailable })
+            { ProfileSource = profile is null ? "application-snapshot" : "user-profile" };
         }).ToArray();
 
         return Results.Ok(new PagedClubMembersResponse(
@@ -230,6 +242,7 @@ public static class MemberManagementEndpoints
         var actualHistoryPageSize = Math.Clamp(historyPageSize ?? 10, 1, 100);
 
         var statisticsClient = httpContext.RequestServices.GetService<ActivityStatisticsClient>();
+        var statisticsAvailable = statisticsClient is not null;
         ActivityStatisticsDetail detail;
         try
         {
@@ -248,23 +261,38 @@ public static class MemberManagementEndpoints
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             var logger = httpContext.RequestServices.GetService<ILogger<ActivityStatisticsClient>>();
-            logger?.LogWarning(exception, "Activity statistics detail is temporarily unavailable for member {MemberId} in club {ClubId}. Falling back to default statistics.", memberId, clubId);
+            logger?.LogWarning(exception, "Activity statistics detail is temporarily unavailable for member {MemberId} in club {ClubId}.", memberId, clubId);
+            statisticsAvailable = false;
             detail = new ActivityStatisticsDetail(new ActivityMemberStatistics(membership.UserId, 0, 0, 0), Array.Empty<ActivityHistoryItem>(), actualHistoryPage, actualHistoryPageSize, 0, 0);
         }
 
+        InternalUserProfile? currentProfile = null;
+        var profilesClient = httpContext.RequestServices.GetService<CurrentUserProfileClient>();
+        if (profilesClient is not null)
+            try { currentProfile = (await profilesClient.GetAsync([membership.UserId], cancellationToken)).GetValueOrDefault(membership.UserId); }
+            catch (HttpRequestException) { return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "Current member profile is unavailable."); }
+        var applicationSnapshot = ClubMappers.ToMembershipResponse(membership);
+        var currentMember = currentProfile is null ? applicationSnapshot : applicationSnapshot with
+        { FullName = currentProfile.DisplayName, Email = currentProfile.Email, PhoneNumber = currentProfile.PhoneNumber ?? "", DateOfBirth = null, Address = "" };
         return Results.Ok(new ClubMemberDetailResponse(
-            ClubMappers.ToMembershipResponse(membership),
+            currentMember,
             membership.ReviewedAtUtc ?? membership.RequestedAtUtc,
             new MemberParticipationResponse(
-                detail.Statistics.EligibleActivities,
-                detail.Statistics.AttendedActivities,
-                detail.Statistics.ParticipationRate),
+                statisticsAvailable ? detail.Statistics.EligibleActivities : null,
+                statisticsAvailable ? detail.Statistics.AttendedActivities : null,
+                statisticsAvailable ? detail.Statistics.ParticipationRate : null)
+            { Available = statisticsAvailable },
             detail.Items.Select(x => new MemberActivityHistoryItemResponse(
                 x.ActivityId, x.Title, x.StartTimeUtc, x.ActivityStatus, x.AttendanceStatus)).ToArray(),
             actualHistoryPage,
             actualHistoryPageSize,
             detail.TotalItems,
-            detail.TotalPages));
+            detail.TotalPages)
+        {
+            ApplicationSnapshot = applicationSnapshot,
+            CurrentProfile = currentProfile?.Profile,
+            ProfileSource = currentProfile is null ? "application-snapshot" : "user-profile"
+        });
     }
 
     private static async Task<IResult> UpdateMemberProfile(
@@ -304,20 +332,18 @@ public static class MemberManagementEndpoints
             return Results.BadRequest(new { message = "Invalid profile field: check name, email, phone, date of birth and field lengths." });
         }
 
-        if (fullName is not null) membership.FullName = fullName;
-        if (email is not null) membership.Email = email;
-        if (phone is not null) membership.PhoneNumber = phone;
-        if (address is not null) membership.Address = address;
-        if (gender is not null) membership.Gender = gender;
-        if (request.DateOfBirth.HasValue) membership.DateOfBirth = request.DateOfBirth.Value;
-        await db.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Membership {MembershipId} profile in club {ClubId} was updated by user {UserId}", memberId, clubId, user.GetUserId());
-        return Results.Ok(ClubMappers.ToMembershipResponse(membership));
+        return Results.Json(new
+        {
+            code = "PERSONAL_PROFILE_SELF_ONLY",
+            message = "Personal information is updated by its owner through /api/users/me. The membership application remains a historical snapshot."
+        },
+            statusCode: StatusCodes.Status403Forbidden);
     }
 
-    private static async Task<IResult> RemoveMember(
+    internal static async Task<IResult> RemoveMember(
         int clubId,
         int memberId,
+        Guid? expectedVersion,
         ClubDbContext db,
         ClaimsPrincipal user,
         HttpContext httpContext,
@@ -327,38 +353,45 @@ public static class MemberManagementEndpoints
         if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
             return Results.Forbid();
 
-        var membership = await db.ClubMemberships
+        var membership = await db.ClubMemberships.IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Id == memberId && x.ClubId == clubId, cancellationToken);
 
         if (membership is null)
             return Results.NotFound(new { message = "Member not found in this club." });
 
-        var isActiveManager = await db.ClubManagerAssignments.AsNoTracking()
-            .AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == membership.UserId && x.IsActive, cancellationToken);
+        return await ApiOperations.ExecuteAsync(httpContext, db, new { clubId, memberId, expectedVersion }, async () =>
+        {
+            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)) return Results.Forbid();
+            if (membership.IsDeleted) return Results.NotFound();
+            if (expectedVersion.HasValue && expectedVersion != membership.ConcurrencyToken)
+                return ApiOperations.Error(409, "STALE_VERSION", "Reload the member before removal.");
+            var isActiveManager = await db.ClubManagerAssignments.AsNoTracking()
+                .AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == membership.UserId && x.IsActive, cancellationToken);
 
-        var removalError = ClubMemberRoleRules.ValidateRemoval(isActiveManager);
-        if (removalError is not null)
-            return Results.Conflict(new { message = removalError });
+            var removalError = ClubMemberRoleRules.ValidateRemoval(isActiveManager);
+            if (removalError is not null)
+                return Results.Conflict(new { message = removalError });
 
-        membership.IsDeleted = true;
-        membership.DeletedAtUtc = DateTimeOffset.UtcNow;
-        membership.DeletedByUserId = user.GetUserId();
-        membership.Status = ClubMembershipStatuses.Inactive;
-        membership.TreasurerSlot = null;
+            membership.IsDeleted = true;
+            membership.DeletedAtUtc = DateTimeOffset.UtcNow;
+            membership.DeletedByUserId = user.GetUserId();
+            membership.Status = ClubMembershipStatuses.Inactive;
+            membership.TreasurerSlot = null;
 
-        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            clubId,
-            [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
+            db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                clubId,
+                [membership.UserId]), EventRoutingKeys.ClubAccessInvalidated);
 
-        await db.SaveChangesAsync(cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation(
-            "Membership {MembershipId} was soft-deleted from club {ClubId} by user {UserId}",
-            memberId, clubId, user.GetUserId());
+            logger.LogInformation(
+                "Membership {MembershipId} was soft-deleted from club {ClubId} by user {UserId}",
+                memberId, clubId, user.GetUserId());
 
-        return Results.NoContent();
+            return Results.NoContent();
+        }, cancellationToken, required: false);
     }
 
     private static async Task<IResult> GetMemberRoster(

@@ -3,6 +3,11 @@ namespace AdminService.Data;
 public sealed class QuestParticipant
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Version { get; set; } = Guid.NewGuid();
+    public Guid? CriteriaVersion { get; set; }
+    public string? CriteriaSnapshotJson { get; set; }
+    public string LinkedContributionIdsJson { get; set; } = "[]";
+    public long? CompletedLedgerRevision { get; set; }
 
     public Guid QuestId { get; set; }
 

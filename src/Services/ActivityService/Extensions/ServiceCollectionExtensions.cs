@@ -3,6 +3,7 @@ using ActivityService.Infrastructure;
 using ActivityService.Services;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
 using ClubReportHub.Shared.Tracing;
@@ -28,8 +29,23 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddClubReportJwt(configuration, environment);
+        services.AddCurrentAccountValidation(configuration, environment);
         services.AddClubReportTracing();
         services.AddClubAccessClient(configuration);
+        services.AddHttpClient<CurrentUserProfileClient>(client =>
+        { client.BaseAddress = new Uri(configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/"); client.Timeout = TimeSpan.FromSeconds(10); });
+        services.AddHttpClient<ClubExperienceAuthorityClient>(client =>
+        { client.BaseAddress = new Uri(configuration["Services:ClubService:BaseUrl"] ?? "http://club-service:8080/"); client.Timeout = TimeSpan.FromSeconds(10); });
+        services.AddHttpClient<MediaAttachmentClient>(client =>
+        {
+            client.BaseAddress = new Uri(configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        }).AddCorrelationIdForwarding();
+        services.AddHttpClient<ExperienceAuthorityClient>(client =>
+        {
+            client.BaseAddress = new Uri(configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+            client.Timeout = TimeSpan.FromSeconds(15);
+        }).AddCorrelationIdForwarding();
 
         services.AddScoped<MemberActivityStatisticsService>();
 
@@ -55,6 +71,8 @@ public static class ServiceCollectionExtensions
 
         services.AddRedisStreamEventBus(configuration);
         services.AddTransactionalOutbox<ActivityDbContext>();
+        services.AddScoped<ActivityExperienceEventHandler>();
+        services.AddHostedService<ExperienceStreamConsumer<ActivityExperienceEventHandler>>();
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();

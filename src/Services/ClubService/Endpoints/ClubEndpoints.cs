@@ -17,6 +17,10 @@ public static class ClubEndpoints
 {
     public static void MapClubEndpoints(this WebApplication app)
     {
+        app.MapClubPublicProfileEndpoints();
+        app.MapClubSemesterPlanEndpoints();
+        app.MapClubPublicImageEndpoints();
+        app.MapClubExperienceAuthorityEndpoints();
         var clubs = app.MapGroup("/api/clubs")
             .WithTags("Clubs")
             .RequireAuthorization(AuthPolicies.BusinessAccess);

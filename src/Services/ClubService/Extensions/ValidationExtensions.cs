@@ -91,10 +91,7 @@ public static class ValidationExtensions
     public static string? ValidateJoinRequest(JoinClubRequest request, string clubCategory)
     {
         if (string.IsNullOrWhiteSpace(request.FullName)
-            || request.DateOfBirth is null
-            || string.IsNullOrWhiteSpace(request.Gender)
             || string.IsNullOrWhiteSpace(request.Email)
-            || string.IsNullOrWhiteSpace(request.PhoneNumber)
             || string.IsNullOrWhiteSpace(request.Reason))
         {
             return "Please provide your personal information, objectives, and reason for joining the club.";
@@ -111,14 +108,13 @@ public static class ValidationExtensions
             return "The membership application exceeds the allowed length.";
         }
 
-        var dateOfBirth = request.DateOfBirth.Value;
-        if (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow)
-            || dateOfBirth < DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-100)))
+        if (request.DateOfBirth is { } dateOfBirth && (dateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow)
+            || dateOfBirth < DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-100))))
         {
             return "The date of birth is invalid.";
         }
 
-        if (!ClubGenders.All.Contains(request.Gender.Trim().ToUpperInvariant()))
+        if (!string.IsNullOrWhiteSpace(request.Gender) && !ClubGenders.All.Contains(request.Gender.Trim().ToUpperInvariant()))
         {
             return "The gender value is invalid.";
         }
@@ -128,7 +124,7 @@ public static class ValidationExtensions
             return "The email address is invalid.";
         }
 
-        if (!Regex.IsMatch(request.PhoneNumber.Trim(), @"^\+?[0-9]{9,15}$"))
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber) && !Regex.IsMatch(request.PhoneNumber.Trim(), @"^\+?[0-9]{9,15}$"))
         {
             return "The phone number must contain 9 to 15 digits.";
         }

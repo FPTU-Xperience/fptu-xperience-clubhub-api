@@ -30,6 +30,8 @@ jobs:
       CI: "true"
       SQL_PASSWORD: "Backend_Validation_CI_Only_2026!"
       JWT_SIGNING_KEY: "ci-only-signing-key-with-at-least-32-characters"
+      INTERNAL_WORKFLOW_TOKEN: "ci-only-workflow-secret-at-least-32-characters"
+      ATTENDANCE_SIGNING_KEY: "ci-only-attendance-secret-at-least-32-characters"
       FRONTEND_ORIGIN: "https://ci.example.invalid"
       ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
       FINANCE_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"

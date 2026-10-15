@@ -54,9 +54,10 @@ public sealed class RedisStreamOptions
     /// <summary>
     /// Maximum length of the Redis stream. When new messages are published via XADD,
     /// the stream will be approximately trimmed to this length using MAXLEN ~ N.
-    /// Default is 10,000 entries (approx. 20-30 MB under typical event payload sizes).
+    /// Zero disables automatic trimming. The experience groups must acknowledge
+    /// messages before an operational retention job removes them.
     /// </summary>
-    public int MaxStreamLength { get; init; } = 10000;
+    public int MaxStreamLength { get; init; } = 0;
 
     /// <summary>
     /// Maximum length of the Redis dead-letter queue stream. When dead-letter messages

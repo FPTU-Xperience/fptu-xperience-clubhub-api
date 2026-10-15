@@ -77,13 +77,13 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
     }
 
     [Theory]
-    [InlineData(AuthRoles.ClubManager, 100, HttpStatusCode.OK)]
+    [InlineData(AuthRoles.ClubManager, 100, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.ClubManager, 101, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.ClubManager, 102, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.Treasurer, 103, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.ClubMember, 104, HttpStatusCode.Forbidden)]
-    [InlineData(AuthRoles.Admin, 105, HttpStatusCode.OK)]
-    [InlineData(AuthRoles.StudentAffairsAdmin, 106, HttpStatusCode.OK)]
+    [InlineData(AuthRoles.Admin, 105, HttpStatusCode.Forbidden)]
+    [InlineData(AuthRoles.StudentAffairsAdmin, 106, HttpStatusCode.Forbidden)]
     [InlineData(AuthRoles.SystemAdmin, 107, HttpStatusCode.Forbidden)]
     public async Task CompatibilityContract_MemberProfileRequiresManagementOfExactClub(
         string role, int actor, HttpStatusCode expected)
@@ -167,11 +167,15 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         await using var app = await CreateCompatibilityAppAsync();
         using var client = CreateAdminContractClient(app, 100, AuthRoles.Admin);
         var response = await client.PutAsJsonAsync("/api/clubs/1/members/10", new { address = "", gender = "Other", dateOfBirth = "2001-02-03" });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Original name", body.GetProperty("fullName").GetString());
-        Assert.Equal("2001-02-03", body.GetProperty("dateOfBirth").GetString());
-        Assert.Equal("", body.GetProperty("address").GetString());
+        Assert.Equal("PERSONAL_PROFILE_SELF_ONLY", body.GetProperty("code").GetString());
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var member = await scope.ServiceProvider.GetRequiredService<ClubDbContext>().ClubMemberships.SingleAsync(x => x.Id == 10);
+            Assert.Equal("Original name", member.FullName);
+            Assert.Equal(new DateOnly(2000, 1, 1), member.DateOfBirth);
+        }
         foreach (var path in new[] { "/api/clubs/2/members/10", "/api/clubs/1/members/11", "/api/clubs/1/members/999" })
         {
             Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync(path, new { fullName = "Changed" })).StatusCode);

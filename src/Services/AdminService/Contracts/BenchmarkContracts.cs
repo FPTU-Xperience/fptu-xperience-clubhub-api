@@ -216,7 +216,23 @@ public sealed record StudentRadarResponse(
     decimal ERI,
     string ProfileTitle,
     int ApprovedDeclarationsCount,
-    IReadOnlyList<PillarRadarItemResponse> Pillars);
+    IReadOnlyList<PillarRadarItemResponse> Pillars)
+{
+    public string LedgerBasis { get; init; } = "LEGACY_PREVIEW";
+    public Guid? PolicyVersion { get; init; }
+    public bool IsAuthoritative { get; init; }
+    public int ApprovedClubContributionsCount { get; init; }
+    public string Scope { get; init; } = "PERIOD";
+    public string? SemesterId { get; init; }
+    public string FormulaVersion { get; init; } = string.Empty;
+    public string ContributionFormulaVersion { get; init; } = string.Empty;
+    public long LedgerRevision { get; init; }
+    public DateTimeOffset AsOf { get; init; }
+    public string Version { get; init; } = string.Empty;
+    public IReadOnlyList<PillarRadarItemResponse> RadarAxes { get; init; } = [];
+    public PillarRadarItemResponse? PlusOne { get; init; }
+    public int LegacyPreviewCount { get; init; }
+}
 
 public sealed record PillarOverviewResponse(
     string Pillar,

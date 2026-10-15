@@ -13,13 +13,13 @@ namespace Backend.StabilizationTests;
 public sealed class RedisStreamRetentionTests
 {
     [Fact]
-    public void RedisStreamOptions_DefaultValues_EnforceBoundedRetention()
+    public void RedisStreamOptions_DefaultValues_PreserveUnacknowledgedExperienceEvents()
     {
         var options = new RedisStreamOptions();
 
         Assert.Equal("clubreporthub-events", options.StreamName);
         Assert.Equal("clubreporthub-events-dlq", options.DeadLetterStreamName);
-        Assert.Equal(10000, options.MaxStreamLength);
+        Assert.Equal(0, options.MaxStreamLength);
         Assert.Equal(5000, options.MaxDeadLetterStreamLength);
         Assert.True(options.UseApproximateTrimming);
         Assert.Equal(60, options.KeepAliveSeconds);
@@ -62,7 +62,7 @@ public sealed class RedisStreamRetentionTests
     }
 
     [Fact]
-    public async Task PublishAsync_AppliesDefaultStreamTrimmingParameters()
+    public async Task PublishAsync_AppliesExplicitStreamTrimmingParameters()
     {
         var multiplexer = Substitute.For<IConnectionMultiplexer>();
         var database = Substitute.For<IDatabase>();
@@ -249,7 +249,7 @@ public sealed class RedisStreamRetentionTests
             Arg.Is<NameValueEntry[]>(entries =>
                 entries.Any(e => e.Name == "correlationId" && e.Value == "corr-test-12345")),
             messageId: null,
-            maxLength: 10000,
+            maxLength: null,
             useApproximateMaxLength: true,
             flags: CommandFlags.None);
     }

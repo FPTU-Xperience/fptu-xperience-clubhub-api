@@ -142,7 +142,7 @@ public static class BenchmarkEndpoints
             .FirstOrDefaultAsync(x => x.SemesterCode == normalizedCode, cancellationToken);
         if (existing is not null)
         {
-            if (existing.IsLocked)
+            if (existing.IsLocked || existing.ApprovalStatus == "APPROVED")
             {
                 throw new ResourceConflictException($"Benchmark configuration for semester '{normalizedCode}' already exists and is locked.");
             }
@@ -166,6 +166,7 @@ public static class BenchmarkEndpoints
             existing.ThresholdLeader = request.ThresholdLeader;
             existing.MinPillarScoreAllRounder = request.MinPillarScoreAllRounder;
             existing.MinJAllRounder = request.MinJAllRounder;
+            existing.Version = Guid.NewGuid();
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -242,7 +243,7 @@ public static class BenchmarkEndpoints
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new ResourceNotFoundException("The requested benchmark configuration was not found.");
 
-        if (config.IsLocked)
+        if (config.IsLocked || config.ApprovalStatus == "APPROVED")
         {
             throw new BusinessRuleException("Cấu hình chỉ tiêu học kỳ đã bị khóa và không thể chỉnh sửa (Quy tắc Phụ lục A4).");
         }
@@ -257,6 +258,7 @@ public static class BenchmarkEndpoints
         }
 
         config.IsActive = request.IsActive;
+        config.Version = Guid.NewGuid();
         config.TauAcademic = tauAcad;
         config.TauResearch = tauEthi;
         config.TauGlobal = tauGlob;
@@ -303,6 +305,7 @@ public static class BenchmarkEndpoints
         }
 
         config.IsLocked = true;
+        config.Version = Guid.NewGuid();
         config.LockedAtUtc = DateTimeOffset.UtcNow;
         config.LockedByUserId = actor.UserId;
         config.LockedByName = actor.Email ?? actor.SubjectId;
@@ -322,130 +325,40 @@ public static class BenchmarkEndpoints
         return Results.Ok(BenchmarkConfigResponse.From(config));
     }
 
-    private static async Task<IResult> GetMyRadarAsync(
-        string? semester,
-        ICurrentActor actor,
-        AdminDbContext dbContext,
-        CancellationToken cancellationToken)
+    private static Task<IResult> GetMyRadarAsync(string? semester, string? scope, DateTimeOffset? asOf,
+        ICurrentActor actor, AdminDbContext dbContext, IConfiguration configuration, CancellationToken cancellationToken)
     {
-        if (!actor.UserId.HasValue)
-        {
-            throw new OperationForbiddenException("An authenticated user ID is required to calculate personal radar.");
-        }
-
-        return await BuildStudentRadarAsync(
-            studentId: actor.UserId.Value,
-            requestedSemester: semester,
-            fallbackName: actor.Email ?? actor.SubjectId ?? $"User {actor.UserId.Value}",
-            fallbackEmail: actor.Email ?? string.Empty,
-            dbContext: dbContext,
-            cancellationToken: cancellationToken);
+        if (!actor.UserId.HasValue) throw new OperationForbiddenException("An authenticated user ID is required.");
+        return BuildStudentRadarAsync(actor.UserId.Value, semester, actor.Email ?? actor.SubjectId ?? "Student",
+            actor.Email ?? string.Empty, dbContext, cancellationToken, scope, asOf,
+            configuration["Experience:Environment"] ?? "PROJECT");
     }
 
-    private static async Task<IResult> GetStudentRadarAsync(
-        int studentId,
-        string? semester,
-        AdminDbContext dbContext,
+    private static async Task<IResult> GetStudentRadarAsync(int studentId, string? semester, string? scope, DateTimeOffset? asOf,
+        AdminDbContext dbContext, ICurrentActor actor, HttpContext http, IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        return await BuildStudentRadarAsync(
-            studentId: studentId,
-            requestedSemester: semester,
-            fallbackName: $"Student {studentId}",
-            fallbackEmail: string.Empty,
-            dbContext: dbContext,
-            cancellationToken: cancellationToken);
+        var profiles = http.RequestServices.GetService<CurrentUserProfileClient>();
+        if (profiles is null) return ClubReportHub.Shared.Data.ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The profile client is unconfigured.");
+        InternalUserProfile? profile;
+        try { profile = (await profiles.GetAsync([studentId], cancellationToken)).GetValueOrDefault(studentId); }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or TaskCanceledException)
+        { return ClubReportHub.Shared.Data.ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The profile authority is unavailable."); }
+        if (profile is null) return Results.NotFound();
+        if (!http.User.IsInRole(AuthRoles.Admin) && profile.CampusCode != actor.CampusCode) return Results.Forbid();
+        return await BuildStudentRadarAsync(studentId, semester, profile.DisplayName, profile.Email, dbContext,
+            cancellationToken, scope, asOf, configuration["Experience:Environment"] ?? "PROJECT");
     }
 
-    private static async Task<IResult> BuildStudentRadarAsync(
-        int studentId,
-        string? requestedSemester,
-        string fallbackName,
-        string fallbackEmail,
-        AdminDbContext dbContext,
-        CancellationToken cancellationToken)
+    private static async Task<IResult> BuildStudentRadarAsync(int studentId, string? requestedSemester,
+        string fallbackName, string fallbackEmail, AdminDbContext dbContext, CancellationToken cancellationToken,
+        string? scope = null, DateTimeOffset? asOf = null, string environment = "PROJECT")
     {
-        SemesterBenchmarkConfig? activeBenchmark = null;
-        if (!string.IsNullOrWhiteSpace(requestedSemester))
-        {
-            var code = requestedSemester.Trim().ToUpperInvariant();
-            activeBenchmark = await dbContext.SemesterBenchmarkConfigs
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.SemesterCode == code, cancellationToken);
-        }
-
-        activeBenchmark ??= await dbContext.SemesterBenchmarkConfigs
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.IsActive, cancellationToken)
-            ?? new SemesterBenchmarkConfig { SemesterCode = "FA26", AcademicYear = "2026-2027" };
-
-        var approvedDeclarations = await dbContext.SelfDeclarations
-            .AsNoTracking()
-            .Where(x => x.StudentId == studentId && x.Status == DeclarationStatuses.Approved)
-            .ToListAsync(cancellationToken);
-
-        var studentName = approvedDeclarations.FirstOrDefault()?.StudentName ?? fallbackName;
-        var studentEmail = approvedDeclarations.FirstOrDefault()?.StudentEmail ?? fallbackEmail;
-
-        var rawScores = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var leaderPillars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var p in RadarPillars.AllSeven)
-        {
-            rawScores[p] = 0m;
-        }
-
-        foreach (var dec in approvedDeclarations)
-        {
-            var pillar = dec.FinalCategory ?? dec.Category;
-            var points = dec.RawPoints ?? 0m;
-
-            if (rawScores.ContainsKey(pillar))
-            {
-                rawScores[pillar] += points;
-            }
-            else
-            {
-                rawScores[pillar] = points;
-            }
-
-            if (string.Equals(dec.Role, ContributionRoles.Leader, StringComparison.OrdinalIgnoreCase))
-            {
-                leaderPillars.Add(pillar);
-            }
-        }
-
-        var tauDict = activeBenchmark.ToTauDictionary();
-        var radarResult = ExperienceIndexCalculator.ComputeRadar(rawScores, tauDict, leaderPillars);
-
-        var pillarResponses = RadarPillars.AllSeven
-            .Select(p =>
-            {
-                var accum = radarResult.Pillars[p];
-                return new PillarRadarItemResponse(
-                    Pillar: accum.Pillar,
-                    RawPointsSum: Math.Round(accum.RawPointsSum, 4),
-                    Tau: accum.Tau,
-                    SaturatedScore: Math.Round(accum.SaturatedScore, 2),
-                    MasteryTier: accum.MasteryTier,
-                    HasLeaderProof: accum.HasLeaderProof);
-            })
-            .ToArray();
-
-        var response = new StudentRadarResponse(
-            StudentId: studentId,
-            StudentName: studentName,
-            StudentEmail: studentEmail,
-            SemesterCode: activeBenchmark.SemesterCode,
-            D: radarResult.D,
-            J: radarResult.J,
-            M: radarResult.M,
-            ERI: radarResult.ERI,
-            ProfileTitle: radarResult.ProfileTitle,
-            ApprovedDeclarationsCount: approvedDeclarations.Count,
-            Pillars: pillarResponses);
-
-        return Results.Ok(response);
+        var result = await AdminService.Services.StudentExperienceReadService.ReadAsync(dbContext, studentId,
+            requestedSemester, scope, asOf, fallbackName, fallbackEmail, environment, cancellationToken);
+        return result.Radar is null
+            ? ClubReportHub.Shared.Data.ApiOperations.Error(result.StatusCode, result.Code!, result.Message!)
+            : Results.Ok(result.Radar);
     }
 
     private static async Task<IResult> GetRadarOverviewAsync(

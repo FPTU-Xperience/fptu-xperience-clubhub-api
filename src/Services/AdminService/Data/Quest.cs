@@ -3,6 +3,9 @@ namespace AdminService.Data;
 public sealed class Quest
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Version { get; set; } = Guid.NewGuid();
+    public Guid? CriteriaVersion { get; set; }
+    public string? CriteriaSnapshotJson { get; set; }
 
     public string Title { get; set; } = string.Empty;
 

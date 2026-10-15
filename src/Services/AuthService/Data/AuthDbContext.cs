@@ -1,5 +1,6 @@
 using AuthService.Models;
 using Microsoft.EntityFrameworkCore;
+using ClubReportHub.Shared.Data;
 
 namespace AuthService.Data;
 
@@ -9,9 +10,25 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<CanonicalUserProfile> UserProfiles => Set<CanonicalUserProfile>();
+    public DbSet<PublicMediaIntent> PublicMediaIntents => Set<PublicMediaIntent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyApiOperationConfiguration();
+        modelBuilder.Entity<PublicMediaIntent>(entity =>
+        {
+            entity.HasIndex(x => x.PublicUrl).IsUnique(); entity.Property(x => x.PublicUrl).HasMaxLength(450);
+            entity.Property(x => x.VerifiedUrl).HasMaxLength(1000); entity.Property(x => x.Version).IsConcurrencyToken();
+            entity.HasIndex(x => new { x.ActorId, x.CreatedAt });
+        });
+        modelBuilder.Entity<CanonicalUserProfile>(entity =>
+        {
+            entity.HasKey(x => x.UserId); entity.Property(x => x.Version).IsConcurrencyToken();
+            entity.Property(x => x.DisplayName).HasMaxLength(120); entity.Property(x => x.About).HasMaxLength(2000);
+            entity.Property(x => x.PhoneNumber).HasMaxLength(20);
+            entity.HasOne<User>().WithOne().HasForeignKey<CanonicalUserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(x => x.Username).IsUnique();

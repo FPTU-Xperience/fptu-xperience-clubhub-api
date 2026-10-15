@@ -31,6 +31,7 @@ public static class AttendanceManagementEndpoints
             async (
                 int clubId,
                 int activityId,
+                int? sessionId,
                 string? search,
                 int? page,
                 int? pageSize,
@@ -69,6 +70,8 @@ public static class AttendanceManagementEndpoints
                     });
                 }
 
+                if (activity.PublicationStatus != "LEGACY" || sessionId.HasValue)
+                    return await SessionAttendanceManagement.GetAsync(activityId, sessionId, search, page, pageSize, db, rosterClient, httpContext, cancellationToken);
                 var actualPage = Math.Max(1, page ?? 1);
                 var actualPageSize = Math.Clamp(pageSize ?? 20, 1, 100);
 
@@ -252,6 +255,10 @@ public static class AttendanceManagementEndpoints
                     });
                 }
 
+                if (activity.PublicationStatus != "LEGACY" || request.SessionId.HasValue)
+                    return await SessionAttendanceManagement.WriteAsync(activityId, new BulkUpdateAttendanceRequest(
+                        [new BulkAttendanceItemRequest(memberId, request.Status, request.Note, request.ExpectedVersion)],
+                        request.SessionId, request.ExpectedSessionVersion, request.Reason), db, rosterClient, httpContext, cancellationToken);
                 if (activity.Status == ActivityStatuses.Cancelled)
                 {
                     return Results.BadRequest(new
@@ -398,6 +405,8 @@ public static class AttendanceManagementEndpoints
                     });
                 }
 
+                if (activity.PublicationStatus != "LEGACY" || request.SessionId.HasValue)
+                    return await SessionAttendanceManagement.WriteAsync(activityId, request, db, rosterClient, httpContext, cancellationToken);
                 if (activity.Status == ActivityStatuses.Cancelled)
                 {
                     return Results.BadRequest(new
