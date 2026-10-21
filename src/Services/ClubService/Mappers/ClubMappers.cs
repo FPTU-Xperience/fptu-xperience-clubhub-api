@@ -45,7 +45,12 @@ public static class ClubMappers
             club.IsRecruiting,
             managers,
             members,
-            club.CampusCode);
+            club.CampusCode)
+        {
+            Version = club.ConcurrencyToken,
+            CoverImageUrl = club.CoverImageUrl,
+            Schedule = club.ScheduleJson is null ? null : JsonSerializer.Deserialize<JsonElement>(club.ScheduleJson)
+        };
     }
 
     public static ClubDirectoryResponse ToDirectoryResponse(Club club)

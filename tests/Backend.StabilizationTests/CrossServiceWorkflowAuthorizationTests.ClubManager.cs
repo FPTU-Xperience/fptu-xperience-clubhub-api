@@ -161,11 +161,18 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
                     Content = JsonContent.Create(new SemesterReference(
                     Guid.Parse("11111111-1111-1111-1111-111111111111"), "FALL2026", DateTimeOffset.UtcNow.AddMonths(-1), DateTimeOffset.UtcNow.AddMonths(2), true))
                 }), builder.Configuration));
+        builder.Services.AddSingleton(new MediaAttachmentClient(CreateFakeHttpClient(request =>
+        {
+            var body = JsonSerializer.Deserialize<JsonElement>(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            var url = body.GetProperty("publicUrl").GetString();
+            return new HttpResponseMessage(url?.StartsWith("https://images.example/", StringComparison.Ordinal) == true
+                ? HttpStatusCode.OK : HttpStatusCode.Conflict)
+            { Content = JsonContent.Create(new { publicUrl = url }) };
+        }), builder.Configuration));
         var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapClubPublicProfileEndpoints();
-        app.MapClubSemesterPlanEndpoints();
+        app.MapClubEndpoints();
         app.MapMembershipEndpoints();
         await using (var scope = app.Services.CreateAsyncScope())
         {
@@ -179,7 +186,8 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
                 IsRecruiting = true,
                 LogoUrl = "https://images.example/logo.png",
                 CoverImageUrl = "https://images.example/cover.png",
-                ScheduleLabel = "Old"
+                ScheduleLabel = "Old",
+                ScheduleJson = "{\"semesterId\":\"FALL2026\",\"weekdays\":[1]}"
             });
             db.ClubCategories.Add(new ClubCategory { Code = "CUSTOM", Name = "Custom category" });
             db.ClubManagerAssignments.AddRange(new ClubManagerAssignment { ClubId = 1, ManagerUserId = 100, IsActive = true },

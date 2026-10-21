@@ -59,7 +59,12 @@ public sealed record ClubResponse(
     bool IsRecruiting,
     IReadOnlyCollection<ManagerAssignmentResponse> Managers,
     IReadOnlyCollection<ClubMembershipResponse> Members,
-    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
+{
+    public Guid Version { get; init; }
+    public string? CoverImageUrl { get; init; }
+    public System.Text.Json.JsonElement? Schedule { get; init; }
+}
 
 public sealed record ManagerAssignmentResponse(
     int Id,
