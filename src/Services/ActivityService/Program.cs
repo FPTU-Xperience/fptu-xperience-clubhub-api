@@ -17,6 +17,7 @@ app.UseActivityServicePipeline();
 app.MapSystemEndpoints();
 app.MapActivityEndpoints();
 app.MapStudentActivityEndpoints();
+app.MapStudentSessionSourceEndpoints();
 app.MapStudentActivityHistoryEndpoints();
 app.MapMemberStatisticsEndpoints();
 app.MapAttendanceManagementEndpoints();

@@ -128,6 +128,7 @@ app.MapAnomalyEndpoints();
 app.MapSettingsEndpoints();
 app.MapSemesterEndpoints();
 app.MapExperiencePolicyEndpoints();
+app.MapWorkspaceCatalogEndpoints();
 app.MapVerificationAssignmentEndpoints();
 app.MapVerifiedContributionEndpoints();
 app.MapManualAttendanceEndpoints();

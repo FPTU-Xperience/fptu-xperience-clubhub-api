@@ -657,6 +657,15 @@
           "Path": "/api/v2/activities/feed"
         }
       },
+      "student-session-sources": {
+        "Order": -30,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/activities/{activityId}/sessions"
+        }
+      },
       "student-discovery-detail": {
         "Order": -30,
         "ClusterId": "activity-service",
