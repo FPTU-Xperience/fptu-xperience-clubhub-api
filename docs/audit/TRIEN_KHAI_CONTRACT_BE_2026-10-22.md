@@ -8,6 +8,8 @@ Phạm vi: BE, trên nhánh `feat/backend-contract-completion`. Nguồn yêu c�
 
 > Bổ sung: [hồ sơ cá nhân mở rộng](HO_SO_CA_NHAN_BE_2026-10-22.md), gồm ba field self-only và học vụ từ roster; các phần chưa có nguồn/media được giữ nhãn riêng.
 
+> Bổ sung 23/10: [thư viện liên kết hoạt động](TAI_NGUYEN_HOAT_DONG_BE_2026-10-23.md) đã triển khai 5 operation EMBED có persistence/audit/CAS. Upload tệp và public transport vẫn chưa hoàn thành; nhóm resources giữ trạng thái partial.
+
 ## Trạng thái từng phần
 
 | Actor / phần | API | Trạng thái BE và giới hạn |

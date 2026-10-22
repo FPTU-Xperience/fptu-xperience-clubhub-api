@@ -341,12 +341,59 @@
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
       "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
       "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{activityId}/resources",
+      "actor": [
+        "CURRENT_CLUB_MANAGER",
+        "APPROVED_CLUB_MEMBER",
+        "SCOPED_PUBLIC_VIEWER"
+      ],
+      "status": "EMBED_GALLERY_SOURCE_IMPLEMENTED",
+      "limitation": "Authenticated scope only; CLUB links limited to current club member/manager; no anonymous or private file delivery."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{activityId}/resources",
+      "actor": [
+        "CURRENT_CLUB_MANAGER"
+      ],
+      "status": "EMBED_ONLY_SOURCE_IMPLEMENTED",
+      "limitation": "DOCUMENT/MEDIA not implemented (501); required Idempotency-Key; at most 100 attached resources."
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{activityId}/resources/{resourceId}",
+      "actor": [
+        "CURRENT_CLUB_MANAGER"
+      ],
+      "status": "EMBED_METADATA_SOURCE_IMPLEMENTED",
+      "limitation": "GUID expectedVersion; title/visibility/position only; required Idempotency-Key."
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/activities/{activityId}/resources/{resourceId}",
+      "actor": [
+        "CURRENT_CLUB_MANAGER"
+      ],
+      "status": "AUDITED_DETACH_SOURCE_IMPLEMENTED",
+      "limitation": "JSON expectedVersion/reason and Idempotency-Key; soft detach retains immutable audit."
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{activityId}/resources/history",
+      "actor": [
+        "CURRENT_CLUB_MANAGER"
+      ],
+      "status": "IMMUTABLE_HISTORY_SOURCE_IMPLEMENTED",
+      "limitation": "Current authority required; paginated; no former-manager grant."
     }
   ],
   "deferred": [
     "NEW_SCORING_BY_PRODUCT_OWNER: estimates, raw-budget/final-report awards, +1/index/rollover, task credits/wallet/redemption",
     "Governance multiple groups and cross-service capabilities",
-    "Remaining profile/media/resources",
+    "Remaining cosmetics/layout, activity file resources and anonymous public activity policy",
     "Shape asset format decision and optional/unapproved scopes"
   ],
   "currentHandoff": "../audit/HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md",
@@ -354,9 +401,9 @@
   "rosterIdentity": "EXISTING_SCHOOL_EMAIL_NO_ACCOUNT_CREATION",
   "verification": {
     "totals": {
-      "total": 882,
-      "executed": 882,
-      "passed": 882,
+      "total": 914,
+      "executed": 914,
+      "passed": 914,
       "failed": 0,
       "notExecuted": 0
     },
@@ -379,9 +426,9 @@
       },
       {
         "assembly": "backend.stabilizationtests.dll",
-        "total": 674,
-        "executed": 674,
-        "passed": 674,
+        "total": 706,
+        "executed": 706,
+        "passed": 706,
         "failed": 0,
         "notExecuted": 0
       }
@@ -390,83 +437,114 @@
       {
         "name": "format",
         "exitCode": 0,
-        "seconds": 13.37
+        "seconds": 11.53
       },
       {
         "name": "format-verify",
         "exitCode": 0,
-        "seconds": 13.13
+        "seconds": 10.6
       },
       {
         "name": "release-build",
         "exitCode": 0,
-        "seconds": 13.34
+        "seconds": 9.27
       },
       {
         "name": "full-release-tests",
         "exitCode": 0,
-        "seconds": 218.92
+        "seconds": 234.78
       },
       {
         "name": "diff-check",
         "exitCode": 0,
-        "seconds": 0.13
+        "seconds": 0.1
       }
     ],
     "ciStyleModelChecks": [
       {
+        "name": "style-ActivityService",
+        "exitCode": 0,
+        "seconds": 14.99
+      },
+      {
         "name": "style-AdminService",
         "exitCode": 0,
-        "seconds": 19.34
+        "seconds": 17.16
       },
       {
         "name": "style-AuthService",
         "exitCode": 0,
-        "seconds": 13.65
+        "seconds": 13.53
       },
       {
         "name": "style-ClubService",
         "exitCode": 0,
-        "seconds": 17.4
+        "seconds": 15.05
       },
       {
         "name": "style-AdminService.IntegrationTests",
         "exitCode": 0,
-        "seconds": 14.42
+        "seconds": 12.09
       },
       {
         "name": "style-Backend.StabilizationTests",
         "exitCode": 0,
-        "seconds": 34.26
+        "seconds": 31.08
+      },
+      {
+        "name": "style-shared-ci",
+        "exitCode": 0,
+        "seconds": 9.64
       },
       {
         "name": "model-ActivityService",
         "exitCode": 0,
-        "seconds": 5.05
+        "seconds": 4.65
       },
       {
         "name": "model-AdminService",
         "exitCode": 0,
-        "seconds": 5.22
+        "seconds": 4.99
       },
       {
         "name": "model-AuthService",
         "exitCode": 0,
-        "seconds": 4.98
+        "seconds": 4.91
       },
       {
         "name": "model-ClubService",
         "exitCode": 0,
-        "seconds": 4.88
+        "seconds": 4.48
+      },
+      {
+        "name": "model-ReportService",
+        "exitCode": 0,
+        "seconds": 6.31
+      },
+      {
+        "name": "model-FinanceService",
+        "exitCode": 0,
+        "seconds": 5.91
+      },
+      {
+        "name": "model-ExportService",
+        "exitCode": 0,
+        "seconds": 6.83
+      },
+      {
+        "name": "model-NotificationService",
+        "exitCode": 0,
+        "seconds": 4.95
       }
     ],
     "coverageCollected": true,
-    "sql": "Configured SQL Server disposable databases; prior-schema account/profile/roster/activity upgrades, self media and concurrent writes.",
-    "proofDirectory": "C:\\Users\\ADMIN\\Downloads\\DOAN\\.contract-audit\\be-work-2026-10-21\\self-media-final-results"
+    "sql": "Configured SQL Server disposable databases; prior-schema migrations and CAS including activity resources; HTTP and YARP route-selection tests.",
+    "proofDirectory": "C:\\Users\\ADMIN\\Downloads\\DOAN\\.contract-audit\\be-work-2026-10-21\\resources-final-results"
   },
   "additionalHandoffs": [
     "../audit/HOAN_THIEN_LICH_HOC_BE_2026-10-22.md",
-    "../audit/HO_SO_CA_NHAN_BE_2026-10-22.md"
+    "../audit/HO_SO_CA_NHAN_BE_2026-10-22.md",
+    "../audit/TAI_NGUYEN_HOAT_DONG_BE_2026-10-23.md"
   ],
   "profileExtensions": {
     "methodRoutes": [
@@ -485,7 +563,7 @@
     "academicStudentCode": "Current school-email identity and current Admin roster revision; read-only; source availability explicit",
     "majorAndYear": "NO_AUTHORITATIVE_SOURCE; null; read-only",
     "remaining": [
-      "cosmetics/layout and activity resources",
+      "cosmetics/layout and activity file resources; EMBED gallery implemented separately",
       "official major/year data source",
       "FE integration/live storage acceptance and orphan cleanup acceptance"
     ],
@@ -511,5 +589,41 @@
   "governanceMigrationDecision": {
     "status": "AWAITING_PRODUCT_OWNER",
     "question": "Confirm legacy treasurer migration into authoritative semester; CTSV confirmation versus no inheritance. No implicit migration/grant."
+  },
+  "activityResources": {
+    "status": "PARTIAL_EMBED_GALLERY_ONLY",
+    "handoff": "TAI_NGUYEN_HOAT_DONG_BE_2026-10-23.md",
+    "newImplementedPublicOperations": 5,
+    "detail": "GET /api/activities/{id}: resources/resourceAvailability/resourceCapabilities; existing core access policy retained",
+    "canUpload": false,
+    "supportedKinds": [
+      "EMBED"
+    ],
+    "publicVisibility": "Within authenticated activity access; CAMPUS_PUBLIC is not anonymous",
+    "incomplete": [
+      {
+        "method": "POST",
+        "route": "/api/activities/{activityId}/resources/upload-intents",
+        "status": "NOT_IMPLEMENTED",
+        "response": "501 RESOURCE_UPLOAD_NOT_IMPLEMENTED after current management check; no upload/receipt"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activities/{activityId}/resources",
+        "status": "DOCUMENT_MEDIA_NOT_IMPLEMENTED"
+      },
+      {
+        "method": "GET",
+        "route": "/api/public/activities/{id}",
+        "status": "NOT_IMPLEMENTED_POLICY_NOT_DEFINED"
+      },
+      "Private file delivery, bytes/container/scanning/quarantine and expiry/orphan cleanup",
+      "Governance specialist capabilities; legacy treasurer cutover still awaiting product decision"
+    ]
+  },
+  "knowledgeGraph": {
+    "runner": "GitNexus 1.6.12",
+    "receiptSchema": 4,
+    "limitation": "C# receiver typing and bounded process extraction mean the graph is not exhaustive. UNKNOWNs verified with source/HTTP/SQL; final staged gate required partial=false/truncated=false with no unresolved symbol IDs."
   }
 }

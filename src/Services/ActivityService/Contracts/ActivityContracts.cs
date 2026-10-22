@@ -34,6 +34,9 @@ public sealed record ActivityResponse(
     public string Eligibility { get; init; } = "CLUB_MEMBER";
     public IReadOnlyList<PillarWeight> PillarWeights { get; init; } = [];
     public string? CoverImageUrl { get; init; }
+    public IReadOnlyList<ActivityResourceResponse>? Resources { get; init; }
+    public ActivityResourceCapabilities ResourceCapabilities { get; init; } = new(false, false, []);
+    public string ResourceAvailability { get; init; } = "NOT_REQUESTED";
     public int RegisteredCount { get; init; }
     public int VerifiedAttendanceCount { get; init; }
     public string EffortTier { get; init; } = "T1";

@@ -21,6 +21,7 @@ public static class ActivityEndpoints
         var activities = app
             .MapGroup("/api/activities")
             .WithTags("Activities")
+            .AddEndpointFilter<ActivityResourceReadFilter>()
             .AddEndpointFilter<ActivityPublicationReadFilter>()
             .RequireAuthorization(AuthPolicies.BusinessAccess);
 
@@ -34,6 +35,7 @@ public static class ActivityEndpoints
         app.MapActivityExperienceSourceEndpoints();
         app.MapActivityExperienceMetricsEndpoints();
         app.MapActivityCoverImageEndpoints();
+        app.MapActivityResourceEndpoints();
 
         return app;
     }

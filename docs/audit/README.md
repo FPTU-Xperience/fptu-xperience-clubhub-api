@@ -1,5 +1,7 @@
 # Tài liệu tiến độ BE
 
+- [Thư viện liên kết hoạt động — 23/10](TAI_NGUYEN_HOAT_DONG_BE_2026-10-23.md): 5 operation đã triển khai cho EMBED; upload DOCUMENT/MEDIA, private download và public transport vẫn chưa hoàn thành.
+
 - [Hồ sơ cá nhân mở rộng](HO_SO_CA_NHAN_BE_2026-10-22.md): headline/ngày sinh/địa chỉ self-only, mã sinh viên từ roster chỉ đọc; nguồn ngành/năm học và media vẫn có trạng thái riêng.
 
 - [Lịch học cá nhân và lịch học kỳ](HOAN_THIEN_LICH_HOC_BE_2026-10-22.md): thêm 6 API công khai, alias Semester/campus, version và import an toàn; FE vẫn chưa chuyển consumer.
@@ -8,7 +10,7 @@
 - [Operation manifest BE](../contracts/be-operation-manifest.json): method/route/actor, trạng thái và giới hạn cho FE.
 
 - [Triển khai và bàn giao contract BE — 22/10/2026](TRIEN_KHAI_CONTRACT_BE_2026-10-22.md): tiến độ sau audit 21/10; route mới, lỗi đã sửa, metadata, migration và phần còn thiếu. Dùng mốc này khi tích hợp các thay đổi trên nhánh `feat/backend-contract-completion`.
-- [JSON tiến độ triển khai — 22/10](TRIEN_KHAI_CONTRACT_BE_2026-10-22.json): 35 operation công khai mới so với baseline; 0 route còn thiếu trong nhóm 16 ban đầu, có ghi riêng giới hạn nghiệp vụ và checkpoint kiểm thử.
+- [JSON tiến độ triển khai — 22/10](TRIEN_KHAI_CONTRACT_BE_2026-10-22.json): 40 operation công khai mới so với baseline; 0 route còn thiếu trong nhóm 16 ban đầu, có ghi riêng giới hạn nghiệp vụ và checkpoint kiểm thử.
 - [Đối chiếu BE với contract FE main — 21/10/2026](DOI_CHIEU_BE_CONTRACT_FE_2026-10-21.md): mốc trước triển khai, theo actor/nhóm contract, 16 operation có consumer nhưng chưa có route, các lệch DTO/nghiệp vụ và kiểm thử BE thực chạy.
 - [Dữ liệu đối chiếu JSON — 21/10](DOI_CHIEU_BE_CONTRACT_FE_2026-10-21.json): commit/hash nguồn, wrapper và route inventory, findings, scope và kết quả test; nhãn declaration tách riêng nhãn nghiệp vụ.
 - [Bảng trạng thái API — 14/10/2026](TRANG_THAI_API_BE_CHO_FE_2026-10-14.md) và [JSON lịch sử](TRANG_THAI_API_BE_CHO_FE_2026-10-14.json): phạm vi cũ 74 operation, không phải tổng phạm vi contract FE main mới.

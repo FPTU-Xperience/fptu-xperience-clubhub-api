@@ -34,7 +34,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
 
     private void ValidateActionHistory()
     {
-        if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule
+        if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule or ActivityResourceAudit
             && x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Application history, approved rules and execution audit are append-only.");
     }
@@ -42,6 +42,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ActivityActionConfiguration.Configure(modelBuilder);
+        ActivityResourceConfiguration.Configure(modelBuilder);
         modelBuilder.Entity<ClubActivity>(entity =>
         {
             entity.Property(x => x.Version).IsConcurrencyToken();
