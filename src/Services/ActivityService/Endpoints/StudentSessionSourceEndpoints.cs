@@ -64,8 +64,17 @@ public static class StudentSessionSourceEndpoints
             var alreadyVerified = verified.Contains(session.Id);
             items.Add(new
             {
-                session.Id, session.ActivityId, session.SemesterId, session.StartTimeUtc, session.EndTimeUtc, session.Timezone,
-                session.Location, status = source.Status, version = session.Version, activityVersion = activity.Version, source,
+                session.Id,
+                session.ActivityId,
+                session.SemesterId,
+                session.StartTimeUtc,
+                session.EndTimeUtc,
+                session.Timezone,
+                session.Location,
+                status = source.Status,
+                version = session.Version,
+                activityVersion = activity.Version,
+                source,
                 alreadyVerified,
                 sourceActions = new
                 {
@@ -77,7 +86,16 @@ public static class StudentSessionSourceEndpoints
             });
         }
         http.Response.Headers.CacheControl = "no-store";
-        return Results.Ok(new { activityId, items, page = current, pageSize = size, totalItems = total,
-            totalPages = (int)Math.Ceiling((decimal)total / size), asOf = now, scopeVersion = authority.Version });
+        return Results.Ok(new
+        {
+            activityId,
+            items,
+            page = current,
+            pageSize = size,
+            totalItems = total,
+            totalPages = (int)Math.Ceiling((decimal)total / size),
+            asOf = now,
+            scopeVersion = authority.Version
+        });
     }
 }

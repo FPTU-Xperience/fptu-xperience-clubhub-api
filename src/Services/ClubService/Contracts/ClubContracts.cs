@@ -105,6 +105,14 @@ public sealed record ClubMembershipResponse(
     int? ReviewedByUserId)
 {
     public Guid Version { get; init; }
+    public string ClubCode { get; init; } = string.Empty;
+    public string? LogoUrl { get; init; }
+    public string Source { get; init; } = "UNKNOWN";
+    public string? SemesterId { get; init; }
+    public DateTimeOffset? InvitedAt { get; init; }
+    public DateTimeOffset? ConsentedAt { get; init; }
+    public bool CanAcceptInvitation { get; init; }
+    public bool CanWithdraw { get; init; }
 }
 
 public sealed record ClubAccessResponse(

@@ -9,6 +9,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
     public DbSet<Club> Clubs => Set<Club>();
     public DbSet<ClubManagerAssignment> ClubManagerAssignments => Set<ClubManagerAssignment>();
     public DbSet<ClubMembership> ClubMemberships => Set<ClubMembership>();
+    public DbSet<ClubMembershipAction> MembershipActions => Set<ClubMembershipAction>();
     public DbSet<ClubCreationApplication> ClubCreationApplications => Set<ClubCreationApplication>();
     public DbSet<ClubDisbandRequest> ClubDisbandRequests => Set<ClubDisbandRequest>();
     public DbSet<ClubOwnershipTransfer> ClubOwnershipTransfers => Set<ClubOwnershipTransfer>();
@@ -19,9 +20,28 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        ValidateMembershipAudit();
         foreach (var entry in ChangeTracker.Entries<ClubMembership>().Where(x => x.State == EntityState.Modified))
             entry.Entity.ConcurrencyToken = Guid.NewGuid();
         return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ValidateMembershipAudit();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ValidateMembershipAudit();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private void ValidateMembershipAudit()
+    {
+        if (ChangeTracker.Entries<ClubMembershipAction>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Membership action audit records are append-only.");
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -69,7 +89,10 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
         modelBuilder.Entity<ClubMembership>(entity =>
         {
             entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken();
-            entity.HasIndex(x => new { x.ClubId, x.UserId }).IsUnique();
+            entity.HasIndex(x => new { x.ClubId, x.UserId }).IsUnique().HasFilter("[IsDeleted] = 0");
+            entity.Property(x => x.Source).HasMaxLength(20).HasDefaultValue(ClubMembershipSources.Unknown);
+            entity.Property(x => x.SemesterId).HasMaxLength(40);
+            entity.HasOne<ClubMembership>().WithMany().HasForeignKey(x => x.PreviousApplicationId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.UserId, x.Status });
             entity.HasIndex(x => new { x.ClubId, x.Role, x.Status });
             entity.HasIndex(x => new { x.ClubId, x.IsDeleted, x.Status });
@@ -96,6 +119,15 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
             entity.Property(x => x.Expectations).HasMaxLength(1000);
             entity.Property(x => x.Contributions).HasMaxLength(1000);
             entity.Property(x => x.ReviewNote).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<ClubMembershipAction>(entity =>
+        {
+            entity.HasIndex(x => new { x.MembershipId, x.Action }).IsUnique();
+            entity.Property(x => x.Action).HasMaxLength(40);
+            entity.Property(x => x.PreviousStatus).HasMaxLength(40);
+            entity.Property(x => x.Status).HasMaxLength(40);
+            entity.HasOne<ClubMembership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<ClubCreationApplication>(entity =>

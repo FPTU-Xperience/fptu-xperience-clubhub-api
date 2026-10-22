@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "scope": "BE implementation and local verification; FE unchanged; not deployment proof",
+  "branch": "feat/backend-contract-completion",
+  "baselineBeCommit": "b066f96b9fd0ea304e7c498f6ddcc569b2c21ebf",
+  "feContractCommit": "3ffd00ed03a5b8db942ed3ac3b7b6dee098d9f42",
+  "newPublicOperationCount": 6,
+  "newPublicOperations": [
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/workspace-semesters",
+      "status": "READ_IMPLEMENTED",
+      "limitation": "Overall workspace attribution/governance remains partial."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/invitation-semesters",
+      "status": "READ_IMPLEMENTED_WORKFLOW_PARTIAL",
+      "limitation": "ROSTER_UNAVAILABLE; canInvite=false."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/experience-policies",
+      "status": "READ_IMPLEMENTED",
+      "limitation": "Canonical semester; approved PERIOD/environment policies only."
+    },
+    {
+      "method": "GET",
+      "route": "/api/v2/activities/{activityId}/sessions",
+      "status": "SAFE_SOURCE_READ_IMPLEMENTED",
+      "limitation": "Registration/current eligibility required; submission authority revalidates writes."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/me/membership-applications",
+      "status": "SELF_HISTORY_IMPLEMENTED",
+      "limitation": "Legacy UNKNOWN is preserved; self-only capabilities."
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/me/membership-applications/{applicationId}/withdraw",
+      "status": "IMPLEMENTED",
+      "limitation": "Own pending APPLICATION only; no body, optional Idempotency-Key."
+    }
+  ],
+  "consumerGapScope": {
+    "baseline": 16,
+    "resolved": 1,
+    "remaining": 15,
+    "note": "Counts only the 16 missing operations with an existing consumer in the 2026-10-21 audit; actor sets overlap. Proposed APIs and business gaps are separate.",
+    "remainingByActor": {
+      "Quản lý CLB": 13,
+      "CTSV/Admin": 1,
+      "Sinh viên": 3,
+      "Người xác minh": 2
+    },
+    "remainingOperations": [
+      {
+        "method": "GET",
+        "route": "/api/clubs/{}/eligible-members",
+        "consumer": "searchEligibleClubMembers",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "current_facade",
+        "contract": "club-member-invitations-api.md",
+        "work_package": "P04"
+      },
+      {
+        "method": "GET",
+        "route": "/api/activity-applications/{}",
+        "consumer": "getActivityApplication",
+        "actors": [
+          "Quản lý CLB",
+          "CTSV/Admin"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "current_facade",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P06"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activity-applications",
+        "consumer": "createActivityApplication",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "current_facade",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P06"
+      },
+      {
+        "method": "PATCH",
+        "route": "/api/activity-applications/{}",
+        "consumer": "updateActivityApplication",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "current_facade",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P06"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activity-applications/{}/submit",
+        "consumer": "submitActivityApplication",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "current_facade",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P06"
+      },
+      {
+        "method": "PATCH",
+        "route": "/api/activities/{}/publication",
+        "consumer": "setActivityPublication",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "current_facade",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P06"
+      },
+      {
+        "method": "GET",
+        "route": "/api/activities/{}/staffing",
+        "consumer": "getActivityStaffing",
+        "actors": [
+          "Quản lý CLB",
+          "Sinh viên",
+          "Người xác minh"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activities/{}/assignments",
+        "consumer": "ActivityStaffingPanel.assignments",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activities/{}/assignments/{}/cancel",
+        "consumer": "ActivityStaffingPanel.cancel",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activities/{}/action-completions/{}/verify",
+        "consumer": "ActivityStaffingPanel.verify",
+        "actors": [
+          "Người xác minh"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activities/{}/recruitment",
+        "consumer": "ActivityStaffingPanel.createRecruitment",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "PATCH",
+        "route": "/api/activities/{}/recruitment",
+        "consumer": "ActivityStaffingPanel.editRecruitment",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "PATCH",
+        "route": "/api/activities/{}/recruitment/status",
+        "consumer": "ActivityStaffingPanel.recruitmentStatus",
+        "actors": [
+          "Quản lý CLB"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "POST",
+        "route": "/api/activities/{}/recruitment/positions/{}/join",
+        "consumer": "ActivityStaffingPanel.joinPosition",
+        "actors": [
+          "Sinh viên"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      },
+      {
+        "method": "GET",
+        "route": "/api/clubs/{}/activity-recruitments",
+        "consumer": "QuestsTab",
+        "actors": [
+          "Quản lý CLB",
+          "Sinh viên"
+        ],
+        "status": "NO_BE_ROUTE",
+        "scope": "direct_consumer",
+        "contract": "activity-action-staffing-api.md",
+        "work_package": "P07"
+      }
+    ]
+  },
+  "migration": "20261021140255_MembershipApplicationHistory",
+  "verification": {
+    "totals": {
+      "total": 788,
+      "executed": 788,
+      "passed": 788,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    "testAssemblies": [
+      {
+        "assembly": "clubreporthub.tests.dll",
+        "total": 123,
+        "executed": 123,
+        "passed": 123,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      {
+        "assembly": "adminservice.integrationtests.dll",
+        "total": 85,
+        "executed": 85,
+        "passed": 85,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      {
+        "assembly": "backend.stabilizationtests.dll",
+        "total": 580,
+        "executed": 580,
+        "passed": 580,
+        "failed": 0,
+        "notExecuted": 0
+      }
+    ],
+    "checks": [
+      {
+        "name": "release-build",
+        "exitCode": 0,
+        "seconds": 16.82
+      },
+      {
+        "name": "club-model",
+        "exitCode": 0,
+        "seconds": 4.65
+      },
+      {
+        "name": "full-release-tests",
+        "exitCode": 0,
+        "seconds": 155.75
+      },
+      {
+        "name": "manager-regressions",
+        "exitCode": 0,
+        "seconds": 42.43
+      },
+      {
+        "name": "diff-check",
+        "exitCode": 0,
+        "seconds": 0.12
+      }
+    ],
+    "formatting": "AdminService, AuthService, ClubService, AdminService.IntegrationTests, Backend.StabilizationTests: passed",
+    "sql": "LocalDB disposable test databases; Admin and Finance migration tests enabled",
+    "coverageCollected": true,
+    "managerRegressionPassed": 73
+  },
+  "overallPlanDone": false,
+  "deferred": [
+    "School roster/import/eligibility and semester invitation validation",
+    "Governance and new application/publication/action/staffing/final-report workflows",
+    "Approved scoring/raw-budget settlement, +1/index/rollover decisions",
+    "Tasks, CLUB_CREDIT wallet, rewards/redemption/debt policy",
+    "Remaining media owners/profile/resources/timetable; shape format decision"
+  ],
+  "knowledgeGraph": {
+    "runner": "GitNexus 1.6.12",
+    "receiptSchema": 4,
+    "limitation": "C# receiver typing and some missing symbol IDs limit static flow attribution. Direct source review, HTTP and real SQL regression tests supplement the graph; no claim of exhaustive static coverage."
+  }
+}

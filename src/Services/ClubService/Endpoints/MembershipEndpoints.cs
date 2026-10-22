@@ -107,7 +107,7 @@ public static class MembershipEndpoints
 
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
-            var existing = await db.ClubMemberships.IgnoreQueryFilters()
+            var existing = await db.ClubMemberships
                 .FirstOrDefaultAsync(x => x.ClubId == id && x.UserId == userId, cancellationToken);
 
             if (existing is not null)
@@ -117,38 +117,35 @@ public static class MembershipEndpoints
                 {
                     ClubMappers.ApplyJoinRequest(existing, request);
                     existing.ConcurrencyToken = Guid.NewGuid();
-                    existing.RequestedAtUtc = DateTimeOffset.UtcNow;
+                    existing.ConsentedAtUtc = DateTimeOffset.UtcNow;
                     await db.SaveChangesAsync(cancellationToken);
-                    return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
+                    existing.Club = club;
+                    return Results.Ok(SelfMembershipApplicationEndpoints.SelfResponse(existing, userId));
                 }
 
-                if (existing.Status == ClubMembershipStatuses.Rejected || existing.IsDeleted)
+                if (existing.Status == ClubMembershipStatuses.Rejected)
                 {
-                    existing.IsDeleted = false;
-                    existing.DeletedAtUtc = null;
-                    existing.DeletedByUserId = null;
-                    existing.Status = ClubMembershipStatuses.Pending;
-                    existing.Role = ClubMemberRoles.Member;
-                    existing.ConcurrencyToken = Guid.NewGuid();
+                    // Archive the rejected attempt before releasing the unique current-membership slot.
+                    existing.IsDeleted = true;
                     existing.TreasurerSlot = null;
-                    ClubMappers.ApplyJoinRequest(existing, request);
-                    existing.ReviewNote = null;
-                    existing.RequestedAtUtc = DateTimeOffset.UtcNow;
-                    existing.ReviewedAtUtc = null;
-                    existing.ReviewedByUserId = null;
+                    existing.DeletedAtUtc = DateTimeOffset.UtcNow;
+                    existing.DeletedByUserId = userId;
                     await db.SaveChangesAsync(cancellationToken);
-                    return Results.Ok(ClubMappers.ToMembershipResponseWithClub(existing, club));
                 }
-
-                return Results.Conflict(new { message = $"Membership request already exists with status {existing.Status}." });
+                else return Results.Conflict(new { message = $"Membership request already exists with status {existing.Status}." });
             }
-
+            var previousId = existing?.Id ?? await db.ClubMemberships.IgnoreQueryFilters()
+                .Where(x => x.ClubId == id && x.UserId == userId).OrderByDescending(x => x.RequestedAtUtc).ThenByDescending(x => x.Id)
+                .Select(x => (int?)x.Id).FirstOrDefaultAsync(cancellationToken);
             var membership = new ClubMembership
             {
                 ClubId = id,
                 UserId = userId,
                 Role = ClubMemberRoles.Member,
-                Status = ClubMembershipStatuses.Pending
+                Status = ClubMembershipStatuses.Pending,
+                Source = ClubMembershipSources.Application,
+                ConsentedAtUtc = DateTimeOffset.UtcNow,
+                PreviousApplicationId = previousId
             };
 
             ClubMappers.ApplyJoinRequest(membership, request);
@@ -156,7 +153,7 @@ public static class MembershipEndpoints
             await db.SaveChangesAsync(cancellationToken);
 
             membership.Club = club;
-            return Results.Created($"/api/clubs/memberships/{membership.Id}", ClubMappers.ToMembershipResponse(membership));
+            return Results.Created($"/api/clubs/memberships/{membership.Id}", SelfMembershipApplicationEndpoints.SelfResponse(membership, userId));
         }, cancellationToken, required: false);
     }
 

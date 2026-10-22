@@ -66,6 +66,7 @@ public static class MemberManagementEndpoints
         JsonElement request,
         ClaimsPrincipal user,
         ClubDbContext db,
+        HttpContext http,
         CancellationToken cancellationToken)
     {
         if (request.ValueKind != JsonValueKind.Object ||
@@ -95,12 +96,27 @@ public static class MemberManagementEndpoints
         if (club is null) return Results.NotFound();
         if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
             return Results.Forbid();
+        if (!user.IsSuperAdmin() && club.CampusCode != CampusCodes.Global && user.GetCampus() != club.CampusCode)
+            return Results.Forbid();
         if (await db.ClubManagerAssignments.AnyAsync(x =>
                 x.ClubId == clubId && x.ManagerUserId == parsedNumber && x.IsActive, cancellationToken))
             return Results.Conflict(new { message = "The club manager is already attached to this club." });
         if (await db.ClubMemberships.IgnoreQueryFilters().AnyAsync(x =>
-                x.ClubId == clubId && x.UserId == parsedNumber, cancellationToken))
+                x.ClubId == clubId && x.UserId == parsedNumber && !x.IsDeleted, cancellationToken))
             return Results.Conflict(new { message = "Membership or invitation already exists for this user." });
+
+        var profiles = http.RequestServices.GetService<CurrentUserProfileClient>();
+        if (profiles is null) return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account client is unconfigured.");
+        InternalUserProfile? target;
+        try { target = (await profiles.GetAsync([parsedNumber], cancellationToken)).GetValueOrDefault(parsedNumber); }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        { return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account service is unavailable."); }
+        if (target is null) return Results.NotFound();
+        if (!target.IsActive || target.IsLocked || club.CampusCode != CampusCodes.Global && target.CampusCode != club.CampusCode)
+            return ApiOperations.Error(422, "STUDENT_NOT_ELIGIBLE", "The target account is inactive, locked or outside the club campus.");
+        fullName = target.DisplayName.Trim();
+        if (string.IsNullOrEmpty(fullName) || fullName.Length > 200)
+            return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account name is invalid.");
 
         var membership = new ClubMembership
         {
@@ -110,7 +126,10 @@ public static class MemberManagementEndpoints
             Role = ClubMemberRoles.Member,
             Status = ClubMembershipStatuses.Pending,
             AcceptedClubRules = false,
-            CommittedToParticipate = false
+            CommittedToParticipate = false,
+            Source = ClubMembershipSources.Invitation,
+            InvitedByUserId = user.GetUserId(),
+            InvitedAtUtc = DateTimeOffset.UtcNow
         };
         db.ClubMemberships.Add(membership);
         try
@@ -130,7 +149,11 @@ public static class MemberManagementEndpoints
             membership.FullName,
             role = AuthRoles.ClubMember,
             membership.Status,
-            membership.RequestedAtUtc
+            membership.RequestedAtUtc,
+            membership.Source,
+            invitedAt = membership.InvitedAtUtc,
+            membership.SemesterId,
+            version = membership.ConcurrencyToken
         });
     }
 

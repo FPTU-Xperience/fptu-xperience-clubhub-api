@@ -164,7 +164,15 @@ public static class ClubMappers
             membership.RequestedAtUtc,
             membership.ReviewedAtUtc,
             membership.ReviewedByUserId)
-        { Version = membership.ConcurrencyToken };
+        {
+            Version = membership.ConcurrencyToken,
+            ClubCode = club.Code,
+            LogoUrl = club.LogoUrl,
+            Source = membership.Source,
+            SemesterId = membership.SemesterId,
+            InvitedAt = membership.InvitedAtUtc,
+            ConsentedAt = membership.ConsentedAtUtc
+        };
     }
 
     // ========================================================================

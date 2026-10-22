@@ -7,6 +7,14 @@ public sealed class ClubMembership
     public int ClubId { get; set; }
     public Club Club { get; set; } = null!;
     public int UserId { get; set; }
+    public string Source { get; set; } = ClubMembershipSources.Unknown;
+    public string? SemesterId { get; set; }
+    public int? PreviousApplicationId { get; set; }
+    public int? InvitedByUserId { get; set; }
+    public DateTimeOffset? InvitedAtUtc { get; set; }
+    public DateTimeOffset? ConsentedAtUtc { get; set; }
+    public DateTimeOffset? WithdrawnAtUtc { get; set; }
+    public int? WithdrawnByUserId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public DateOnly? DateOfBirth { get; set; }
     public string Gender { get; set; } = string.Empty;

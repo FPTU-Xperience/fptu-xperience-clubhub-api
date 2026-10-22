@@ -122,6 +122,7 @@ app.MapGet("/", () => Results.Ok(new { service = "Club Service", status = "runni
 
 app.MapClubEndpoints();             // Club CRUD operations
 app.MapClubWorkspaceCatalogEndpoints();
+app.MapSelfMembershipApplicationEndpoints();
 app.MapApplicationEndpoints();      // Club creation applications
 app.MapMembershipEndpoints();       // Membership requests & management
 app.MapManagerEndpoints();          // Manager assignments

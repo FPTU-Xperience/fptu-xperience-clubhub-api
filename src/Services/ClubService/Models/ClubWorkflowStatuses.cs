@@ -6,6 +6,7 @@ public static class ClubMembershipStatuses
     public const string Approved = "Approved";
     public const string Rejected = "Rejected";
     public const string Inactive = "Inactive";
+    public const string Withdrawn = "Withdrawn";
 }
 
 public static class ClubMemberRoles

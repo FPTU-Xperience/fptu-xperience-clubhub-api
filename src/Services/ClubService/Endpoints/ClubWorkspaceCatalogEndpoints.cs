@@ -47,25 +47,45 @@ public static class ClubWorkspaceCatalogEndpoints
                 || x.Id.ToString().Equals(semesterId, StringComparison.OrdinalIgnoreCase));
             if (semester is null) return Results.NotFound();
             var items = result.Policies.Where(x => x.Policy.SemesterId == semester.Code).ToArray();
-            return Results.Ok(new { clubId, semesterId = semester.Code, semesterKey = semester.Id, result.Environment,
-                items, availability = items.Length == 0 ? "NO_APPROVED_POLICY" : "AVAILABLE", result.AsOf });
+            return Results.Ok(new
+            {
+                clubId,
+                semesterId = semester.Code,
+                semesterKey = semester.Id,
+                result.Environment,
+                items,
+                availability = items.Length == 0 ? "NO_APPROVED_POLICY" : "AVAILABLE",
+                result.AsOf
+            });
         }
         return Results.Ok(new
         {
             clubId,
             items = result.Semesters.Select(x => new
             {
-                x.Id, x.Code, x.Label, x.IsCurrent,
+                x.Id,
+                x.Code,
+                x.Label,
+                x.IsCurrent,
                 editable = x.Editable && (manager || backoffice),
                 canInvite = false,
                 invitationAvailability = "ROSTER_UNAVAILABLE",
-                x.StartUtc, x.EndUtc, x.ReportPeriod,
+                x.StartUtc,
+                x.EndUtc,
+                x.ReportPeriod,
                 invitationCode = x.Code,
                 semesterId = x.Code,
                 semesterKey = x.Id,
-                x.Year, x.Term, x.EditAvailability, x.MappingAvailability
+                x.Year,
+                x.Term,
+                x.EditAvailability,
+                x.MappingAvailability
             }).ToArray(),
-            result.CurrentAvailability, result.AsOf, result.Timezone, result.StartInclusive, result.EndInclusive
+            result.CurrentAvailability,
+            result.AsOf,
+            result.Timezone,
+            result.StartInclusive,
+            result.EndInclusive
         });
     }
 }

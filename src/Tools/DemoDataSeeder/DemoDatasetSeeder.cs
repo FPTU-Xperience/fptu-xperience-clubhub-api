@@ -306,6 +306,7 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
         await clubDb.ClubDisbandRequests.ExecuteDeleteAsync(cancellationToken);
         await clubDb.ClubCreationApplications.ExecuteDeleteAsync(cancellationToken);
         await clubDb.ClubManagerAssignments.ExecuteDeleteAsync(cancellationToken);
+        await clubDb.MembershipActions.ExecuteDeleteAsync(cancellationToken);
         await clubDb.ClubMemberships.IgnoreQueryFilters().ExecuteDeleteAsync(cancellationToken);
         await clubDb.Clubs.ExecuteDeleteAsync(cancellationToken);
 
@@ -486,7 +487,6 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
             var user = users[spec.UserKey];
             var profile = catalog.Users.Single(x => x.Key == spec.UserKey);
             var membership = await db.ClubMemberships
-                .IgnoreQueryFilters()
                 .SingleOrDefaultAsync(x => x.ClubId == club.Id && x.UserId == user.Id, cancellationToken);
 
             if (membership is null)

@@ -181,7 +181,7 @@ public static class ClubEndpoints
             .OrderByDescending(x => x.RequestedAtUtc)
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(memberships.Select(ClubMappers.ToMembershipResponse));
+        return Results.Ok(memberships.Select(x => SelfMembershipApplicationEndpoints.SelfResponse(x, userId)));
     }
 
     private static async Task<IResult> GetAccessSummary(
@@ -449,7 +449,10 @@ public static class ClubEndpoints
             club.DeletedByUserId = null;
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        club.ConcurrencyToken = Guid.NewGuid();
+        try { await db.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException)
+        { return ApiOperations.Error(409, "STALE_VERSION", "Reload the club before saving."); }
         return Results.Ok(ClubMappers.ToResponse(club));
     }
 

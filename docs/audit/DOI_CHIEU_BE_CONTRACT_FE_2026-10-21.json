@@ -1,0 +1,4307 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-10-21",
+  "mode": "READ_ONLY_AUDIT_NO_IMPLEMENTATION",
+  "baseline": {
+    "auditedAt": "2026-10-21",
+    "feContractRef": "origin/main",
+    "feContractHead": "3ffd00ed03a5b8db942ed3ac3b7b6dee098d9f42",
+    "feWorkingHead": "7faf84cb867e8f3b8af89c39f327d410b2f1a10c",
+    "beHead": "b066f96b9fd0ea304e7c498f6ddcc569b2c21ebf",
+    "beOriginMain": "b066f96b9fd0ea304e7c498f6ddcc569b2c21ebf",
+    "feStatusBefore": " M package-lock.json\n",
+    "beStatusBefore": ""
+  },
+  "contractManifest": [
+    {
+      "path": "docs/contracts/README.md",
+      "bytes": 3525,
+      "sha256": "6be33db01c8c28d3707eb05529e5e2b897bac5351a5fab777f51bdc8198f2eb4"
+    },
+    {
+      "path": "docs/contracts/activity-action-staffing-api.md",
+      "bytes": 9630,
+      "sha256": "9b055d005aae8fca7237327d9c77d9ec06ed7edebee106fae951145fe868ad84"
+    },
+    {
+      "path": "docs/contracts/activity-profile-resources-api.md",
+      "bytes": 8794,
+      "sha256": "dc4c82f52ac6ca44a5f48b3379eecc8b98862a32aebe95ee4412636e475cd945"
+    },
+    {
+      "path": "docs/contracts/api-contract-conventions.md",
+      "bytes": 5737,
+      "sha256": "ff96e79cd8028c240209a979f1d5138ea67dc13a4cef341b141b0bf3dbd7d239"
+    },
+    {
+      "path": "docs/contracts/api-declaration-inventory.md",
+      "bytes": 15792,
+      "sha256": "b1583174ead9a3718330a336418eb1369f29fbe5ea12c35fd7cff723145b81c3"
+    },
+    {
+      "path": "docs/contracts/club-contributions-points-api.md",
+      "bytes": 8149,
+      "sha256": "703211892d6a8828e7f919dce59a598450a0a0002b2c7a5af89bfae10b898d8d"
+    },
+    {
+      "path": "docs/contracts/club-governance-groups-api.md",
+      "bytes": 21441,
+      "sha256": "4b835cb4e8125e038c3ca56a6b201d73fcca0a95ca404b5ce652c0e664cd670f"
+    },
+    {
+      "path": "docs/contracts/club-governance-groups-proposal.md",
+      "bytes": 28001,
+      "sha256": "9e7d99bebbc03469de77ad4fbfe0426015b749376b0a3a9449ab3a7cc14e377b"
+    },
+    {
+      "path": "docs/contracts/club-member-invitations-api.md",
+      "bytes": 16118,
+      "sha256": "5118ddde5c56ee3d70b867276958e0476528a54547ce79752f75914c393a8069"
+    },
+    {
+      "path": "docs/contracts/club-navigation-applications-api.md",
+      "bytes": 14535,
+      "sha256": "b20f3ab798fd3d9edce74c994466739c7c48d0d781cfd25ebf7afbe0ff17bccd"
+    },
+    {
+      "path": "docs/contracts/contract-lifecycle-audit.md",
+      "bytes": 10821,
+      "sha256": "10dcd64322e0b6365ac7c15f417d2ef6f76485b0203b3df036998616c6e06f92"
+    },
+    {
+      "path": "docs/contracts/event-registration-extensions-api.md",
+      "bytes": 1443,
+      "sha256": "48c01a89930aedfc1a7ebd493060df12b05a3369d5bb0b91efa352152c9e1185"
+    },
+    {
+      "path": "docs/contracts/experience-source-projections-api.md",
+      "bytes": 3715,
+      "sha256": "d960486c3e7cf8de2e1bea48570479d45be2904e77ae5d420caee01e48abfa31"
+    },
+    {
+      "path": "docs/contracts/implemented/canonical-self-profile-api.md",
+      "bytes": 2373,
+      "sha256": "7672e7dcc9ec3abd887a9a22a2b6384d677ad90193e5cad21fcf00df3cf432ac"
+    },
+    {
+      "path": "docs/contracts/implemented/club-public-profile-api.md",
+      "bytes": 2147,
+      "sha256": "1025051b3ceb6eb07535f005aac616f1fb94b72290e97735e2c42ea22da0de99"
+    },
+    {
+      "path": "docs/contracts/implemented/notification-summary.md",
+      "bytes": 3451,
+      "sha256": "91005b3a5c9d96017f31064944cc6f583cd7f5d4f1b9c14944cc08bb30e13955"
+    },
+    {
+      "path": "docs/contracts/implemented/student-experience-reads-api.md",
+      "bytes": 3492,
+      "sha256": "ad328cd63ba434ccb24056e08262abf5fcc0391abb12186b98cdc6ac60e7372a"
+    },
+    {
+      "path": "docs/contracts/implemented/verified-experience-operations-api.md",
+      "bytes": 5826,
+      "sha256": "2ff05f8403b2f11d076e3dd1825a9dc01df42a5b9f7ef61e7057ca715a6f96a1"
+    },
+    {
+      "path": "docs/contracts/my-clubs-membership-api.md",
+      "bytes": 6025,
+      "sha256": "3671761049af438a965d25e4fa1ec0bfd7a7331c73b7dccc54347c83905c056d"
+    },
+    {
+      "path": "docs/contracts/outdated/activity-discovery-api.md",
+      "bytes": 4394,
+      "sha256": "0442fb294d353507d6cea27f12f807e2e4bcaaf626620db247f5b3c613cdb3fd"
+    },
+    {
+      "path": "docs/contracts/outdated/backend-api-implementation-handoff.md",
+      "bytes": 14098,
+      "sha256": "31ba58c511aef573c63e7c9ada2e9a2f0677e4fc5ede355efce40c4b6f66b3ca"
+    },
+    {
+      "path": "docs/contracts/outdated/backend-changes-for-frontend.md",
+      "bytes": 5524,
+      "sha256": "d64b2251d9ab124ab308fca0dbbaee7a365ba463d3a53a18ecf98d1f2c21e20e"
+    },
+    {
+      "path": "docs/contracts/outdated/club-event-operations-api.md",
+      "bytes": 5491,
+      "sha256": "99ab8efd5160ed2f9f54d610470ed022e09a4aa48839a3a54b2b17a738ff84e2"
+    },
+    {
+      "path": "docs/contracts/outdated/existing-api-hardening.md",
+      "bytes": 6792,
+      "sha256": "669b4350ae73ec59ad85d0780135061221c599f7d3b24cfc5a570146fee4a7c3"
+    },
+    {
+      "path": "docs/contracts/outdated/frontend-api-debt-register.md",
+      "bytes": 10676,
+      "sha256": "96d77a11931cefb530229e79823bdd4ddfdbf3dc743a8a32df56920d62b3f48c"
+    },
+    {
+      "path": "docs/contracts/outdated/page-integration-checklist.md",
+      "bytes": 38985,
+      "sha256": "feec4fda073487c58332e2cbb67f9fd019d79a25b462a788987ca16c15fbe244"
+    },
+    {
+      "path": "docs/contracts/outdated/personal-experience-api.md",
+      "bytes": 4576,
+      "sha256": "9d7f4fb689b78a45ff9901499bbabc20f39b0a5370b920217f8472b985454b72"
+    },
+    {
+      "path": "docs/contracts/outdated/self-profile-sync-api.md",
+      "bytes": 8277,
+      "sha256": "fbe557286c8d47120c87dc638ca760c4152b7f1ed517a53fa45c54307987c775"
+    },
+    {
+      "path": "docs/contracts/profile-cover-rewards-api.md",
+      "bytes": 30697,
+      "sha256": "4eb5033757824d5aa2fa255014c67a1f3518e97fcbf0ce1c63ed986e41c3c8a1"
+    },
+    {
+      "path": "docs/contracts/public-image-api.md",
+      "bytes": 11253,
+      "sha256": "195a4eb1e53307f31b988d35e9d7dc40bbcca2288449869eff080cdb2468a7a3"
+    },
+    {
+      "path": "docs/contracts/public-member-directory-api.md",
+      "bytes": 2764,
+      "sha256": "4e0c2fa26e35dbe2a9a7e15537764f386c861069a184cc5dfad4f8a46857eb44"
+    },
+    {
+      "path": "docs/contracts/self-profile-extensions-api.md",
+      "bytes": 2073,
+      "sha256": "8a10167380d8012fe60b8b58d32c1ea8d34b9c0d76fb6c9b91170fd7a9348a88"
+    },
+    {
+      "path": "docs/contracts/semester-student-roster-api.md",
+      "bytes": 5397,
+      "sha256": "e2e4c9752ae4fd9a9cd45bb9916b937c1c3875dbc4613143aff9dd974a85bb8a"
+    },
+    {
+      "path": "docs/contracts/study-schedule-api.md",
+      "bytes": 14644,
+      "sha256": "75eb174c951e06c5e8bf6f0b3c13f51bca79d5f1cbcb75e175388cc06ea02d0b"
+    },
+    {
+      "path": "docs/contracts/workspace-semester-context-api.md",
+      "bytes": 6198,
+      "sha256": "94164988dc0054e13cd2eb65f815eebb83a19450c6c947d4b0082f24ced34324"
+    },
+    {
+      "path": "docs/qa/activity-application-v2.md",
+      "bytes": 10162,
+      "sha256": "9992634ea27ea1867018409bf9bf55f9fb48f4f36553b9a14a05b59f7716bd07"
+    },
+    {
+      "path": "docs/qa/activity-contact-point-v2.md",
+      "bytes": 3814,
+      "sha256": "0dd3f919344d0f7d8a83b388fe86412f8842c98abf1994e55439918619145238"
+    },
+    {
+      "path": "docs/qa/activity-details-attendance-modal.png",
+      "bytes": 55414,
+      "sha256": "6df0574b75681b36eb62de2d7efe9d03fbe97b89fcd91409ccdf5618e47483dd"
+    },
+    {
+      "path": "docs/qa/activity-details-attendance-page.png",
+      "bytes": 33875,
+      "sha256": "c916b581e115202121ddc9036cb22d264bc6f787877b59c83cc7f11c5a1e7e1c"
+    },
+    {
+      "path": "docs/qa/activity-details-attendance.md",
+      "bytes": 2859,
+      "sha256": "8b244516badd3a011ce765059332cb7cd0a76ff18bd99fa0dd526f144444a435"
+    },
+    {
+      "path": "docs/qa/activity-edit-preview-v2.md",
+      "bytes": 2272,
+      "sha256": "3e91fd263002ace346db8d13c414d70521568446c87db67fade2dda1061a8f5f"
+    },
+    {
+      "path": "docs/qa/activity-profile-manager.png",
+      "bytes": 67622,
+      "sha256": "c55a5c0519620a47ab4bd216c1ddd97f9f4126a656cfd1c789dc6c72b9df9dae"
+    },
+    {
+      "path": "docs/qa/activity-profile-public.png",
+      "bytes": 57809,
+      "sha256": "5818c9e27f7c00baad963be346582342291e56a5aa6c4a6fb1de041a6b3aab4b"
+    },
+    {
+      "path": "docs/qa/activity-profile-ui.md",
+      "bytes": 2425,
+      "sha256": "c8579a9a3ec7fe2a7b052fb9feb6a99c847538ac9d87af6cb1684aa81e6193bb"
+    },
+    {
+      "path": "docs/qa/activity-publication-v2.md",
+      "bytes": 7033,
+      "sha256": "54e3a0e0e11bdb34a3c583516745828d79a8a9790a750537e4661f0ea1f5c307"
+    },
+    {
+      "path": "docs/qa/activity-staffing-recruitment-v2.md",
+      "bytes": 7504,
+      "sha256": "c47bc45e8846a810cd2fc9ad94628b92638394ec3599e8dde8d2200c4d070e95"
+    },
+    {
+      "path": "docs/qa/club-detail-join-cta.png",
+      "bytes": 74149,
+      "sha256": "c449e192bbc3b7d6461567a94fbb3f91edeb97175c0d5814f0ca031da0f69076"
+    },
+    {
+      "path": "docs/qa/club-detail-member-cta.png",
+      "bytes": 72385,
+      "sha256": "1378594e925091f3075c632412a55a2094f5c730f903652bb7d814e1b27a2601"
+    },
+    {
+      "path": "docs/qa/club-governance-clean-ui.png",
+      "bytes": 78387,
+      "sha256": "2f630c7ae20726719d59fe293f74e773b13beed033063ff6bd131c9464b6fdfa"
+    },
+    {
+      "path": "docs/qa/club-governance-compact-layout.png",
+      "bytes": 70792,
+      "sha256": "816259e73e896e257495bbb94ffec5fba3777babe4acf4619c71c18d995c38e3"
+    },
+    {
+      "path": "docs/qa/club-governance-default-groups.png",
+      "bytes": 27462,
+      "sha256": "450291e937dbec5407616acde9cffc7847791af0a5bcba805f26b9f33d5e22f8"
+    },
+    {
+      "path": "docs/qa/club-governance-history.png",
+      "bytes": 96766,
+      "sha256": "a58ae4070f25029998bfafe9ffad94defce21e2b7ce3b9d06087514562d7944b"
+    },
+    {
+      "path": "docs/qa/club-governance-ui.md",
+      "bytes": 7325,
+      "sha256": "b916608e4e8f726d79b5232eb298f584866452e314532a5be23864eb88a97f6d"
+    },
+    {
+      "path": "docs/qa/event-cards-completed-colors.png",
+      "bytes": 45201,
+      "sha256": "aff09b2cc69b64e004cc6e1bce0cd5a51a67f0679511093156328ef26701813d"
+    },
+    {
+      "path": "docs/qa/event-cards-public.png",
+      "bytes": 64257,
+      "sha256": "c5313f84244fc882661cd911bfa03b6cdd9d9045b7841541904bcb7d2ce604f5"
+    },
+    {
+      "path": "docs/qa/event-cards-schedule.png",
+      "bytes": 45826,
+      "sha256": "e986ed5d156080c67d07f3c400ea2043f337fa2b03211af2df97ce1a21625934"
+    },
+    {
+      "path": "docs/qa/event-cards-ui.md",
+      "bytes": 6447,
+      "sha256": "51898a9d6b0e4605e2901ea00631e794a4d442e2cc250042322b6d0927512b34"
+    },
+    {
+      "path": "docs/qa/event-cards-workspace.png",
+      "bytes": 73312,
+      "sha256": "1ca14da3f32d00e72e6877a2cc26affe53609f7d4d53ec2f58c54ca562d82908"
+    },
+    {
+      "path": "docs/qa/fe-be-audit-2026-10-19.md",
+      "bytes": 4224,
+      "sha256": "338205ec1b684a255a2f64ee1012102ff3ab54d9761735ad4c5a3e386124cc31"
+    },
+    {
+      "path": "docs/qa/fe-be-audit-change-manifest.json",
+      "bytes": 6134,
+      "sha256": "d0f0e7932d94bb5be407d7e4e0be6c33bc6973ee8000af4966c6d3393e081938"
+    },
+    {
+      "path": "docs/qa/report-create-v2.md",
+      "bytes": 5577,
+      "sha256": "0eac4b88fc312f3a81cf39d318742985fd26f190fcef3fb2a7a1b3930fa4049b"
+    },
+    {
+      "path": "docs/qa/report-detail-v2.md",
+      "bytes": 3650,
+      "sha256": "e20b519bef865ad345a8135d6b118217e2e4df852d9ffaf2ab53d1a7cf114ec6"
+    },
+    {
+      "path": "docs/qa/workspace-activities-loading-fixed.png",
+      "bytes": 68773,
+      "sha256": "00789869b6aea6e63d991c719b5873bf0c7792ccffb8e863196853267611ad24"
+    },
+    {
+      "path": "docs/qa/workspace-member-count.png",
+      "bytes": 66944,
+      "sha256": "4d0537a03376a8fa5509659fada9acb7aacd4deafd04e29f326adb8d33624208"
+    },
+    {
+      "path": "docs/qa/workspace-pending-badges.png",
+      "bytes": 55171,
+      "sha256": "3f866f753318a026e0606f22f44bfa88f66c1378837fc0e9130e10b951ee3dce"
+    },
+    {
+      "path": "docs/qa/workspace-shared-semester.png",
+      "bytes": 68882,
+      "sha256": "dbf915ca6f2c11e39684c3f202d9133e11205e718602351ee302bfc79deaa111"
+    },
+    {
+      "path": "docs/qa/workspace-source-inventory.md",
+      "bytes": 68647,
+      "sha256": "40de250ee3f717af5200d4fdef9289571a299e86b8ed0e02c1f35f6b2791fa35"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1009,
+      "sha256": "09265762dd6b08b0dc9b351bfb45f945992c3fd7ca1a682c744abb8e08c9a558"
+    },
+    {
+      "path": "scripts/audit-api-contracts.mjs",
+      "bytes": 3897,
+      "sha256": "dbbe3caf6ce2dfd0514fd729fc3396a19551ed71c07ef6095d19db937568836b"
+    },
+    {
+      "path": "scripts/check-contract-docs.mjs",
+      "bytes": 2443,
+      "sha256": "9b82f79a6dcdb0dd88355b87eab64ce2a530618eddaf43ff40904079cc5025dd"
+    },
+    {
+      "path": "scripts/source-route-inventory.mjs",
+      "bytes": 3913,
+      "sha256": "4bee1bb401fc43f3bbaf1117c3a2ec3fe476f3d0685c7a0b4c211ed208df0556"
+    },
+    {
+      "path": "src/services/api.js",
+      "bytes": 39647,
+      "sha256": "667961f0b8c2e1dc3d550f6e42fc76c99f87a1b449bd0f455e9f28b064215c2c"
+    },
+    {
+      "path": "src/components/v2/activity-detail/ActivityStaffingPanel.jsx",
+      "bytes": 31970,
+      "sha256": "fd47551ca1e32539f568b23307fac40532fbb10d1414f746f96651baa662775c"
+    },
+    {
+      "path": "src/pages/v2/activity-publication.js",
+      "bytes": 2332,
+      "sha256": "bc85f30d4b8fb33672827968e876385c890b2adfc801e0276e1c589092415fd8"
+    },
+    {
+      "path": "src/pages/v2/club-workspace-page/tabs/ClubPageTab.jsx",
+      "bytes": 11063,
+      "sha256": "acb4ea9b06c210e8d7a54c15d2b44aa222dd24b047c7027e898ebf44410a11a7"
+    },
+    {
+      "path": "src/pages/v2/club-workspace-page/tabs/QuestsTab.jsx",
+      "bytes": 4605,
+      "sha256": "1b6f2d59135cfc78992213f7a2936ca07c382c9e995c3f8f76e501d9c8c48e84"
+    },
+    {
+      "path": "src/services/activity-staffing.js",
+      "bytes": 3016,
+      "sha256": "2fd79d5c44f3001f2065bdc5f97673051c902568b9673cdf6337af8f67632d0b"
+    },
+    {
+      "path": "src/services/media-upload.js",
+      "bytes": 2885,
+      "sha256": "5f307172cfe3a391c34cefddf0252f044a858e5b7839e0df5f154b6e5b0fe391"
+    }
+  ],
+  "counts": {
+    "backendResolvedDeclarations": 285,
+    "backendPublicApiDeclarationsIncludingAliases": 269,
+    "unresolvedRouteReceivers": 0,
+    "facadeWrappers": 113,
+    "facadeDeclarationCounts": {
+      "DECLARED": 104,
+      "COMPOSED": 2,
+      "ABSENT": 7
+    },
+    "additionalDirectMissingOperations": 9,
+    "boundedCurrentConsumerMissingUniqueOperations": 16,
+    "businessContractDocumentsReviewed": 21
+  },
+  "countCaveat": "113 wrappers không phải toàn bộ call site; 16 là tập API thiếu đã xác minh ở facade + staffing/recruitment. Không phải tổng API chưa làm của toàn bộ đề tài. Nhóm contract không phải số operation. Alias và actor dùng chung không cộng đôi.",
+  "findings": [
+    {
+      "id": "F01",
+      "priority": "P1",
+      "title": "GET chi tiết CLB cho chính chủ thiếu version, ảnh bìa và lịch cấu trúc",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "detail": "GetClubById chọn ToResponse cho manager/SA, trong khi ClubResponse không có Version, CoverImageUrl hoặc Schedule. Chỉ ToPublicDetailResponse có các trường này. ClubPageTab đọc chính GET đó rồi gửi club.version khi lưu. Vì vậy tải bằng đúng tài khoản quản lý không cung cấp đủ dữ liệu để lưu text/ảnh theo contract; không thể xác nhận toàn bộ implemented/club-public-profile-api.md là Done.",
+      "fix": "Bổ sung cùng version/cover/schedule vào projection quản lý và mapper, giữ dữ liệu private đúng quyền. Kiểm thử GET bằng manager → lấy version từ HTTP → PATCH text/PUT ảnh → reload; không lấy version trực tiếp từ DbContext trong test tích hợp này.",
+      "evidence": [
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+          "line": 270,
+          "anchor": "var canViewPrivateDetails"
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Contracts/ClubContracts.cs",
+          "line": 48,
+          "anchor": "public sealed record ClubResponse("
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Mappers/ClubMappers.cs",
+          "line": 117,
+          "anchor": "Version = club.ConcurrencyToken"
+        },
+        {
+          "repository": "FE",
+          "file": "src/pages/v2/club-workspace-page/tabs/ClubPageTab.jsx",
+          "line": 114,
+          "anchor": "expectedVersion: club.version"
+        },
+        {
+          "repository": "BE",
+          "file": "tests/Backend.StabilizationTests/CrossServiceWorkflowAuthorizationTests.ClubManager.cs",
+          "line": 29,
+          "anchor": "version = (await scope.ServiceProvider"
+        }
+      ]
+    },
+    {
+      "id": "F02",
+      "priority": "P1",
+      "title": "Đổi một ảnh CLB có thể làm mất ảnh còn lại",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "detail": "ClubPageTab gửi {[field]:url,expectedVersion}; facade gửi nguyên object. ClubPublicImagesRequest là full-state gồm LogoUrl/CoverImageUrl nullable. Field vắng được bind null; MediaAttachmentClient.VerifyAsync(null, current, ...) trả null thành công rồi handler ghi cả hai cột. Khi đã có version hợp lệ và ảnh mới được xác minh, đổi logo riêng có thể xóa cover; đổi cover riêng có thể xóa logo. F01 hiện còn có thể chặn sớm thao tác ở màn hình này.",
+      "fix": "Chốt một wire contract: FE gửi cả hai giá trị cho PUT hoặc BE phân biệt omitted với explicit null trong partial update. Vì phạm vi hiện tại chỉ audit, chưa sửa bên nào. Bổ sung test đổi riêng từng ảnh, chủ động clear null, stale version và retry.",
+      "evidence": [
+        {
+          "repository": "FE",
+          "file": "src/pages/v2/club-workspace-page/tabs/ClubPageTab.jsx",
+          "line": 114,
+          "anchor": "const images = { [field]: url"
+        },
+        {
+          "repository": "FE",
+          "file": "src/services/api.js",
+          "line": 360,
+          "anchor": "body: JSON.stringify(images)"
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Endpoints/ClubPublicImageEndpoints.cs",
+          "line": 13,
+          "anchor": "public sealed record ClubPublicImagesRequest"
+        },
+        {
+          "repository": "BE",
+          "file": "src/Shared/ClubReportHub.Shared/Experience/MediaAttachmentClient.cs",
+          "line": 14,
+          "anchor": "if (url is null || url == current)"
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Endpoints/ClubPublicImageEndpoints.cs",
+          "line": 31,
+          "anchor": "club.LogoUrl = logo.PublicUrl;"
+        }
+      ]
+    },
+    {
+      "id": "F03",
+      "priority": "P1",
+      "title": "Luồng mời thành viên có route nhưng chưa kiểm tra sinh viên/roster học kỳ",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên",
+        "CTSV/Admin"
+      ],
+      "detail": "InviteClubMember xác thực quyền quản lý, CLB hoạt động, role member và chống trùng; sau đó lưu userId/fullName từ request. Không resolve tài khoản/roster/campus học kỳ, không đọc semesterId. Metadata source/semester/roster revision và outbox thông báo mời chưa có. Đây là khoảng thiếu có thể quan sát trong source, chưa kết luận đã khai thác trên môi trường deploy.",
+      "fix": "Làm roster authoritative và lookup nội bộ trước; kiểm tra lại khi mời, sinh viên đồng ý và manager duyệt. Giữ nguyên yêu cầu cá nhân đồng ý trước khi duyệt; bổ sung source/audit/version và outbox.",
+      "evidence": [
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+          "line": 64,
+          "anchor": "private static async Task<IResult> InviteClubMember("
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+          "line": 109,
+          "anchor": "FullName = fullName,"
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Models/ClubWorkflowStatuses.cs",
+          "line": 3,
+          "anchor": "public static class ClubMembershipStatuses"
+        }
+      ]
+    },
+    {
+      "id": "F04",
+      "priority": "P1",
+      "title": "Luồng cộng điểm hiện tại khác cơ chế action chờ báo cáo kết thúc",
+      "actors": [
+        "Sinh viên",
+        "Người xác minh",
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "detail": "ReviewAsync hiện gọi AppendEffectAsync loại AWARD ngay khi approve đóng góp; calculator dùng tier/role/scale/result. Action contract mới yêu cầu completion VERIFIED chỉ có pendingRawXp, sau final report mới award và trừ raw budget. Chưa có application/action/assignment/completion/final-report settlement persistence; không được coi raw ledger hiện tại là đã đáp ứng luồng này.",
+      "fix": "Chốt quyền duyệt cuối, công thức và cách cùng tồn tại/migrate với verified contribution trước khi bật award action; thiết kế unique source xuyên attendance/manual/action và transactional raw budget. Không thay công thức hoặc cộng thêm một lần chỉ để khớp màn hình.",
+      "evidence": [
+        {
+          "repository": "BE",
+          "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+          "line": 262,
+          "anchor": "if (policy is not null) await AppendEffectAsync"
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/AdminService/Services/VerifiedExperienceService.cs",
+          "line": 72,
+          "anchor": "var newPoints = revoke ? 0m"
+        },
+        {
+          "repository": "FE",
+          "file": "docs/contracts/activity-action-staffing-api.md",
+          "line": 52,
+          "anchor": "A verified completion holds pending raw XP."
+        }
+      ]
+    },
+    {
+      "id": "F05",
+      "priority": "P2",
+      "title": "Sinh viên ngoài CLB thiếu projection nguồn để gửi đóng góp của hoạt động campus-public",
+      "actors": [
+        "Sinh viên"
+      ],
+      "detail": "StudentActivityItem có nextSessionId/version/policy/pillarWeights nhưng không có effortTier/scale/full scoring snapshot. GET sessions đòi CanView của CLB hoặc reviewer. Sinh viên cùng campus chưa là thành viên có thể đủ quyền đăng ký/check-in nhưng không lấy được toàn bộ source context qua đường FE hiện tại. Không mở internal endpoint ra browser để bù thiếu.",
+      "fix": "Bổ sung projection đã lọc quyền cho sinh viên vào detail/session context; giữ challenge và roster ngoài response đó. Test campus nonmember → đăng ký → check-in → lấy source → gửi contribution.",
+      "evidence": [
+        {
+          "repository": "BE",
+          "file": "src/Shared/ClubReportHub.Shared/Experience/StudentExperienceSources.cs",
+          "line": 16,
+          "anchor": "public sealed record StudentActivityItem("
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+          "line": 68,
+          "anchor": "if (!CanReviewAllActivities(http.User)"
+        }
+      ]
+    },
+    {
+      "id": "F06",
+      "priority": "P2",
+      "title": "Membership đã có GUID version; vẫn thiếu source/capabilities/semester/withdrawal",
+      "actors": [
+        "Sinh viên",
+        "Quản lý CLB"
+      ],
+      "detail": "ClubMembershipResponse có Version và mapper đã gán ConcurrencyToken. Vì vậy câu trong bảng Required backend changes của club-navigation-applications-api.md nói không có version là sai với source hiện tại. Những thiếu hụt source/canWithdraw/canAcceptInvitation/clubCode/logoUrl/semester và trạng thái WITHDRAWN vẫn đúng.",
+      "fix": "Khi chỉnh contract, giữ và tái sử dụng GUID version hiện có; chỉ bổ sung metadata và lifecycle còn thiếu. Bổ sung predicate active-record thống nhất cho join/invite/reapply; không dùng manager DELETE làm rút đơn.",
+      "evidence": [
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Contracts/ClubContracts.cs",
+          "line": 72,
+          "anchor": "public sealed record ClubMembershipResponse("
+        },
+        {
+          "repository": "BE",
+          "file": "src/Services/ClubService/Mappers/ClubMappers.cs",
+          "line": 162,
+          "anchor": "{ Version = membership.ConcurrencyToken };"
+        },
+        {
+          "repository": "FE",
+          "file": "docs/contracts/club-navigation-applications-api.md",
+          "line": 42,
+          "anchor": "but no `source`"
+        }
+      ]
+    }
+  ],
+  "currentConsumerMissingOperations": [
+    {
+      "method": "POST",
+      "route": "/api/clubs/me/membership-applications/{}/withdraw",
+      "consumer": "withdrawMyMembershipApplication",
+      "actors": [
+        "Sinh viên"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "my-clubs-membership-api.md"
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/eligible-members",
+      "consumer": "searchEligibleClubMembers",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "club-member-invitations-api.md"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications/{}",
+      "consumer": "getActivityApplication",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications",
+      "consumer": "createActivityApplication",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activity-applications/{}",
+      "consumer": "updateActivityApplication",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications/{}/submit",
+      "consumer": "submitActivityApplication",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{}/publication",
+      "consumer": "setActivityPublication",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "current_facade",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}/staffing",
+      "consumer": "getActivityStaffing",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên",
+        "Người xác minh"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/assignments",
+      "consumer": "ActivityStaffingPanel.assignments",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/assignments/{}/cancel",
+      "consumer": "ActivityStaffingPanel.cancel",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/action-completions/{}/verify",
+      "consumer": "ActivityStaffingPanel.verify",
+      "actors": [
+        "Người xác minh"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/recruitment",
+      "consumer": "ActivityStaffingPanel.createRecruitment",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{}/recruitment",
+      "consumer": "ActivityStaffingPanel.editRecruitment",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{}/recruitment/status",
+      "consumer": "ActivityStaffingPanel.recruitmentStatus",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/recruitment/positions/{}/join",
+      "consumer": "ActivityStaffingPanel.joinPosition",
+      "actors": [
+        "Sinh viên"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/activity-recruitments",
+      "consumer": "QuestsTab",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên"
+      ],
+      "status": "NO_BE_ROUTE",
+      "scope": "direct_consumer",
+      "contract": "activity-action-staffing-api.md"
+    }
+  ],
+  "contractGroups": [
+    {
+      "contract": "canonical-self-profile-api.md",
+      "implementedFolder": true,
+      "status": "SOURCE_SUBSET_READY",
+      "actors": [
+        "Sinh viên"
+      ],
+      "existing": "GET/PATCH canonical 5 trường, principal, GUID version, validation; đồng bộ private member projection.",
+      "remaining": "Chỉ displayName/about/skills/interests/phone. Phần mở rộng ở tài liệu riêng; cần live acceptance."
+    },
+    {
+      "contract": "club-public-profile-api.md",
+      "implementedFolder": true,
+      "status": "PARTIAL_CONTRACT_MISMATCH",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "existing": "PATCH text/schedule, validate category/semester, stale-version, persistence.",
+      "remaining": "F01: GET cho manager thiếu version/cover/schedule; chưa thể xác nhận tích hợp xong."
+    },
+    {
+      "contract": "notification-summary.md",
+      "implementedFolder": true,
+      "status": "SOURCE_SUBSET_READY",
+      "actors": [
+        "Các actor"
+      ],
+      "existing": "Notification list/read, recipient filtering, persistence và Gateway.",
+      "remaining": "Chưa kiểm tra live delivery; event mời/đổi quà mới chưa có."
+    },
+    {
+      "contract": "student-experience-reads-api.md",
+      "implementedFolder": true,
+      "status": "SOURCE_SUBSET_READY",
+      "actors": [
+        "Sinh viên"
+      ],
+      "existing": "Feed/detail/recommendation/summary/radar/contributions/ledger/history có handler và routes.",
+      "remaining": "F05 source projection; khác biệt công thức/+1 và live acceptance vẫn mở; raw points không phải ví."
+    },
+    {
+      "contract": "verified-experience-operations-api.md",
+      "implementedFolder": true,
+      "status": "SOURCE_SUBSET_READY",
+      "actors": [
+        "Sinh viên",
+        "Người xác minh",
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "existing": "Private evidence, declaration/contribution/review/upgrade/adjustment, scoped assignments/policy, sessions/manual attendance, plans/statistics/PDF.",
+      "remaining": "Chỉ cơ chế hiện có; không bao gồm final action report, raw budget hay wallet; F04/F05."
+    },
+    {
+      "contract": "activity-action-staffing-api.md",
+      "implementedFolder": false,
+      "status": "NO_BE_IMPLEMENTATION",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên",
+        "Người xác minh",
+        "CTSV/Admin"
+      ],
+      "existing": "Tái sử dụng activity/session/verified ledger và internal authority hiện có.",
+      "remaining": "Thiếu application 4 API, publication toggle, staffing 9 API; thiếu decisions/final report/budget. Integer version khác GUID; chính sách vẫn là proposal."
+    },
+    {
+      "contract": "activity-profile-resources-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên"
+      ],
+      "existing": "Cover attach có; generic authorized activity detail có.",
+      "remaining": "Thiếu public activity projection, resource/gallery/capabilities, upload-intent/commit/PATCH/detach và private delivery."
+    },
+    {
+      "contract": "club-contributions-points-api.md",
+      "implementedFolder": false,
+      "status": "NO_BE_IMPLEMENTATION",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên"
+      ],
+      "existing": "Có verified raw contribution và private evidence dùng làm nền tảng.",
+      "remaining": "Thiếu task/submission/review/credit correction, wallet/ledger/leaderboard/badges; không dùng Admin quest/Finance tiền thay thế."
+    },
+    {
+      "contract": "club-governance-groups-api.md",
+      "implementedFolder": false,
+      "status": "NO_BE_IMPLEMENTATION",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "existing": "Membership, owner assignments/transfer, treasurer rule và verifier grants hiện có.",
+      "remaining": "Thiếu term/group/multi-assignment/capability union/revisions/history/report snapshots/vice appointment/expiry; source projection và liên dịch vụ."
+    },
+    {
+      "contract": "club-member-invitations-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên",
+        "CTSV/Admin"
+      ],
+      "existing": "Tạo Pending invitation, sinh viên consent, manager approve/reject hiện có.",
+      "remaining": "Thiếu roster/eligible-members/invitation-semesters, invite/consent/review revalidation, canonical target, source/audit/outbox (F03)."
+    },
+    {
+      "contract": "club-navigation-applications-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Sinh viên",
+        "Quản lý CLB"
+      ],
+      "existing": "Own access/memberships + directory composition; review timestamps và GUID version đã có.",
+      "remaining": "Thiếu source/action metadata, withdraw/reapply và durable pins; pins là nâng cấp tương lai. F06 sửa nhận định thiếu version."
+    },
+    {
+      "contract": "my-clubs-membership-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Sinh viên"
+      ],
+      "existing": "Own memberships/access/directory/join/review hiện có, không cần duplicate read.",
+      "remaining": "Thiếu self withdrawal/WITHDRAWN/history/reapply và metadata; selection/inbox API riêng là tùy chọn."
+    },
+    {
+      "contract": "profile-cover-rewards-api.md",
+      "implementedFolder": false,
+      "status": "NO_BE_IMPLEMENTATION",
+      "actors": [
+        "Sinh viên",
+        "Quản lý CLB"
+      ],
+      "existing": "Canonical text và basic club/activity media có.",
+      "remaining": "Thiếu catalog/inventory/wallet/redeem/equip/award-rules/results worker/publication scheduling. Tài sản/credit local không phải grant BE."
+    },
+    {
+      "contract": "public-image-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên",
+        "CTSV/Admin"
+      ],
+      "existing": "Upload intent + verify + attach cho club-logo/club-cover/activity-cover của owner hiện hữu.",
+      "remaining": "F01/F02; thiếu application-logo/student-avatar/student-cover/club-shape và policy kiểu file; R2/CORS/delivery live chưa kiểm tra."
+    },
+    {
+      "contract": "public-member-directory-api.md",
+      "implementedFolder": false,
+      "status": "OPTIONAL_DEFERRED",
+      "actors": [
+        "Sinh viên",
+        "khách xem theo policy"
+      ],
+      "existing": "Public leaders/member count và private member list/detail hiện có.",
+      "remaining": "Opt-in public list và per-club self consent chưa có; chưa cần cho batch bắt buộc, không đánh dấu hủy."
+    },
+    {
+      "contract": "self-profile-extensions-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Sinh viên"
+      ],
+      "existing": "5 trường canonical text/phone đã persist.",
+      "remaining": "Thiếu headline/dob/address/media/academic/layout/consent tùy phạm vi; academic cần nguồn authoritative; manager không sửa hồ sơ người khác."
+    },
+    {
+      "contract": "semester-student-roster-api.md",
+      "implementedFolder": false,
+      "status": "NO_BE_IMPLEMENTATION",
+      "actors": [
+        "CTSV/Admin"
+      ],
+      "existing": "Semester CRUD canonical GUID/code và campus policy có.",
+      "remaining": "Thiếu preview/commit/student-roster, revision/carry-forward/empty distinction/internal lookup; schema matching O-04 cần chốt."
+    },
+    {
+      "contract": "study-schedule-api.md",
+      "implementedFolder": false,
+      "status": "NO_BE_IMPLEMENTATION",
+      "actors": [
+        "Sinh viên",
+        "CTSV/Admin"
+      ],
+      "existing": "Semester authority hiện có; activity schedule là luồng khác.",
+      "remaining": "Thiếu academic-calendar GET/PUT và study-schedule GET/PUT/DELETE/import, persistence, alias semester/campus, version và atomic bulk."
+    },
+    {
+      "contract": "workspace-semester-context-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "existing": "Admin semester và semester plans đã có.",
+      "remaining": "Thiếu workspace-semesters safe projection, manager-safe approved policy catalog, alias/reportPeriod/semester attribution thống nhất; không nới quyền backoffice."
+    },
+    {
+      "contract": "experience-source-projections-api.md",
+      "implementedFolder": false,
+      "status": "PARTIAL",
+      "actors": [
+        "Sinh viên",
+        "Quản lý CLB"
+      ],
+      "existing": "Discovery có source IDs/versions/pillars; session management/internal authority có.",
+      "remaining": "F05; thiếu safe source context và manager-safe catalog; không mở challenge/internal service secrets."
+    },
+    {
+      "contract": "event-registration-extensions-api.md",
+      "implementedFolder": false,
+      "status": "CONDITIONAL_NOT_SPECIFIED",
+      "actors": [
+        "Sinh viên",
+        "Quản lý CLB"
+      ],
+      "existing": "Participant registration/check-in/session attendance hiện có.",
+      "remaining": "Custom form/answers/withdraw/review là mở rộng có điều kiện; URL/schema/chính sách chưa chốt, không đếm như API đã thiết kế."
+    }
+  ],
+  "decisionsRequired": [
+    "D01 — Action XP: basePoints/stacking/caps/authority duyệt cuối, final report và tương thích scoring tier hiện tại. Không coi proposal là policy đã duyệt.",
+    "D02 — Publication và staffing: chọn integer aggregate version riêng hoặc thống nhất GUID qua adapter; giữ CLOSE khác unpublish; chốt khi đã có participant có được ẩn không.",
+    "D03 — Điểm: raw activity budget, raw experience ledger, Admin quest XP, CLUB_CREDIT spendable wallet và VNĐ phải có nguồn/quy đổi riêng được duyệt; +1 tuyến tính so với saturation hiện tại chưa chốt.",
+    "D04 — Roster: schema/identity matching O-04, import/carry-forward, valid-empty và campus; rollover reset điểm/office succession là các nghiệp vụ riêng chưa có contract đủ để đếm API.",
+    "D05 — Media: public-image quy định shape PNG <=1MiB/transparent, reward editor mô tả PNG/SVG <=5MB và vectorization. Chốt một policy server và wire asset DTO trước khi publish shape.",
+    "D06 — Task và recruitment: D07 tasks nhận CLUB_CREDIT và activity-recruitments nhận action pending XP là hai source khác nhau; phải chốt cách cùng hiển thị/quyền, không biến Admin quests thành cả hai.",
+    "D07 — Custom registration/public directory/pins/physical rewards: xác định required/deferred, giữ nguyên phần optional; không cộng toàn bộ vào backlog MVP bắt buộc.",
+    "D08 — Numeric limits, negative wallet reversal debt, award policies và leadership scope còn là proposed defaults. Repo fptu-xperience-doc được FE tham chiếu không hiện diện cạnh source; chưa có căn cứ xác nhận toàn bộ O01–O14 đã được duyệt.",
+    "D09 — Hợp đồng legacy: chốt read projection quản lý và full PUT/partial image (F01/F02); chỉnh câu no version của memberships (F06). Các đoạn historical được lifecycle ghi rõ không tự trở thành yêu cầu hiện hành."
+  ],
+  "facadeWrappers": [
+    {
+      "name": "login",
+      "method": "POST",
+      "route": "/api/auth/dev-login",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/auth/dev-login",
+        "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+        "line": 27
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "loginWithGoogle",
+      "method": "POST",
+      "route": "/api/auth/google",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/auth/google",
+        "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+        "line": 22
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "refresh",
+      "method": "POST",
+      "route": "/api/auth/refresh",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/auth/refresh",
+        "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+        "line": 39
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "logout",
+      "method": "POST",
+      "route": "/api/auth/logout",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/auth/logout",
+        "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+        "line": 43
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getUsers",
+      "method": "GET",
+      "route": "/api/users",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users",
+        "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+        "line": 27
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getCurrentUser",
+      "method": "GET",
+      "route": "/api/users/me",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users/me",
+        "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+        "line": 19
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyProfile",
+      "method": "GET",
+      "route": "/api/users/me/profile",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users/me/profile",
+        "file": "src/Services/AuthService/Endpoints/CanonicalProfileEndpoints.cs",
+        "line": 16
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateMyProfile",
+      "method": "PATCH",
+      "route": "/api/users/me/profile",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PATCH",
+        "route": "/api/users/me/profile",
+        "file": "src/Services/AuthService/Endpoints/CanonicalProfileEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyExperienceSummary",
+      "method": "GET",
+      "route": "/api/users/me/experience-summary",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users/me/experience-summary",
+        "file": "src/Services/AdminService/Endpoints/StudentExperienceEndpoints.cs",
+        "line": 17
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyRadar",
+      "method": "GET",
+      "route": "/api/v1/declarations/me/radar",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/v1/declarations/me/radar",
+        "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+        "line": 60
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyContributions",
+      "method": "GET",
+      "route": "/api/users/me/contributions",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users/me/contributions",
+        "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+        "line": 30
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "uploadPrivateEvidence",
+      "method": "POST",
+      "route": "/api/contributions/evidence",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/contributions/evidence",
+        "file": "src/Services/AdminService/Endpoints/PrivateEvidenceEndpoints.cs",
+        "line": 14
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "downloadPrivateEvidence",
+      "method": "GET",
+      "route": "/api/contributions/evidence/{}/download",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/contributions/evidence/{}/download",
+        "file": "src/Services/AdminService/Endpoints/PrivateEvidenceEndpoints.cs",
+        "line": 78
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyExperienceLedger",
+      "method": "GET",
+      "route": "/api/users/me/experience-ledger",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users/me/experience-ledger",
+        "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+        "line": 31
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyActivityHistory",
+      "method": "GET",
+      "route": "/api/users/me/activity-history",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/users/me/activity-history",
+        "file": "src/Services/ActivityService/Endpoints/StudentActivityHistoryEndpoints.cs",
+        "line": 12
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getStudentActivities",
+      "method": "GET",
+      "route": "/api/v2/activities/feed",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/v2/activities/feed",
+        "file": "src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs",
+        "line": 18
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getStudentActivity",
+      "method": "GET",
+      "route": "/api/v2/activities/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/v2/activities/{}",
+        "file": "src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs",
+        "line": 19
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getRecommendedActivities",
+      "method": "GET",
+      "route": "/api/v2/recommendations/activities",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/v2/recommendations/activities",
+        "file": "src/Services/AdminService/Endpoints/StudentExperienceEndpoints.cs",
+        "line": 18
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "downloadClubExperienceReport",
+      "method": "GET",
+      "route": "/api/club-experience-reports/{}/download",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/club-experience-reports/{}/download",
+        "file": "src/Services/ExportService/Endpoints/ClubExperienceReportEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "createUser",
+      "method": "POST",
+      "route": "/api/users",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/users",
+        "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+        "line": 31
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateUser",
+      "method": "PUT",
+      "route": "/api/users/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/users/{}",
+        "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+        "line": 32
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "lockUser",
+      "method": "PATCH",
+      "route": "/api/users/{}/lock",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PATCH",
+        "route": "/api/users/{}/lock",
+        "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+        "line": 36
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "unlockUser",
+      "method": "PATCH",
+      "route": "/api/users/{}/unlock",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PATCH",
+        "route": "/api/users/{}/unlock",
+        "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+        "line": 37
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getClubs",
+      "method": "GET",
+      "route": "/api/clubs",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 29
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getClub",
+      "method": "GET",
+      "route": "/api/clubs/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/{}",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 60
+      },
+      "businessStatus": "CONTRACT_MISMATCH",
+      "note": "F01: projection cho manager thiếu version/cover/schedule."
+    },
+    {
+      "name": "updateClub",
+      "method": "PUT",
+      "route": "/api/clubs/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/clubs/{}",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 76
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "uploadPublicImage",
+      "method": "POST",
+      "route": "/api/media/upload-intents",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/media/upload-intents",
+        "file": "src/Services/AuthService/Endpoints/PublicMediaEndpoints.cs",
+        "line": 24
+      },
+      "businessStatus": "PARTIAL",
+      "note": "Chỉ 3 kind owner hiện hữu; unsupported kinds và live R2 còn mở."
+    },
+    {
+      "name": "updateClubPublicImages",
+      "method": "PUT",
+      "route": "/api/clubs/{}/public-images",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/clubs/{}/public-images",
+        "file": "src/Services/ClubService/Endpoints/ClubPublicImageEndpoints.cs",
+        "line": 17
+      },
+      "businessStatus": "CONTRACT_MISMATCH",
+      "note": "F01/F02: version từ read thiếu, omitted ảnh bị xem như null."
+    },
+    {
+      "name": "updateClubPublicProfile",
+      "method": "PATCH",
+      "route": "/api/clubs/{}/public-profile",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PATCH",
+        "route": "/api/clubs/{}/public-profile",
+        "file": "src/Services/ClubService/Endpoints/ClubPublicProfileEndpoints.cs",
+        "line": 19
+      },
+      "businessStatus": "PARTIAL",
+      "note": "Mutation có; FE phụ thuộc GET thiếu version (F01)."
+    },
+    {
+      "name": "updateActivityCoverImage",
+      "method": "PUT",
+      "route": "/api/activities/{}/cover-image",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/activities/{}/cover-image",
+        "file": "src/Services/ActivityService/Endpoints/ActivityCoverImageEndpoints.cs",
+        "line": 16
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "deleteClub",
+      "method": "DELETE",
+      "route": "/api/clubs/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "DELETE",
+        "route": "/api/clubs/{}",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 82
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyMemberships",
+      "method": "GET",
+      "route": "/api/clubs/me/memberships",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/me/memberships",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 50
+      },
+      "businessStatus": "PARTIAL",
+      "note": "F06: đã có GUID version, thiếu source/capabilities/semester/code/logo."
+    },
+    {
+      "name": "getMyClubSelection",
+      "method": "GET",
+      "route": "/api/clubs/me/access + /api/clubs",
+      "declaration": "COMPOSED",
+      "evidence": null,
+      "businessStatus": "COMPOSED_REUSE",
+      "note": "Ghép các read hiện có; không đòi route mới."
+    },
+    {
+      "name": "getMyMembershipApplications",
+      "method": "GET",
+      "route": "/api/clubs/me/memberships + /api/clubs",
+      "declaration": "COMPOSED",
+      "evidence": null,
+      "businessStatus": "COMPOSED_REUSE",
+      "note": "Ghép các read hiện có; không đòi route mới."
+    },
+    {
+      "name": "withdrawMyMembershipApplication",
+      "method": "POST",
+      "route": "/api/clubs/me/membership-applications/{}/withdraw",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "getMyClubAccess",
+      "method": "GET",
+      "route": "/api/clubs/me/access",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/me/access",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 55
+      },
+      "businessStatus": "PARTIAL",
+      "note": "Boolean access dùng được; chưa có capability/groups/access version D06."
+    },
+    {
+      "name": "getManagedClubs",
+      "method": "GET",
+      "route": "/api/clubs/me/managed",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/me/managed",
+        "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+        "line": 45
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "joinClub",
+      "method": "POST",
+      "route": "/api/clubs/{}/join",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/{}/join",
+        "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+        "line": 28
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getClubApplications",
+      "method": "GET",
+      "route": "/api/clubs/applications",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/applications",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyClubApplications",
+      "method": "GET",
+      "route": "/api/clubs/applications/me",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/applications/me",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 31
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "createClubApplication",
+      "method": "POST",
+      "route": "/api/clubs/applications",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/applications",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 40
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateClubApplication",
+      "method": "PUT",
+      "route": "/api/clubs/applications/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/clubs/applications/{}",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 46
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "approveClubApplication",
+      "method": "POST",
+      "route": "/api/clubs/applications/{}/approve",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/applications/{}/approve",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 52
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "requestClubApplicationRevision",
+      "method": "POST",
+      "route": "/api/clubs/applications/{}/request-revision",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/applications/{}/request-revision",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 58
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "rejectClubApplication",
+      "method": "POST",
+      "route": "/api/clubs/applications/{}/reject",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/applications/{}/reject",
+        "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+        "line": 64
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getClubMemberships",
+      "method": "GET",
+      "route": "/api/clubs/{}/memberships",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/{}/memberships",
+        "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+        "line": 33
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "approveClubMembership",
+      "method": "POST",
+      "route": "/api/clubs/memberships/{}/approve",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/memberships/{}/approve",
+        "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+        "line": 38
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "rejectClubMembership",
+      "method": "POST",
+      "route": "/api/clubs/memberships/{}/reject",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/memberships/{}/reject",
+        "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+        "line": 43
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getClubMembers",
+      "method": "GET",
+      "route": "/api/clubs/{}/members",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/{}/members",
+        "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+        "line": 31
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "searchEligibleClubMembers",
+      "method": "GET",
+      "route": "/api/clubs/{}/eligible-members",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "inviteClubMember",
+      "method": "POST",
+      "route": "/api/clubs/{}/members",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/{}/members",
+        "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+        "line": 35
+      },
+      "businessStatus": "PARTIAL",
+      "note": "F03: không verify target/semester roster."
+    },
+    {
+      "name": "getClubMember",
+      "method": "GET",
+      "route": "/api/clubs/{}/members/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/{}/members/{}",
+        "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+        "line": 40
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateClubMemberProfile",
+      "method": "PUT",
+      "route": "/api/clubs/{}/members/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/clubs/{}/members/{}",
+        "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+        "line": 44
+      },
+      "businessStatus": "LEGACY_WRITE_DENIED_BY_DESIGN",
+      "note": "Handler trả PERSONAL_PROFILE_SELF_ONLY/403 cho cập nhật; dùng self PATCH. Không đánh dấu thiếu quyền sửa người khác."
+    },
+    {
+      "name": "assignClubTreasurer",
+      "method": "POST",
+      "route": "/api/clubs/{}/treasurers",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/{}/treasurers",
+        "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+        "line": 48
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "removeClubTreasurer",
+      "method": "POST",
+      "route": "/api/clubs/memberships/{}/member",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/clubs/memberships/{}/member",
+        "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+        "line": 53
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "deleteClubMember",
+      "method": "DELETE",
+      "route": "/api/clubs/{}/members/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "DELETE",
+        "route": "/api/clubs/{}/members/{}",
+        "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+        "line": 49
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getReports",
+      "method": "GET",
+      "route": "/api/reports",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports",
+        "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+        "line": 17
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getReport",
+      "method": "GET",
+      "route": "/api/reports/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports/{}",
+        "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+        "line": 21
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getReportingDeadlines",
+      "method": "GET",
+      "route": "/api/reporting-deadlines",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reporting-deadlines",
+        "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+        "line": 24
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "createReport",
+      "method": "POST",
+      "route": "/api/reports",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports",
+        "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+        "line": 21
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateReport",
+      "method": "PUT",
+      "route": "/api/reports/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/reports/{}",
+        "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+        "line": 22
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "archiveReport",
+      "method": "DELETE",
+      "route": "/api/reports/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "DELETE",
+        "route": "/api/reports/{}",
+        "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "submitReport",
+      "method": "POST",
+      "route": "/api/reports/{}/submit",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports/{}/submit",
+        "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+        "line": 21
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "reviewReport",
+      "method": "POST",
+      "route": "/api/reports/{}/review",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports/{}/review",
+        "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "approveReport",
+      "method": "POST",
+      "route": "/api/reports/{}/approve",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports/{}/approve",
+        "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+        "line": 24
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "rejectReport",
+      "method": "POST",
+      "route": "/api/reports/{}/reject",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports/{}/reject",
+        "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+        "line": 26
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "uploadReportFile",
+      "method": "POST",
+      "route": "/api/reports/upload",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports/upload",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 21
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateUploadedReportFile",
+      "method": "PUT",
+      "route": "/api/reports/{}/uploaded-file",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/reports/{}/uploaded-file",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "deleteUploadedReportFile",
+      "method": "DELETE",
+      "route": "/api/reports/{}/uploaded-file",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "DELETE",
+        "route": "/api/reports/{}/uploaded-file",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 26
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "downloadUploadedReportFile",
+      "method": "GET",
+      "route": "/api/reports/{}/uploaded-file/download",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports/{}/uploaded-file/download",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 24
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "downloadReportAttachment",
+      "method": "GET",
+      "route": "/api/reports/{}/attachments/{}/download",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports/{}/attachments/{}/download",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 39
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "uploadReportAttachment",
+      "method": "POST",
+      "route": "/api/reports/{}/attachments/upload",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/reports/{}/attachments/upload",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 36
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "deleteReportAttachment",
+      "method": "DELETE",
+      "route": "/api/reports/{}/attachments/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "DELETE",
+        "route": "/api/reports/{}/attachments/{}",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 40
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getActivities",
+      "method": "GET",
+      "route": "/api/activities",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/activities",
+        "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+        "line": 43
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getActivity",
+      "method": "GET",
+      "route": "/api/activities/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/activities/{}",
+        "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+        "line": 116
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getActivityApplication",
+      "method": "GET",
+      "route": "/api/activity-applications/{}",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "createActivityApplication",
+      "method": "POST",
+      "route": "/api/activity-applications",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "updateActivityApplication",
+      "method": "PATCH",
+      "route": "/api/activity-applications/{}",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "submitActivityApplication",
+      "method": "POST",
+      "route": "/api/activity-applications/{}/submit",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "createActivity",
+      "method": "POST",
+      "route": "/api/activities",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/activities",
+        "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+        "line": 158
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateActivity",
+      "method": "PUT",
+      "route": "/api/activities/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/activities/{}",
+        "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+        "line": 21
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "setActivityPublication",
+      "method": "PATCH",
+      "route": "/api/activities/{}/publication",
+      "declaration": "ABSENT",
+      "evidence": null,
+      "businessStatus": "NO_BE_ROUTE",
+      "note": "Chưa có method/path tương ứng."
+    },
+    {
+      "name": "cancelActivity",
+      "method": "DELETE",
+      "route": "/api/activities/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "DELETE",
+        "route": "/api/activities/{}",
+        "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+        "line": 22
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "checkInActivity",
+      "method": "POST",
+      "route": "/api/activities/{}/check-in",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/activities/{}/check-in",
+        "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+        "line": 24
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyActivityAttendance",
+      "method": "GET",
+      "route": "/api/activities/{}/my-attendance",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/activities/{}/my-attendance",
+        "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "registerParticipant",
+      "method": "POST",
+      "route": "/api/activities/{}/participants",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/activities/{}/participants",
+        "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "completeActivity",
+      "method": "PATCH",
+      "route": "/api/activities/{}/complete",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PATCH",
+        "route": "/api/activities/{}/complete",
+        "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+        "line": 26
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getActivityAttendance",
+      "method": "GET",
+      "route": "/api/clubs/{}/activities/{}/attendance",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/clubs/{}/activities/{}/attendance",
+        "file": "src/Services/ActivityService/Endpoints/AttendanceManagementEndpoints.cs",
+        "line": 29
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "updateActivityAttendance",
+      "method": "PUT",
+      "route": "/api/clubs/{}/activities/{}/attendance/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/clubs/{}/activities/{}/attendance/{}",
+        "file": "src/Services/ActivityService/Endpoints/AttendanceManagementEndpoints.cs",
+        "line": 205
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "bulkUpdateActivityAttendance",
+      "method": "PUT",
+      "route": "/api/clubs/{}/activities/{}/attendance",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/clubs/{}/activities/{}/attendance",
+        "file": "src/Services/ActivityService/Endpoints/AttendanceManagementEndpoints.cs",
+        "line": 355
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getBudgetProposals",
+      "method": "GET",
+      "route": "/api/finance/proposals",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/finance/proposals",
+        "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "createBudgetProposal",
+      "method": "POST",
+      "route": "/api/finance/proposals",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/proposals",
+        "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "approveBudget",
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/approve",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/proposals/{}/approve",
+        "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+        "line": 32
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "managerApproveBudget",
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/manager-approve",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/proposals/{}/manager-approve",
+        "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+        "line": 30
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "managerRejectBudget",
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/manager-reject",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/proposals/{}/manager-reject",
+        "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+        "line": 31
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "rejectBudget",
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/reject",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/proposals/{}/reject",
+        "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+        "line": 34
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "createSettlement",
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/settlements",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/proposals/{}/settlements",
+        "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+        "line": 19
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "approveSettlement",
+      "method": "POST",
+      "route": "/api/finance/settlements/{}/approve",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/settlements/{}/approve",
+        "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "rejectSettlement",
+      "method": "POST",
+      "route": "/api/finance/settlements/{}/reject",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/finance/settlements/{}/reject",
+        "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getFinanceTransactions",
+      "method": "GET",
+      "route": "/api/finance/transactions",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/finance/transactions",
+        "file": "src/Services/FinanceService/Endpoints/TransactionEndpoints.cs",
+        "line": 18
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getKpiRules",
+      "method": "GET",
+      "route": "/api/kpis/rules",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/kpis/rules",
+        "file": "src/Services/ReportService/Endpoints/KpiEndpoints.cs",
+        "line": 25
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getKpiLeaderboard",
+      "method": "GET",
+      "route": "/api/kpis/leaderboard",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/kpis/leaderboard",
+        "file": "src/Services/ReportService/Endpoints/KpiEndpoints.cs",
+        "line": 26
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getReportSummary",
+      "method": "GET",
+      "route": "/api/reports/summary",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports/summary",
+        "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+        "line": 18
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getReportAggregation",
+      "method": "GET",
+      "route": "/api/reports/aggregate",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports/aggregate",
+        "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+        "line": 19
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getMyDeadlines",
+      "method": "GET",
+      "route": "/api/deadlines/me",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/deadlines/me",
+        "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+        "line": 29
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getExports",
+      "method": "GET",
+      "route": "/api/exports",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/exports",
+        "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+        "line": 27
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getExport",
+      "method": "GET",
+      "route": "/api/exports/{}",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/exports/{}",
+        "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+        "line": 28
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "createExport",
+      "method": "POST",
+      "route": "/api/exports",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "POST",
+        "route": "/api/exports",
+        "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+        "line": 29
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "downloadExport",
+      "method": "GET",
+      "route": "/api/exports/{}/download",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/exports/{}/download",
+        "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+        "line": 30
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getUploadedReportFilePreview",
+      "method": "GET",
+      "route": "/api/reports/{}/uploaded-file/preview",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/reports/{}/uploaded-file/preview",
+        "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+        "line": 23
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "getNotifications",
+      "method": "GET",
+      "route": "/api/notifications",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "GET",
+        "route": "/api/notifications",
+        "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+        "line": 19
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "markNotificationRead",
+      "method": "PUT",
+      "route": "/api/notifications/{}/read",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/notifications/{}/read",
+        "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+        "line": 21
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    },
+    {
+      "name": "markAllNotificationsRead",
+      "method": "PUT",
+      "route": "/api/notifications/read-all",
+      "declaration": "DECLARED",
+      "evidence": {
+        "method": "PUT",
+        "route": "/api/notifications/read-all",
+        "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+        "line": 22
+      },
+      "businessStatus": "DECLARED_REQUIRES_SCOPE_REVIEW",
+      "note": "Có khai báo route; không tự suy ra đầy đủ DTO/nghiệp vụ/live integration. Đọc nhóm contract tương ứng."
+    }
+  ],
+  "backendPublicDeclarations": [
+    {
+      "method": "PUT",
+      "route": "/api/activities/{}/cover-image",
+      "file": "src/Services/ActivityService/Endpoints/ActivityCoverImageEndpoints.cs",
+      "line": 16
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities",
+      "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+      "line": 43
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}",
+      "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+      "line": 116
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities",
+      "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+      "line": 158
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/from-approved-report",
+      "file": "src/Services/ActivityService/Endpoints/ActivityEndpoints.cs",
+      "line": 264
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}/sessions",
+      "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/sessions",
+      "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{}/sessions/{}",
+      "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/sessions/{}/close",
+      "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/sessions/{}/cancel",
+      "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}/sessions/{}/attendance-challenge",
+      "file": "src/Services/ActivityService/Endpoints/ActivitySessionEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "PUT",
+      "route": "/api/activities/{}",
+      "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/activities/{}",
+      "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/participants",
+      "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/check-in",
+      "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}/my-attendance",
+      "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{}/complete",
+      "file": "src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/activities/{}/attendance",
+      "file": "src/Services/ActivityService/Endpoints/AttendanceManagementEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/{}/activities/{}/attendance/{}",
+      "file": "src/Services/ActivityService/Endpoints/AttendanceManagementEndpoints.cs",
+      "line": 205
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/{}/activities/{}/attendance",
+      "file": "src/Services/ActivityService/Endpoints/AttendanceManagementEndpoints.cs",
+      "line": 355
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/clubs/{}/member-statistics",
+      "file": "src/Services/ActivityService/Endpoints/MemberStatisticsEndpoints.cs",
+      "line": 15
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/clubs/{}/member-statistics/detail",
+      "file": "src/Services/ActivityService/Endpoints/MemberStatisticsEndpoints.cs",
+      "line": 96
+    },
+    {
+      "method": "GET",
+      "route": "/api/v2/activities/feed",
+      "file": "src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "GET",
+      "route": "/api/v2/activities/{}",
+      "file": "src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/activity-history",
+      "file": "src/Services/ActivityService/Endpoints/StudentActivityHistoryEndpoints.cs",
+      "line": 12
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/me",
+      "file": "src/Services/AdminService/Endpoints/AdminEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/admin/me",
+      "file": "src/Services/AdminService/Endpoints/AdminEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/admin/audit-events",
+      "file": "src/Services/AdminService/Endpoints/AdminEndpoints.cs",
+      "line": 34
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/admin/audit-events/{}",
+      "file": "src/Services/AdminService/Endpoints/AdminEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/audit-events",
+      "file": "src/Services/AdminService/Endpoints/AdminEndpoints.cs",
+      "line": 42
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/me",
+      "file": "src/Services/AdminService/Endpoints/AdminEndpoints.cs",
+      "line": 46
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/anomalies",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/anomalies",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/anomalies/stats",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 33
+    },
+    {
+      "method": "GET",
+      "route": "/api/anomalies/stats",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 33
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/anomalies/{}",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "route": "/api/anomalies/{}",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/student-affairs/anomalies/{}/resolve",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 42
+    },
+    {
+      "method": "POST",
+      "route": "/api/anomalies/{}/resolve",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 42
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/ledger",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 48
+    },
+    {
+      "method": "GET",
+      "route": "/api/ledger",
+      "file": "src/Services/AdminService/Endpoints/AnomalyEndpoints.cs",
+      "line": 48
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/benchmarks",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/benchmarks/active",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/student-affairs/benchmarks",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "PUT",
+      "route": "/api/v1/student-affairs/benchmarks/{}",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/student-affairs/benchmarks/{}/lock",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 39
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/students/{}/radar",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 44
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/radar/overview",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 52
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/declarations/me/radar",
+      "file": "src/Services/AdminService/Endpoints/BenchmarkEndpoints.cs",
+      "line": 60
+    },
+    {
+      "method": "GET",
+      "route": "/api/bonus-matrix",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 32
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/bonus-matrix",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 32
+    },
+    {
+      "method": "POST",
+      "route": "/api/bonus-matrix",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/bonus-matrix",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "PUT",
+      "route": "/api/bonus-matrix/{}",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 43
+    },
+    {
+      "method": "PUT",
+      "route": "/api/v1/bonus-matrix/{}",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 43
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/bonus-matrix/{}",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/bonus-matrix/{}",
+      "file": "src/Services/AdminService/Endpoints/BonusMatrixEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/experience-statistics",
+      "file": "src/Services/AdminService/Endpoints/ClubExperienceStatisticsEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/declarations",
+      "file": "src/Services/AdminService/Endpoints/DeclarationEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/declarations/me",
+      "file": "src/Services/AdminService/Endpoints/DeclarationEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/declarations/{}",
+      "file": "src/Services/AdminService/Endpoints/DeclarationEndpoints.cs",
+      "line": 33
+    },
+    {
+      "method": "PUT",
+      "route": "/api/v1/declarations/{}",
+      "file": "src/Services/AdminService/Endpoints/DeclarationEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/declarations",
+      "file": "src/Services/AdminService/Endpoints/DeclarationEndpoints.cs",
+      "line": 46
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/student-affairs/declarations/{}/review",
+      "file": "src/Services/AdminService/Endpoints/DeclarationEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/student-affairs/benchmarks/{}/draft",
+      "file": "src/Services/AdminService/Endpoints/ExperiencePolicyEndpoints.cs",
+      "line": 17
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/student-affairs/benchmarks/{}/policy",
+      "file": "src/Services/AdminService/Endpoints/ExperiencePolicyEndpoints.cs",
+      "line": 63
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/student-affairs/benchmarks/{}/approval",
+      "file": "src/Services/AdminService/Endpoints/ExperiencePolicyEndpoints.cs",
+      "line": 71
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/sessions/{}/manual-attendance-requests",
+      "file": "src/Services/AdminService/Endpoints/ManualAttendanceEndpoints.cs",
+      "line": 20
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}/sessions/{}/manual-attendance-requests",
+      "file": "src/Services/AdminService/Endpoints/ManualAttendanceEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/sessions/{}/manual-attendance-requests/{}/reviews",
+      "file": "src/Services/AdminService/Endpoints/ManualAttendanceEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/sessions/{}/manual-attendance-requests/{}/review",
+      "file": "src/Services/AdminService/Endpoints/ManualAttendanceEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/contributions/evidence",
+      "file": "src/Services/AdminService/Endpoints/PrivateEvidenceEndpoints.cs",
+      "line": 14
+    },
+    {
+      "method": "GET",
+      "route": "/api/contributions/evidence/{}",
+      "file": "src/Services/AdminService/Endpoints/PrivateEvidenceEndpoints.cs",
+      "line": 77
+    },
+    {
+      "method": "GET",
+      "route": "/api/contributions/evidence/{}/download",
+      "file": "src/Services/AdminService/Endpoints/PrivateEvidenceEndpoints.cs",
+      "line": 78
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/quests",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 77
+    },
+    {
+      "method": "GET",
+      "route": "/api/quests",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 77
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/quests/me",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 82
+    },
+    {
+      "method": "GET",
+      "route": "/api/quests/me",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 82
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/quests/{}",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 87
+    },
+    {
+      "method": "GET",
+      "route": "/api/quests/{}",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 87
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/quests",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 93
+    },
+    {
+      "method": "POST",
+      "route": "/api/quests",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 93
+    },
+    {
+      "method": "PUT",
+      "route": "/api/v1/quests/{}",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 99
+    },
+    {
+      "method": "PUT",
+      "route": "/api/quests/{}",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 99
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/v1/quests/{}/status",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 106
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/quests/{}/status",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 106
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/v1/quests/{}",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 113
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/quests/{}",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 113
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/quests/{}/join",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 120
+    },
+    {
+      "method": "POST",
+      "route": "/api/quests/{}/join",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 120
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/quests/{}/complete",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 127
+    },
+    {
+      "method": "POST",
+      "route": "/api/quests/{}/complete",
+      "file": "src/Services/AdminService/Endpoints/QuestEndpoints.cs",
+      "line": 127
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/semesters",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 15
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/semesters/active",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 20
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/semesters",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "PUT",
+      "route": "/api/v1/semesters/{}",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "GET",
+      "route": "/api/semesters",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 38
+    },
+    {
+      "method": "GET",
+      "route": "/api/semesters/active",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 42
+    },
+    {
+      "method": "POST",
+      "route": "/api/semesters",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 46
+    },
+    {
+      "method": "PUT",
+      "route": "/api/semesters/{}",
+      "file": "src/Services/AdminService/Endpoints/SemesterEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/admin/settings",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "PUT",
+      "route": "/api/v1/admin/settings",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/admin/health/stats",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/health",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "route": "/api/settings",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 42
+    },
+    {
+      "method": "PUT",
+      "route": "/api/settings",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 46
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/settings",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "PUT",
+      "route": "/api/admin/settings",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 54
+    },
+    {
+      "method": "GET",
+      "route": "/api/health/stats",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 58
+    },
+    {
+      "method": "GET",
+      "route": "/api/admin/health/stats",
+      "file": "src/Services/AdminService/Endpoints/SettingsEndpoints.cs",
+      "line": 62
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/experience-summary",
+      "file": "src/Services/AdminService/Endpoints/StudentExperienceEndpoints.cs",
+      "line": 17
+    },
+    {
+      "method": "GET",
+      "route": "/api/v2/recommendations/activities",
+      "file": "src/Services/AdminService/Endpoints/StudentExperienceEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "GET",
+      "route": "/api/verification-assignments",
+      "file": "src/Services/AdminService/Endpoints/VerificationAssignmentEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "POST",
+      "route": "/api/verification-assignments",
+      "file": "src/Services/AdminService/Endpoints/VerificationAssignmentEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/verification-assignments/{}",
+      "file": "src/Services/AdminService/Endpoints/VerificationAssignmentEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{}/contributions",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 20
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{}/contributions",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "GET",
+      "route": "/api/contributions/{}",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/contributions/{}",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "POST",
+      "route": "/api/contributions/{}/reviews",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "POST",
+      "route": "/api/contributions/{}/role-upgrade-requests",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "POST",
+      "route": "/api/contributions/{}/role-upgrade-requests/{}/reviews",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 28
+    },
+    {
+      "method": "POST",
+      "route": "/api/contributions/{}/adjustments",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/contributions",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/experience-ledger",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "GET",
+      "route": "/api/verifications/me/queue",
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "line": 32
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/google",
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/dev-login",
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/test-login",
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/refresh",
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "line": 39
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/logout",
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "line": 43
+    },
+    {
+      "method": "GET",
+      "route": "/api/auth/user-status/{}",
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "line": 46
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/profile",
+      "file": "src/Services/AuthService/Endpoints/CanonicalProfileEndpoints.cs",
+      "line": 16
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/users/me/profile",
+      "file": "src/Services/AuthService/Endpoints/CanonicalProfileEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/internal/register",
+      "file": "src/Services/AuthService/Endpoints/InternalAccountEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "route": "/api/auth/internal/login",
+      "file": "src/Services/AuthService/Endpoints/InternalAccountEndpoints.cs",
+      "line": 40
+    },
+    {
+      "method": "POST",
+      "route": "/api/media/upload-intents",
+      "file": "src/Services/AuthService/Endpoints/PublicMediaEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "route": "/api/roles",
+      "file": "src/Services/AuthService/Endpoints/RoleEndpoints.cs",
+      "line": 17
+    },
+    {
+      "method": "GET",
+      "route": "/api/roles/stats",
+      "file": "src/Services/AuthService/Endpoints/RoleEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "POST",
+      "route": "/api/roles",
+      "file": "src/Services/AuthService/Endpoints/RoleEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/users",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/stats",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/stats/by-role",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/{}",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "POST",
+      "route": "/api/users",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "PUT",
+      "route": "/api/users/{}",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 32
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/users/{}",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 33
+    },
+    {
+      "method": "POST",
+      "route": "/api/users/{}/roles",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 34
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/users/{}/roles/{}",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/users/{}/lock",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 36
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/users/{}/unlock",
+      "file": "src/Services/AuthService/Endpoints/UserEndpoints.cs",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/applications",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/applications/me",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/applications/{}",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/applications",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 40
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/applications/{}",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 46
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/applications/{}/approve",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 52
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/applications/{}/request-revision",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 58
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/applications/{}/reject",
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "line": 64
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/categories",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 34
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/categories",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 39
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/me/managed",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 45
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/me/memberships",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/me/access",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 55
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 60
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/manager/{}",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 65
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 70
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/{}",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 76
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/clubs/{}",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 82
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/clubs/{}/direct",
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "line": 88
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/{}/public-images",
+      "file": "src/Services/ClubService/Endpoints/ClubPublicImageEndpoints.cs",
+      "line": 17
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/clubs/{}/public-profile",
+      "file": "src/Services/ClubService/Endpoints/ClubPublicProfileEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/semester-plans/{}",
+      "file": "src/Services/ClubService/Endpoints/ClubSemesterPlanEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/{}/semester-plans/{}",
+      "file": "src/Services/ClubService/Endpoints/ClubSemesterPlanEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/disband",
+      "file": "src/Services/ClubService/Endpoints/DisbandEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/disband-request",
+      "file": "src/Services/ClubService/Endpoints/DisbandEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/disband-requests",
+      "file": "src/Services/ClubService/Endpoints/DisbandEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/disband-requests/{}/approve",
+      "file": "src/Services/ClubService/Endpoints/DisbandEndpoints.cs",
+      "line": 41
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/disband-requests/{}/reject",
+      "file": "src/Services/ClubService/Endpoints/DisbandEndpoints.cs",
+      "line": 47
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/managers",
+      "file": "src/Services/ClubService/Endpoints/ManagerEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/members",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/members",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/members/{}",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 40
+    },
+    {
+      "method": "PUT",
+      "route": "/api/clubs/{}/members/{}",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 44
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/clubs/{}/members/{}",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 49
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/member-roster",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 54
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/member-roster/resolve",
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "line": 59
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/join",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/memberships",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 33
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/memberships/{}/approve",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 38
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/memberships/{}/reject",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 43
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/treasurers",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 48
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/memberships/{}/member",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 53
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/clubs/memberships/{}",
+      "file": "src/Services/ClubService/Endpoints/MembershipEndpoints.cs",
+      "line": 58
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/members-for-transfer",
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/transfer-ownership",
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "line": 34
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/transfer-request",
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "line": 39
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/transfer-requests",
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "line": 44
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/transfer-requests/{}/approve",
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "line": 50
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/transfer-requests/{}/reject",
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "line": 56
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/{}/experience-reports",
+      "file": "src/Services/ExportService/Endpoints/ClubExperienceReportEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "route": "/api/club-experience-reports/{}",
+      "file": "src/Services/ExportService/Endpoints/ClubExperienceReportEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "route": "/api/club-experience-reports/{}/download",
+      "file": "src/Services/ExportService/Endpoints/ClubExperienceReportEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{}/experience-reports/{}/download",
+      "file": "src/Services/ExportService/Endpoints/ClubExperienceReportEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "route": "/api/exports",
+      "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "GET",
+      "route": "/api/exports/{}",
+      "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+      "line": 28
+    },
+    {
+      "method": "POST",
+      "route": "/api/exports",
+      "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/exports/{}/download",
+      "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "GET",
+      "route": "/api/finance/proposals",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "route": "/api/finance/proposals/{}",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/submit",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/manager-review",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 27
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/review",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 28
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/manager-approve",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/manager-reject",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/approve",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 32
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/reject",
+      "file": "src/Services/FinanceService/Endpoints/ProposalEndpoints.cs",
+      "line": 34
+    },
+    {
+      "method": "GET",
+      "route": "/api/finance/settlements",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 17
+    },
+    {
+      "method": "GET",
+      "route": "/api/finance/settlements/{}",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/proposals/{}/settlements",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/settlements/{}/submit",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 20
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/settlements/{}/review",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/settlements/{}/approve",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/settlements/{}/reject",
+      "file": "src/Services/FinanceService/Endpoints/SettlementEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "route": "/api/finance/transactions",
+      "file": "src/Services/FinanceService/Endpoints/TransactionEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "POST",
+      "route": "/api/finance/transactions",
+      "file": "src/Services/FinanceService/Endpoints/TransactionEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/notifications",
+      "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/notifications/{}",
+      "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+      "line": 20
+    },
+    {
+      "method": "PUT",
+      "route": "/api/notifications/{}/read",
+      "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "PUT",
+      "route": "/api/notifications/read-all",
+      "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "GET",
+      "route": "/api/deadlines",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "GET",
+      "route": "/api/deadlines/{}",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "POST",
+      "route": "/api/deadlines",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 20
+    },
+    {
+      "method": "PUT",
+      "route": "/api/deadlines/{}",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/deadlines/{}",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "GET",
+      "route": "/api/reporting-deadlines",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "route": "/api/deadlines/me",
+      "file": "src/Services/ReportService/Endpoints/DeadlineEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/kpis/rules",
+      "file": "src/Services/ReportService/Endpoints/KpiEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "route": "/api/kpis/leaderboard",
+      "file": "src/Services/ReportService/Endpoints/KpiEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports",
+      "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "PUT",
+      "route": "/api/reports/{}",
+      "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/reports/{}",
+      "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/upload",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/uploaded-file",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/uploaded-file/preview",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/uploaded-file/download",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "PUT",
+      "route": "/api/reports/{}/uploaded-file",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 25
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/reports/{}/uploaded-file",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/file",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/file/preview",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 30
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/file/download",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 31
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/file",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 32
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/reports/{}/file",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 33
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/attachments",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 35
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/attachments/upload",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 36
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}/attachments/{}/download",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 39
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/reports/{}/attachments/{}",
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "line": 40
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports",
+      "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+      "line": 17
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/summary",
+      "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+      "line": 18
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/aggregate",
+      "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+      "line": 19
+    },
+    {
+      "method": "GET",
+      "route": "/api/reports/{}",
+      "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/submit",
+      "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+      "line": 21
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/link-budget",
+      "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/review",
+      "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/approve",
+      "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+      "line": 24
+    },
+    {
+      "method": "POST",
+      "route": "/api/reports/{}/reject",
+      "file": "src/Services/ReportService/Endpoints/ReportWorkflowEndpoints.cs",
+      "line": 26
+    }
+  ],
+  "tests": {
+    "command": "dotnet test ClubReportHub.sln --no-restore --logger \"trx;LogFilePrefix=contract-audit-2026-10-21\" --results-directory .test-results/contract-audit-2026-10-21",
+    "totals": {
+      "total": 740,
+      "passed": 737,
+      "failed": 0,
+      "notExecuted": 3
+    },
+    "runs": [
+      {
+        "file": ".test-results/contract-audit-2026-10-21/contract-audit-2026-10-21_net8.0_20261021192343.trx",
+        "counters": {
+          "total": "123",
+          "executed": "123",
+          "passed": "123",
+          "failed": "0",
+          "error": "0",
+          "timeout": "0",
+          "aborted": "0",
+          "inconclusive": "0",
+          "passedButRunAborted": "0",
+          "notRunnable": "0",
+          "notExecuted": "0",
+          "disconnected": "0",
+          "warning": "0",
+          "completed": "0",
+          "inProgress": "0",
+          "pending": "0"
+        },
+        "skipped": [],
+        "sqlPassed": []
+      },
+      {
+        "file": ".test-results/contract-audit-2026-10-21/contract-audit-2026-10-21_net8.0_20261021192358.trx",
+        "counters": {
+          "total": "85",
+          "executed": "84",
+          "passed": "84",
+          "failed": "0",
+          "error": "0",
+          "timeout": "0",
+          "aborted": "0",
+          "inconclusive": "0",
+          "passedButRunAborted": "0",
+          "notRunnable": "0",
+          "notExecuted": "0",
+          "disconnected": "0",
+          "warning": "0",
+          "completed": "0",
+          "inProgress": "0",
+          "pending": "0"
+        },
+        "skipped": [
+          "AdminService.IntegrationTests.SqlServerMigrationTests.EmptySqlServerDatabase_MigratesAndApplicationBecomesReady"
+        ],
+        "sqlPassed": []
+      },
+      {
+        "file": ".test-results/contract-audit-2026-10-21/contract-audit-2026-10-21_net8.0_20261021192537.trx",
+        "counters": {
+          "total": "532",
+          "executed": "530",
+          "passed": "530",
+          "failed": "0",
+          "error": "0",
+          "timeout": "0",
+          "aborted": "0",
+          "inconclusive": "0",
+          "passedButRunAborted": "0",
+          "notRunnable": "0",
+          "notExecuted": "0",
+          "disconnected": "0",
+          "warning": "0",
+          "completed": "0",
+          "inProgress": "0",
+          "pending": "0"
+        },
+        "skipped": [
+          "Backend.StabilizationTests.FinanceSqlServerMigrationTests.FreshDatabase_MigratesAndEnforcesOneActiveSettlementPerProposal",
+          "Backend.StabilizationTests.FinanceSqlServerMigrationTests.ExistingDatabase_ReconcilesLegacySettlementIndexAndRestoresMissingIndex"
+        ],
+        "sqlPassed": [
+          "Backend.StabilizationTests.CrossServiceWorkflowAuthorizationTests.Student_SqlServerDiscoveryAndHistoryQueriesUseRealPagingAndPrivateDefaultMigration",
+          "Backend.StabilizationTests.CrossServiceWorkflowAuthorizationTests.Student_SqlServerQuestSourcesIncludeExistingRegistrationAndRejectCancelledOrMismatchedSessions",
+          "Backend.StabilizationTests.ClubManagerSqlIntegrityTests.ClubManager_SqlServerFailedMutationRollsBackSourceOutboxAndReceiptAfterHandlerSave",
+          "Backend.StabilizationTests.ClubManagerSqlIntegrityTests.ClubManager_SqlServerUniqueSourceAndLedgerImmutabilitySurviveReload",
+          "Backend.StabilizationTests.CrossServiceWorkflowAuthorizationTests.Student_SqlServerQuestSessionSelectorFindsLaterEligibleSessionAndCountersTrackChangedSources",
+          "Backend.StabilizationTests.ClubManagerSqlIntegrityTests.ClubManager_SqlServerLegacyUpgradePreservesHistoryWithoutVerifiedPoints",
+          "Backend.StabilizationTests.CrossServiceWorkflowAuthorizationTests.ClubManager_SqlServerPdfJobsRecoverExpiredLeasePreserveSnapshotAndRecheckOwnershipOnReplayAndDownload",
+          "Backend.StabilizationTests.ClubManagerSqlIntegrityTests.ClubManager_AllFiveDatabasesMigrateAndReloadOnSqlServer",
+          "Backend.StabilizationTests.ClubManagerSqlIntegrityTests.ClubManager_SqlServerLastSeatRaceAcceptsOneAndReloadKeepsCapacityAndReceipt",
+          "Backend.StabilizationTests.CrossServiceWorkflowAuthorizationTests.Student_SqlServerRadarAndUnionPagingRunAgainstAppliedMigrations"
+        ]
+      }
+    ],
+    "limitations": "Không live gateway/browser/R2/production deployment. Các SQL test riêng dùng LocalDB có chạy; chỉ 3 test migration dùng biến môi trường bị skip."
+  },
+  "graph": "CodeGraph chưa index nên bỏ qua. GitNexus local refresh b066f96 thành công; MCP vẫn báo behind 1 commit, flow extraction có truncation. Dùng graph để định vị, source hiện tại và literal route/schema scan để xác minh; không suy ra absence từ graph."
+}
