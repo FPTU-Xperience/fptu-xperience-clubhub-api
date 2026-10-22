@@ -24,9 +24,11 @@ public static class PublicMediaEndpoints
         app.MapPost("/api/media/upload-intents", async (PublicMediaIntentRequest input, AuthDbContext db, IPublicMediaStorage storage,
             ClubAccessClient access, IHttpClientFactory clients, HttpContext http, CancellationToken ct) =>
         {
-            if (input.Kind is not ("club-logo" or "club-cover" or "activity-cover") || input.ContentType is not ("image/png" or "image/jpeg" or "image/webp")
+            var self = input.Kind is "student-avatar" or "student-cover";
+            if (input.Kind is not ("club-logo" or "club-cover" or "activity-cover" or "student-avatar" or "student-cover") || input.ContentType is not ("image/png" or "image/jpeg" or "image/webp")
                 || input.SizeBytes is <= 0 or > 5_242_880 || !int.TryParse(input.OwnerId, NumberStyles.None, CultureInfo.InvariantCulture, out var owner) || owner <= 0)
-                return ApiOperations.Error(400, "INVALID_MEDIA_INTENT", "Provide an owner, a basic club/activity image kind, JPEG/PNG/WebP and size up to 5 MiB.");
+                return ApiOperations.Error(400, "INVALID_MEDIA_INTENT", "Provide an owner, a supported basic image kind, JPEG/PNG/WebP and size up to 5 MiB.");
+            if (self && (owner != http.User.GetUserId() || !await db.Users.AsNoTracking().AnyAsync(x => x.Id == owner && x.IsActive && !x.IsLocked, ct))) return Results.Forbid();
             var clubId = owner;
             try
             {
@@ -39,7 +41,7 @@ public static class PublicMediaEndpoints
                     if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return Results.Forbid();
                     response.EnsureSuccessStatusCode(); var activity = await response.Content.ReadFromJsonAsync<JsonElement>(ct); clubId = activity.GetProperty("clubId").GetInt32();
                 }
-                if (!(await access.GetMyAccessAsync(http.GetBearerToken(), ct, true)).Any(x => x.ClubId == clubId && x.CanManage)) return Results.Forbid();
+                if (!self && !(await access.GetMyAccessAsync(http.GetBearerToken(), ct, true)).Any(x => x.ClubId == clubId && x.CanManage)) return Results.Forbid();
             }
             catch (HttpRequestException) { return ApiOperations.Error(503, "MEDIA_AUTHORITY_UNAVAILABLE", "Club/activity authority is unavailable."); }
             return await ApiOperations.ExecuteAsync(http, db, input, async () =>
@@ -63,11 +65,13 @@ public static class PublicMediaEndpoints
                 db.PublicMediaIntents.Add(row); await db.SaveChangesAsync(ct);
                 return Results.Created("/api/media/upload-intents", new { uploadUrl = url, row.PublicUrl, row.Key, row.ExpiresAt });
             }, ct, required: false);
-        }).RequireAuthorization(AuthPolicies.BusinessAccess);
+        }).RequireAuthorization(AuthPolicies.AllActors);
         app.MapPost("/api/internal/media/verify", async (VerifyMediaRequest input, AuthDbContext db, IPublicMediaStorage storage, HttpContext http, IConfiguration config, CancellationToken ct) =>
         {
             if (!VerifiedExperienceRules.InternalRequest(http, config)) return Results.Forbid();
             var actor = http.User.GetUserId();
+            if (input.Kind is "student-avatar" or "student-cover" && (input.OwnerId != actor
+                || !await db.Users.AsNoTracking().AnyAsync(x => x.Id == actor && x.IsActive && !x.IsLocked, ct))) return Results.Forbid();
             var row = await db.PublicMediaIntents.SingleOrDefaultAsync(x => x.ActorId == actor && x.Kind == input.Kind && x.OwnerId == input.OwnerId
                 && (x.PublicUrl == input.PublicUrl || x.VerifiedUrl == input.PublicUrl), ct);
             if (row is null) return ApiOperations.Error(409, "MEDIA_OWNER_MISMATCH", "The URL was not issued for this actor, kind and owner.");
@@ -79,6 +83,6 @@ public static class PublicMediaEndpoints
             row.Version = Guid.NewGuid();
             try { await db.SaveChangesAsync(ct); } catch (DbUpdateConcurrencyException) { return ApiOperations.Error(409, "MEDIA_CONCURRENT_VERIFICATION", "Retry attachment after the concurrent verification finishes."); }
             return Results.Ok(new { publicUrl = row.VerifiedUrl });
-        }).RequireAuthorization(AuthPolicies.BusinessAccess).ExcludeFromDescription();
+        }).RequireAuthorization(AuthPolicies.AllActors).ExcludeFromDescription();
     }
 }

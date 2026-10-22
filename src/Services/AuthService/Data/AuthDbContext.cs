@@ -31,6 +31,8 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Property(x => x.Headline).HasMaxLength(160);
             entity.Property(x => x.DateOfBirth).HasMaxLength(10);
             entity.Property(x => x.Address).HasMaxLength(300);
+            entity.Property(x => x.AvatarUrl).HasMaxLength(1000);
+            entity.Property(x => x.CoverImageUrl).HasMaxLength(1000);
             entity.HasOne<User>().WithOne().HasForeignKey<CanonicalUserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<User>(entity =>

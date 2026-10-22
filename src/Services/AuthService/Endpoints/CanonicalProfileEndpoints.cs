@@ -58,8 +58,9 @@ public static class CanonicalProfileEndpoints
         if (includePrivate)
         {
             text["headline"] = profile?.Headline ?? "";
+            text["avatarUrl"] = profile?.AvatarUrl; text["coverImageUrl"] = profile?.CoverImageUrl;
             personal["dateOfBirth"] = profile?.DateOfBirth; personal["address"] = profile?.Address;
-            editable.AddRange(["profile.headline", "personal.dateOfBirth", "personal.address"]);
+            editable.AddRange(["profile.headline", "personal.dateOfBirth", "personal.address", "profile.avatarUrl", "profile.coverImageUrl"]);
         }
         return new
         {
@@ -103,10 +104,16 @@ public static class CanonicalProfileEndpoints
                     }
                     else
                     {
-                        if (path is not ("profile.displayName" or "profile.about" or "personal.phoneNumber" or "profile.headline" or "personal.dateOfBirth" or "personal.address")) return ApiOperations.Error(403, "PROFILE_FIELD_FORBIDDEN", "Identity, roles and account state are read-only.");
-                        var nullable = path is "personal.phoneNumber" or "profile.headline" or "personal.dateOfBirth" or "personal.address";
+                        if (path is not ("profile.displayName" or "profile.about" or "personal.phoneNumber" or "profile.headline" or "personal.dateOfBirth" or "personal.address" or "profile.avatarUrl" or "profile.coverImageUrl")) return ApiOperations.Error(403, "PROFILE_FIELD_FORBIDDEN", "Identity, roles and account state are read-only.");
+                        var nullable = path is "personal.phoneNumber" or "profile.headline" or "personal.dateOfBirth" or "personal.address" or "profile.avatarUrl" or "profile.coverImageUrl";
                         if (field.Value.ValueKind != JsonValueKind.String && !(nullable && field.Value.ValueKind == JsonValueKind.Null)) return Results.BadRequest();
                         var text = field.Value.ValueKind == JsonValueKind.Null ? null : field.Value.GetString()!.Trim();
+                        if (path is "profile.avatarUrl" or "profile.coverImageUrl")
+                        {
+                            var url = await SelfProfileMediaVerifier.Resolve(path, text, db, http, ct);
+                            if (path == "profile.avatarUrl") row.AvatarUrl = url; else row.CoverImageUrl = url;
+                            changed = true; continue;
+                        }
                         if (path == "profile.displayName" && (string.IsNullOrWhiteSpace(text) || text.Length > 120)
                             || path == "profile.about" && text?.Length > 2000
                             || path == "personal.phoneNumber" && text is not null && (text.Length > 20 || text.Any(c => !char.IsAsciiDigit(c) && c is not ('+' or ' ' or '-' or '(' or ')')))) return Results.BadRequest();
