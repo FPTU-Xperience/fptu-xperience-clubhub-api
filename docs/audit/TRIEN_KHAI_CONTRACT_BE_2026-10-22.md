@@ -6,6 +6,8 @@ Phạm vi: BE, trên nhánh `feat/backend-contract-completion`. Nguồn yêu c�
 
 > Bổ sung tiếp: [6 API lịch học và lịch học kỳ](HOAN_THIEN_LICH_HOC_BE_2026-10-22.md) đã có persistence, version và kiểm thử SQL; FE consumer vẫn cần chuyển từ localStorage.
 
+> Bổ sung: [hồ sơ cá nhân mở rộng](HO_SO_CA_NHAN_BE_2026-10-22.md), gồm ba field self-only và học vụ từ roster; các phần chưa có nguồn/media được giữ nhãn riêng.
+
 ## Trạng thái từng phần
 
 | Actor / phần | API | Trạng thái BE và giới hạn |

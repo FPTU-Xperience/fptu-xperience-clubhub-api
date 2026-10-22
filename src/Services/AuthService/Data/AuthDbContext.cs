@@ -28,6 +28,9 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.HasKey(x => x.UserId); entity.Property(x => x.Version).IsConcurrencyToken();
             entity.Property(x => x.DisplayName).HasMaxLength(120); entity.Property(x => x.About).HasMaxLength(2000);
             entity.Property(x => x.PhoneNumber).HasMaxLength(20);
+            entity.Property(x => x.Headline).HasMaxLength(160);
+            entity.Property(x => x.DateOfBirth).HasMaxLength(10);
+            entity.Property(x => x.Address).HasMaxLength(300);
             entity.HasOne<User>().WithOne().HasForeignKey<CanonicalUserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<User>(entity =>

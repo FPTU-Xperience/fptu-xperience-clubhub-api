@@ -9,5 +9,8 @@ public sealed class CanonicalUserProfile
     public string SkillsJson { get; set; } = "[]";
     public string InterestsJson { get; set; } = "[]";
     public string? PhoneNumber { get; set; }
+    public string? Headline { get; set; }
+    public string? DateOfBirth { get; set; }
+    public string? Address { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }

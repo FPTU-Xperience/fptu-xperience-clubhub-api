@@ -11,6 +11,7 @@ using AuthService.Data;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Rosters;
+using ClubReportHub.Shared.Profiles;
 using ClubService.Data;
 using ClubService.Models;
 using Microsoft.AspNetCore.Builder;
@@ -36,6 +37,50 @@ namespace Backend.StabilizationTests;
 
 public sealed class SemesterRosterContractTests
 {
+    [Fact]
+    public async Task AcademicSelf_UsesCurrentRosterEmailIdentityAndDoesNotInventMajorOrYear()
+    {
+        await using var f = await Fixture.Create(); using var admin = f.Admin(); using var student = f.Client(f.AuthApp, 100, AuthRoles.ClubMember);
+        var before = await Json(await student.GetAsync("/api/users/me/profile")); Assert.Equal("ROSTER_UNAVAILABLE", before.GetProperty("academic").GetProperty("availability").GetString());
+        await f.Import(admin, "FALL2026", Guid.Empty, [Row()]);
+        var profile = await Json(await student.GetAsync("/api/users/me/profile?userId=101")); var academic = profile.GetProperty("academic");
+        Assert.Equal(100, profile.GetProperty("userId").GetInt32()); Assert.Equal("SE100", academic.GetProperty("studentCode").GetString());
+        Assert.Equal("AVAILABLE", academic.GetProperty("availability").GetString()); Assert.Equal("FALL2026", academic.GetProperty("semesterId").GetString());
+        Assert.Equal(JsonValueKind.Null, academic.GetProperty("major").ValueKind); Assert.Equal(JsonValueKind.Null, academic.GetProperty("year").ValueKind);
+        Assert.Equal("NO_AUTHORITATIVE_SOURCE", academic.GetProperty("majorAvailability").GetString());
+        Assert.DoesNotContain(profile.GetProperty("editableFields").EnumerateArray(), x => x.GetString()!.Contains("studentCode", StringComparison.Ordinal));
+        using var other = f.Client(f.AuthApp, 101, AuthRoles.ClubMember);
+        var own = await Json(await other.GetAsync("/api/users/me/profile")); Assert.Equal("NOT_IN_ROSTER", own.GetProperty("academic").GetProperty("availability").GetString());
+        Assert.Equal(JsonValueKind.Null, own.GetProperty("academic").GetProperty("studentCode").ValueKind);
+    }
+
+    [Fact]
+    public async Task AcademicSelf_IdentityChangeAndAmbiguousSemesterNeverReuseOldCode()
+    {
+        await using var f = await Fixture.Create(); using var admin = f.Admin(); using var student = f.Client(f.AuthApp, 100, AuthRoles.ClubMember);
+        await f.Import(admin, "FALL2026", Guid.Empty, [Row()]);
+        await f.AuthDb(async db => { (await db.Users.SingleAsync(x => x.Id == 100)).Email = "changed@fpt.edu.vn"; await db.SaveChangesAsync(); });
+        var value = await Json(await student.GetAsync("/api/users/me/profile")); Assert.Equal("IDENTITY_CHANGED", value.GetProperty("academic").GetProperty("availability").GetString());
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("academic").GetProperty("studentCode").ValueKind);
+        await f.AdminDb(async db => { (await db.Semesters.SingleAsync(x => x.SemesterCode == "SUMMER2026")).IsActive = true; await db.SaveChangesAsync(); });
+        value = await Json(await student.GetAsync("/api/users/me/profile")); Assert.Equal("SEMESTER_AMBIGUOUS", value.GetProperty("academic").GetProperty("availability").GetString());
+    }
+
+    [Fact]
+    public async Task AcademicSelf_DependencyFailurePreservesCanonicalTextAndInternalProjectionStaysMinimal()
+    {
+        await using var f = await Fixture.Create(); using var student = f.Client(f.AuthApp, 100, AuthRoles.ClubMember);
+        var request = new HttpRequestMessage(HttpMethod.Patch, "/api/users/me/profile") { Content = JsonContent.Create(new { expectedVersion = Guid.Empty, profile = new { headline = "Own headline" } }) };
+        Assert.Equal(HttpStatusCode.OK, (await student.SendAsync(request)).StatusCode);
+        f.AdminApp.Configuration["Security:InternalWorkflowToken"] = "calendar-side-mismatch";
+        var response = await student.GetAsync("/api/users/me/profile"); Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var value = await Json(response); Assert.Equal("Own headline", value.GetProperty("profile").GetProperty("headline").GetString());
+        Assert.Equal("AUTHORITY_UNAVAILABLE", value.GetProperty("academic").GetProperty("availability").GetString());
+        using var internalClient = f.AuthApp.GetTestClient(); internalClient.DefaultRequestHeaders.Add("X-Internal-Workflow-Token", Secret);
+        value = await Json(await internalClient.PostAsJsonAsync("/api/internal/experience/user-profiles", new[] { 100 }));
+        Assert.False(value[0].GetProperty("profile").TryGetProperty("academic", out _));
+    }
+
     private const string Key = "SemesterRosterTests-Only-Long-Signing-Key-2026-Not-Production";
     private const string Secret = "semester-test-internal-only";
     private static readonly DateTimeOffset Instant = new(2026, 10, 22, 8, 0, 0, TimeSpan.Zero);
@@ -260,7 +305,9 @@ public sealed class SemesterRosterContractTests
             {
                 InitialCatalog = "ClubHub_RosterTests_" + Guid.NewGuid().ToString("N"),
             }.ConnectionString : null;
+            WebApplication admin = null!;
             var ab = Builder(clock); ab.Services.AddDbContext<AuthDbContext>(x => x.UseSqlite(a));
+            ab.Services.AddSingleton(new CanonicalAcademicClient(new HttpClient(new AcademicForwarder(() => admin.GetTestClient())) { BaseAddress = new Uri("http://academic/") }, ab.Configuration));
             var auth = ab.Build(); Pipeline(auth); AuthRosterEndpoints.MapSchoolAccountEndpoints(auth); AuthProfiles.MapCanonicalProfileEndpoints(auth);
             await Db<AuthDbContext>(auth, async db =>
             {
@@ -285,8 +332,9 @@ public sealed class SemesterRosterContractTests
             }); await auth.StartAsync();
             var bb = Builder(clock); bb.Services.AddDbContext<AdminDbContext>(x => { if (sqlConnection is null) x.UseSqlite(b!); else x.UseSqlServer(sqlConnection); });
             bb.Services.AddAuthorization(options => options.AddPolicy(AdminPolicies.BackofficeUser, p => p.RequireRole(AuthRoles.Admin, AuthRoles.StudentAffairsAdmin)));
+            bb.Services.AddAuthorization(options => options.AddPolicy(AdminPolicies.AnyActor, p => p.RequireAuthenticatedUser()));
             bb.Services.AddSingleton(new SchoolAccountClient(auth.GetTestClient(), bb.Configuration));
-            var admin = bb.Build(); Pipeline(admin); AdminRosterEndpoints.MapSemesterRosterEndpoints(admin);
+            admin = bb.Build(); Pipeline(admin); AdminRosterEndpoints.MapSemesterRosterEndpoints(admin); AdminService.Endpoints.AcademicProfileEndpoints.MapAcademicProfileEndpoints(admin);
             await Db<AdminDbContext>(admin, async db =>
             {
                 if (sqlAdmin) await db.GetService<IMigrator>().MigrateAsync("20261013145324_StudentCompletionDefaults");
@@ -363,6 +411,16 @@ public sealed class SemesterRosterContractTests
             }
             await club.DisposeAsync(); await admin.DisposeAsync(); await auth.DisposeAsync(); await clubConnection.DisposeAsync();
             if (adminConnection is not null) await adminConnection.DisposeAsync(); await authConnection.DisposeAsync();
+        }
+    }
+
+    private sealed class AcademicForwarder(Func<HttpClient> client) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            using var forwarded = new HttpRequestMessage(request.Method, request.RequestUri) { Content = request.Content };
+            foreach (var header in request.Headers) forwarded.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            using var destination = client(); return await destination.SendAsync(forwarded, ct);
         }
     }
 }

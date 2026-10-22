@@ -1,5 +1,7 @@
 # Tài liệu tiến độ BE
 
+- [Hồ sơ cá nhân mở rộng](HO_SO_CA_NHAN_BE_2026-10-22.md): headline/ngày sinh/địa chỉ self-only, mã sinh viên từ roster chỉ đọc; nguồn ngành/năm học và media vẫn có trạng thái riêng.
+
 - [Lịch học cá nhân và lịch học kỳ](HOAN_THIEN_LICH_HOC_BE_2026-10-22.md): thêm 6 API công khai, alias Semester/campus, version và import an toàn; FE vẫn chưa chuyển consumer.
 
 - [Bàn giao BE hiện tại: hoạt động, phân công và roster học kỳ](HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md): toàn bộ 16 consumer operation thiếu route ban đầu đã có handler; roster theo email trường của account hiện có; phần tính điểm hoãn, các nhóm khác chưa được đánh Done.

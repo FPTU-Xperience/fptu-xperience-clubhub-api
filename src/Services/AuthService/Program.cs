@@ -12,6 +12,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add all services
 builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+builder.Services.AddHttpClient<ClubReportHub.Shared.Profiles.CanonicalAcademicClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(3);
+});
 builder.Services.AddHttpClient<ClubReportHub.Shared.Schedules.AcademicCalendarClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");

@@ -135,6 +135,7 @@ app.MapSettingsEndpoints();
 app.MapSemesterEndpoints();
 app.MapSemesterRosterEndpoints();
 app.MapAcademicCalendarEndpoints();
+app.MapAcademicProfileEndpoints();
 app.MapExperiencePolicyEndpoints();
 app.MapWorkspaceCatalogEndpoints();
 app.MapVerificationAssignmentEndpoints();

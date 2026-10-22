@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using AuthService.Data;
 using AuthService.Models;
 using ClubReportHub.Shared.Auth;
@@ -17,10 +18,13 @@ public static class CanonicalProfileEndpoints
         {
             var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == http.User.GetUserId(), ct);
             if (user is null) return Results.NotFound();
+            if (!user.IsActive || user.IsLocked) return Results.Forbid();
             var profile = await db.UserProfiles.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == user.Id, ct);
+            http.Response.Headers.CacheControl = "no-store";
             return Results.Ok(Response(user, profile));
-        }).RequireAuthorization(AuthPolicies.AllActors);
-        app.MapPatch("/api/users/me/profile", PatchAsync).RequireAuthorization(AuthPolicies.AllActors);
+        }).RequireAuthorization(AuthPolicies.AllActors).AddEndpointFilter<CanonicalAcademicReadFilter>();
+        app.MapPatch("/api/users/me/profile", PatchAsync).RequireAuthorization(AuthPolicies.AllActors)
+            .AddEndpointFilter<SelfProfileRequestFilter>().AddEndpointFilter<CanonicalAcademicReadFilter>();
         app.MapPost("/api/internal/experience/user-profiles", async (int[] userIds, AuthDbContext db, HttpContext http, IConfiguration configuration, CancellationToken ct) =>
         {
             if (!VerifiedExperienceRules.InternalRequest(http, configuration)) return Results.Forbid();
@@ -35,30 +39,43 @@ public static class CanonicalProfileEndpoints
                 u.CampusCode,
                 u.IsActive,
                 u.IsLocked,
-                profile = profiles.TryGetValue(u.Id, out var p) ? Response(u, p) : null
+                profile = profiles.TryGetValue(u.Id, out var p) ? Response(u, p, false) : null
             }));
         }).AllowAnonymous().ExcludeFromDescription();
     }
 
-    private static object Response(User user, CanonicalUserProfile? profile) => new
+    private static object Response(User user, CanonicalUserProfile? profile, bool includePrivate = true)
     {
-        userId = user.Id,
-        version = profile?.Version ?? Guid.Empty,
-        profileSource = "user-profile",
-        identityProvenance = "PROJECT_ACCOUNT",
-        profile = new
+        var text = new Dictionary<string, object?>
         {
-            displayName = profile?.DisplayName ?? user.FullName,
-            about = profile?.About ?? "",
-            skills = JsonSerializer.Deserialize<string[]>(profile?.SkillsJson ?? "[]"),
-            interests = JsonSerializer.Deserialize<string[]>(profile?.InterestsJson ?? "[]")
-        },
-        personal = new { phoneNumber = profile?.PhoneNumber },
-        editableFields = new[] { "profile.displayName", "profile.about", "profile.skills", "profile.interests", "personal.phoneNumber" }
-    };
+            ["displayName"] = profile?.DisplayName ?? user.FullName,
+            ["about"] = profile?.About ?? "",
+            ["skills"] = JsonSerializer.Deserialize<string[]>(profile?.SkillsJson ?? "[]"),
+            ["interests"] = JsonSerializer.Deserialize<string[]>(profile?.InterestsJson ?? "[]")
+        };
+        var personal = new Dictionary<string, object?> { ["phoneNumber"] = profile?.PhoneNumber };
+        var editable = new List<string> { "profile.displayName", "profile.about", "profile.skills", "profile.interests", "personal.phoneNumber" };
+        if (includePrivate)
+        {
+            text["headline"] = profile?.Headline ?? "";
+            personal["dateOfBirth"] = profile?.DateOfBirth; personal["address"] = profile?.Address;
+            editable.AddRange(["profile.headline", "personal.dateOfBirth", "personal.address"]);
+        }
+        return new
+        {
+            userId = user.Id,
+            version = profile?.Version ?? Guid.Empty,
+            profileSource = "user-profile",
+            identityProvenance = "PROJECT_ACCOUNT",
+            profile = text,
+            personal,
+            editableFields = editable
+        };
+    }
 
-    private static async Task<IResult> PatchAsync(JsonElement request, AuthDbContext db, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> PatchAsync(AuthDbContext db, HttpContext http, CancellationToken ct)
     {
+        var request = await BoundedJsonRequest.ReadAsync<JsonElement>(http, 32768, ct);
         if (request.ValueKind != JsonValueKind.Object || request.EnumerateObject().Any(x => x.Name is not ("expectedVersion" or "profile" or "personal"))
             || request.EnumerateObject().GroupBy(x => x.Name).Any(x => x.Count() > 1)
             || !request.TryGetProperty("expectedVersion", out var version) || version.ValueKind != JsonValueKind.String || !version.TryGetGuid(out var expected))
@@ -86,13 +103,23 @@ public static class CanonicalProfileEndpoints
                     }
                     else
                     {
-                        if (path is not ("profile.displayName" or "profile.about" or "personal.phoneNumber")) return ApiOperations.Error(403, "PROFILE_FIELD_FORBIDDEN", "Identity, roles and account state are read-only.");
-                        if (field.Value.ValueKind != JsonValueKind.String && !(path == "personal.phoneNumber" && field.Value.ValueKind == JsonValueKind.Null)) return Results.BadRequest();
+                        if (path is not ("profile.displayName" or "profile.about" or "personal.phoneNumber" or "profile.headline" or "personal.dateOfBirth" or "personal.address")) return ApiOperations.Error(403, "PROFILE_FIELD_FORBIDDEN", "Identity, roles and account state are read-only.");
+                        var nullable = path is "personal.phoneNumber" or "profile.headline" or "personal.dateOfBirth" or "personal.address";
+                        if (field.Value.ValueKind != JsonValueKind.String && !(nullable && field.Value.ValueKind == JsonValueKind.Null)) return Results.BadRequest();
                         var text = field.Value.ValueKind == JsonValueKind.Null ? null : field.Value.GetString()!.Trim();
                         if (path == "profile.displayName" && (string.IsNullOrWhiteSpace(text) || text.Length > 120)
                             || path == "profile.about" && text?.Length > 2000
                             || path == "personal.phoneNumber" && text is not null && (text.Length > 20 || text.Any(c => !char.IsAsciiDigit(c) && c is not ('+' or ' ' or '-' or '(' or ')')))) return Results.BadRequest();
-                        if (path == "profile.displayName") row.DisplayName = text!; else if (path == "profile.about") row.About = text!; else row.PhoneNumber = text;
+                        if (path == "profile.headline" && text is not null && (text.Length > 160 || text.Any(char.IsControl))
+                            || path == "personal.address" && text is not null && (text.Length > 300 || text.Any(c => char.IsControl(c) && c is not ('\r' or '\n')))) return Results.BadRequest();
+                        var today = DateOnly.FromDateTime((http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow).ToOffset(TimeSpan.FromHours(7)).Date);
+                        if (path == "personal.dateOfBirth" && text is not null && (!DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var birth) || birth > today)) return Results.BadRequest();
+                        if (path == "profile.displayName") row.DisplayName = text!;
+                        else if (path == "profile.about") row.About = text!;
+                        else if (path == "personal.phoneNumber") row.PhoneNumber = text;
+                        else if (path == "profile.headline") row.Headline = string.IsNullOrWhiteSpace(text) ? null : text;
+                        else if (path == "personal.dateOfBirth") row.DateOfBirth = text;
+                        else row.Address = string.IsNullOrWhiteSpace(text) ? null : text;
                     }
                     changed = true;
                 }
