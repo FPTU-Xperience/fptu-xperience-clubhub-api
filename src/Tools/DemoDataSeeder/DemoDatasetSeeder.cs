@@ -284,7 +284,21 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
         await exportDb.ExportFiles.ExecuteDeleteAsync(cancellationToken);
         await exportDb.ExportRequests.ExecuteDeleteAsync(cancellationToken);
 
+        await activityDb.Set<ActivityActionCompletion>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityStaffAssignment>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityRecruitmentPosition>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityRecruitment>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityActionRule>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityExecutionAudit>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityExecution>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityApplicationHistory>().ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ActivityApplication>().ExecuteDeleteAsync(cancellationToken);
         await activityDb.ActivityAttendances.ExecuteDeleteAsync(cancellationToken);
+        await activityDb.SessionAudits.ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Sessions.ExecuteDeleteAsync(cancellationToken);
+        await activityDb.ExperienceInbox.ExecuteDeleteAsync(cancellationToken);
+        await activityDb.OutboxMessages.ExecuteDeleteAsync(cancellationToken);
+        await activityDb.Set<ClubReportHub.Shared.Data.ApiOperationReceipt>().ExecuteDeleteAsync(cancellationToken);
         await activityDb.ActivityParticipants.ExecuteDeleteAsync(cancellationToken);
         await activityDb.Activities.ExecuteDeleteAsync(cancellationToken);
 

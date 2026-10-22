@@ -619,6 +619,12 @@ namespace ClubService.Migrations
                     b.Property<int?>("InvitedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("InvitedRosterRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("InvitedRosterVersion")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -661,6 +667,16 @@ namespace ClubService.Migrations
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("RosterCampusCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid?>("RosterRevisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("RosterVersion")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("SemesterId")
                         .HasMaxLength(40)

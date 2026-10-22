@@ -20,7 +20,12 @@ public sealed record ActivityResponse(
     IReadOnlyCollection<ActivityAttendanceResponse> Attendances)
 {
     public Guid Version { get; init; }
-    public string PublicationStatus { get; init; } = "LEGACY";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PublicationStatus { get; init; } = "LEGACY";
+    public bool? IsPublished { get; init; }
+    public int? PublicationVersion { get; init; }
+    public int? SourceApplicationId { get; init; }
+    public ActivityPublicationCapabilities PublicationCapabilities { get; init; } = new(false);
     public string DiscoveryVisibility { get; init; } = "CLUB_ONLY";
     public string? SemesterId { get; init; }
     public int? Capacity { get; init; }
@@ -36,6 +41,8 @@ public sealed record ActivityResponse(
     public Guid? PolicyVersion { get; init; }
     public string? EvidenceRequirements { get; init; }
 }
+
+public sealed record ActivityPublicationCapabilities(bool CanManage);
 
 public sealed record ActivityParticipantResponse(
     int Id,

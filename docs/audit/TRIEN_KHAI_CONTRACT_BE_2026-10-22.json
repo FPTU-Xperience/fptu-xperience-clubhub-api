@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "date": "2026-10-22",
   "scope": "BE implementation and local verification; FE unchanged; not deployment proof",
   "branch": "feat/backend-contract-completion",
   "baselineBeCommit": "b066f96b9fd0ea304e7c498f6ddcc569b2c21ebf",
   "feContractCommit": "3ffd00ed03a5b8db942ed3ac3b7b6dee098d9f42",
-  "newPublicOperationCount": 6,
+  "newPublicOperationCount": 29,
   "newPublicOperations": [
     {
       "method": "GET",
@@ -16,8 +16,8 @@
     {
       "method": "GET",
       "route": "/api/clubs/{clubId}/invitation-semesters",
-      "status": "READ_IMPLEMENTED_WORKFLOW_PARTIAL",
-      "limitation": "ROSTER_UNAVAILABLE; canInvite=false."
+      "status": "READ_AND_INVITATION_WORKFLOW_IMPLEMENTED",
+      "limitation": "Availability from authoritative roster revision; revalidate identity on invite/consent/approval."
     },
     {
       "method": "GET",
@@ -42,20 +42,256 @@
       "route": "/api/clubs/me/membership-applications/{applicationId}/withdraw",
       "status": "IMPLEMENTED",
       "limitation": "Own pending APPLICATION only; no body, optional Idempotency-Key."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications/{id}",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activity-applications/{id}",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications/{id}/submit",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications/{id}/review",
+      "actors": [
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications/{id}/history",
+      "actors": [
+        "Quản lý CLB",
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{id}/publication",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{id}/staffing",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên",
+        "Người xác minh"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments/{assignmentId}/cancel",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments/{assignmentId}/completions",
+      "actors": [
+        "Sinh viên"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments/{assignmentId}/attendance-claims",
+      "actors": [
+        "Sinh viên"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/action-completions/{completionId}/verify",
+      "actors": [
+        "Người xác minh"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/recruitment",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{id}/recruitment",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{id}/recruitment/status",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/recruitment/positions/{positionId}/join",
+      "actors": [
+        "Sinh viên"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/activity-recruitments",
+      "actors": [
+        "Quản lý CLB",
+        "Sinh viên"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "ActivityActionContractTests",
+      "limitation": ""
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/eligible-members",
+      "actors": [
+        "Quản lý CLB"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "SemesterRosterContractTests",
+      "limitation": ""
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/semesters/{identifier}/roster-imports/preview",
+      "actors": [
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "SemesterRosterContractTests",
+      "limitation": "Existing school-email accounts only; no implicit account creation."
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/semesters/{identifier}/roster-imports/{importId}/commit",
+      "actors": [
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "SemesterRosterContractTests",
+      "limitation": "Existing school-email accounts only; no implicit account creation."
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/semesters/{identifier}/student-roster",
+      "actors": [
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "SemesterRosterContractTests",
+      "limitation": "Existing school-email accounts only; no implicit account creation."
     }
   ],
   "consumerGapScope": {
     "baseline": 16,
-    "resolved": 1,
-    "remaining": 15,
+    "resolved": 16,
+    "remaining": 0,
     "note": "Counts only the 16 missing operations with an existing consumer in the 2026-10-21 audit; actor sets overlap. Proposed APIs and business gaps are separate.",
     "remainingByActor": {
-      "Quản lý CLB": 13,
-      "CTSV/Admin": 1,
-      "Sinh viên": 3,
-      "Người xác minh": 2
+      "Quản lý CLB": 0,
+      "CTSV/Admin": 0,
+      "Sinh viên": 0,
+      "Người xác minh": 0
     },
-    "remainingOperations": [
+    "resolvedOperations": [
       {
         "method": "GET",
         "route": "/api/clubs/{}/eligible-members",
@@ -63,7 +299,7 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "current_facade",
         "contract": "club-member-invitations-api.md",
         "work_package": "P04"
@@ -76,10 +312,11 @@
           "Quản lý CLB",
           "CTSV/Admin"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "current_facade",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P06"
+        "work_package": "P06",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -88,10 +325,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "current_facade",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P06"
+        "work_package": "P06",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "PATCH",
@@ -100,10 +338,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "current_facade",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P06"
+        "work_package": "P06",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -112,10 +351,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "current_facade",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P06"
+        "work_package": "P06",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "PATCH",
@@ -124,10 +364,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "current_facade",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P06"
+        "work_package": "P06",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "GET",
@@ -138,10 +379,11 @@
           "Sinh viên",
           "Người xác minh"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -150,10 +392,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -162,10 +405,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -174,10 +418,11 @@
         "actors": [
           "Người xác minh"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -186,10 +431,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "PATCH",
@@ -198,10 +444,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "PATCH",
@@ -210,10 +457,11 @@
         "actors": [
           "Quản lý CLB"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "POST",
@@ -222,10 +470,11 @@
         "actors": [
           "Sinh viên"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       },
       {
         "method": "GET",
@@ -235,15 +484,29 @@
           "Quản lý CLB",
           "Sinh viên"
         ],
-        "status": "NO_BE_ROUTE",
+        "status": "SOURCE_IMPLEMENTED_OPERATIONAL_NO_NEW_POINTS",
         "scope": "direct_consumer",
         "contract": "activity-action-staffing-api.md",
-        "work_package": "P07"
+        "work_package": "P07",
+        "limitation": "Scoring deferred; application FE receipt currently requires numeric expectedRawXp and must handle null/deferred status."
       }
-    ]
+    ],
+    "remainingOperations": []
   },
-  "migration": "20261021140255_MembershipApplicationHistory",
-  "verification": {
+  "overallPlanDone": false,
+  "deferred": [
+    "NEW_SCORING_BY_PRODUCT_OWNER: estimates, raw-budget/final-report awards, +1/index/rollover, task credits/wallet/redemption",
+    "Governance multiple groups and cross-service capabilities",
+    "Remaining profile/media/resources and academic calendar/private timetable",
+    "Shape asset format decision and optional/unapproved scopes"
+  ],
+  "knowledgeGraph": {
+    "runner": "GitNexus 1.6.12",
+    "receiptSchema": 4,
+    "limitation": "C# receiver typing and some missing symbol IDs limit static flow attribution. Direct source review, HTTP and real SQL regression tests supplement the graph; no claim of exhaustive static coverage."
+  },
+  "currentHandoff": "HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md",
+  "previousCheckpointVerification": {
     "totals": {
       "total": 788,
       "executed": 788,
@@ -309,17 +572,136 @@
     "coverageCollected": true,
     "managerRegressionPassed": 73
   },
-  "overallPlanDone": false,
-  "deferred": [
-    "School roster/import/eligibility and semester invitation validation",
-    "Governance and new application/publication/action/staffing/final-report workflows",
-    "Approved scoring/raw-budget settlement, +1/index/rollover decisions",
-    "Tasks, CLUB_CREDIT wallet, rewards/redemption/debt policy",
-    "Remaining media owners/profile/resources/timetable; shape format decision"
+  "verification": {
+    "totals": {
+      "total": 831,
+      "executed": 831,
+      "passed": 831,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    "testAssemblies": [
+      {
+        "assembly": "clubreporthub.tests.dll",
+        "total": 123,
+        "executed": 123,
+        "passed": 123,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      {
+        "assembly": "adminservice.integrationtests.dll",
+        "total": 85,
+        "executed": 85,
+        "passed": 85,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      {
+        "assembly": "backend.stabilizationtests.dll",
+        "total": 623,
+        "executed": 623,
+        "passed": 623,
+        "failed": 0,
+        "notExecuted": 0
+      }
+    ],
+    "checks": [
+      {
+        "name": "format",
+        "exitCode": 0,
+        "seconds": 11.55
+      },
+      {
+        "name": "format-verify",
+        "exitCode": 0,
+        "seconds": 11.34
+      },
+      {
+        "name": "release-build",
+        "exitCode": 0,
+        "seconds": 12.03
+      },
+      {
+        "name": "full-release-tests",
+        "exitCode": 0,
+        "seconds": 178.22
+      },
+      {
+        "name": "diff-check",
+        "exitCode": 0,
+        "seconds": 0.12
+      }
+    ],
+    "coverageCollected": true,
+    "sql": "Configured SQL Server connection; isolated prefix-validated disposable test databases; prior-schema upgrade and concurrent mutations.",
+    "proofDirectory": "C:\\Users\\ADMIN\\Downloads\\DOAN\\.contract-audit\\be-work-2026-10-21\\operational-final-results",
+    "ciStyleModelChecks": [
+      {
+        "name": "style-AdminService",
+        "exitCode": 0,
+        "seconds": 16.13
+      },
+      {
+        "name": "style-AuthService",
+        "exitCode": 0,
+        "seconds": 12.67
+      },
+      {
+        "name": "style-ClubService",
+        "exitCode": 0,
+        "seconds": 15.05
+      },
+      {
+        "name": "style-AdminService.IntegrationTests",
+        "exitCode": 0,
+        "seconds": 11.97
+      },
+      {
+        "name": "style-Backend.StabilizationTests",
+        "exitCode": 0,
+        "seconds": 30.31
+      },
+      {
+        "name": "model-ActivityService",
+        "exitCode": 0,
+        "seconds": 4.94
+      },
+      {
+        "name": "model-AdminService",
+        "exitCode": 0,
+        "seconds": 5.94
+      },
+      {
+        "name": "model-ClubService",
+        "exitCode": 0,
+        "seconds": 5.75
+      }
+    ]
+  },
+  "currentBatchNewPublicOperationCount": 23,
+  "internalOperations": [
+    {
+      "method": "POST",
+      "route": "/api/internal/semester-roster/accounts/resolve",
+      "owner": "AuthService"
+    },
+    {
+      "method": "POST",
+      "route": "/api/internal/semester-roster/lookup",
+      "owner": "AdminService"
+    },
+    {
+      "method": "GET",
+      "route": "/api/internal/semester-roster/summaries",
+      "owner": "AdminService"
+    }
   ],
-  "knowledgeGraph": {
-    "runner": "GitNexus 1.6.12",
-    "receiptSchema": 4,
-    "limitation": "C# receiver typing and some missing symbol IDs limit static flow attribution. Direct source review, HTTP and real SQL regression tests supplement the graph; no claim of exhaustive static coverage."
-  }
+  "migrations": [
+    "20261021140255_MembershipApplicationHistory",
+    "20261022090451_ActivityActionWorkflowWithoutScoring",
+    "20261022094258_SemesterStudentRosterEmailIdentity",
+    "20261022094304_InvitationRosterValidation",
+    "20261022100406_InvitationRosterAuditContext"
+  ]
 }

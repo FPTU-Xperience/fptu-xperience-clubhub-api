@@ -2,6 +2,8 @@
 
 Phạm vi: BE, trên nhánh `feat/backend-contract-completion`. Nguồn yêu cầu là contract FE main `3ffd00ed03a5b8db942ed3ac3b7b6dee098d9f42`; BE trước triển khai là `b066f96b9fd0ea304e7c498f6ddcc569b2c21ebf`. Tài liệu này cập nhật tiến độ sau [audit 21/10](DOI_CHIEU_BE_CONTRACT_FE_2026-10-21.md); audit cũ giữ nguyên mốc nguồn. Không sửa FE và không đánh đồng test cục bộ với đã deploy.
 
+> Cập nhật tiếp ngày 22/10: xem [bàn giao hoạt động, phân công và roster](HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md). Nhóm 16 consumer operation thiếu route ban đầu hiện đã có đủ handler; tính điểm đang hoãn và các nhóm contract khác vẫn có phần chưa hoàn thành. Kết quả 788 test dưới đây là checkpoint trước đợt bổ sung này.
+
 ## Trạng thái từng phần
 
 | Actor / phần | API | Trạng thái BE và giới hạn |
@@ -9,26 +11,26 @@ Phạm vi: BE, trên nhánh `feat/backend-contract-completion`. Nguồn yêu c�
 | Quản lý CLB | `GET /api/clubs/{id}`, `GET /api/clubs/me/managed` | **Đã sửa F01**: trả `version`, `coverImageUrl`, `schedule`; mapper dùng chung cũng bổ sung dữ liệu cho response tạo/sửa/gán quản lý. Quyền xem danh sách thành viên không được mở rộng. |
 | Quản lý CLB | `PUT /api/clubs/{id}/public-images` | **Đã sửa F02**: trường bị bỏ qua giữ nguyên; `null` xóa đúng ảnh được chỉ định. Có version, xác minh media, quyền hiện tại và chống gửi lại khác payload. |
 | Quản lý CLB, thành viên đã duyệt, CTSV/Admin có phạm vi | `GET /api/clubs/{clubId}/workspace-semesters` | **Đã có read API**: catalog Admin thật, kiểm tra CLB/campus/quyền hiện tại, mã/GUID/ngày và availability. Không đồng nghĩa governance hay mọi nghiệp vụ theo kỳ đã hoàn thành. |
-| Quản lý CLB, CTSV/Admin có phạm vi | `GET /api/clubs/{clubId}/invitation-semesters` | **Đã có catalog; luồng mời còn một phần**: cùng nguồn học kỳ; `canInvite:false`, `invitationAvailability:"ROSTER_UNAVAILABLE"`. Chưa có roster trường/eligible-members. |
+| Quản lý CLB, CTSV/Admin có phạm vi | `GET /api/clubs/{clubId}/invitation-semesters` | **Đã bổ sung luồng roster**: availability/canInvite dựa trên revision roster thật; có eligible-members và kiểm tra lại khi mời/consent/duyệt. Xem bàn giao mới. |
 | Quản lý CLB, CTSV/Admin có phạm vi | `GET /api/clubs/{clubId}/experience-policies?semesterId=...` | **Đã có read API**: nhận code/GUID thật; chỉ policy PERIOD đã duyệt, đúng environment, đã có hiệu lực. Không trả approval basis, người duyệt, tau hay cấu hình quản trị. |
 | Sinh viên đã đăng ký hoạt động | `GET /api/v2/activities/{activityId}/sessions?page=1&pageSize=20` | **Đã có projection an toàn cho F05**: phiên/lịch sử/nguồn snapshot, phiên bản và trạng thái của chính người gọi; không trả roster, geofence, QR challenge hay evidence người khác. FE cần chuyển sang route này cho campus nonmember. |
 | Sinh viên | `GET /api/clubs/me/membership-applications` | **Đã có API**: lịch sử đơn/lời mời của chính tài khoản, cả hồ sơ đã rút/được lưu trữ; club code/logo, source, version và capability theo principal. |
 | Sinh viên | `POST /api/clubs/me/membership-applications/{applicationId}/withdraw` | **Đã có API**: không body; tự rút đơn APPLICATION đang Pending; gửi lại trả cùng trạng thái; giữ câu trả lời và audit actor/thời gian/version. Không dùng để từ chối lời mời hay rời CLB đã tham gia. |
 | Sinh viên | `POST /api/clubs/{id}/join` | **Đã sửa nộp lại**: tạo ID mới, liên kết `previousApplicationId`, giữ nhận xét/câu trả lời của đơn trước; consent lấy từ chính sinh viên, vẫn chờ quản lý duyệt. |
 | Sinh viên | `GET /api/clubs/me/memberships` | **Đã bổ sung metadata F06**: `clubCode`, `logoUrl`, `source`, `semesterId`, `invitedAt`, `consentedAt`, `canWithdraw`, `canAcceptInvitation`, `version`. `semesterId` còn null khi chưa có căn cứ roster; legacy source là UNKNOWN. |
-| Quản lý CLB | `POST /api/clubs/{clubId}/members` | **Đã tăng kiểm tra, vẫn PARTIAL**: tên lấy từ Auth; kiểm tra tài khoản tồn tại/active/unlocked và campus, ghi origin/actor/thời gian lời mời. Chưa kiểm tra roster học kỳ hoặc xác minh actor Sinh viên từ roster; không đánh hoàn thành hợp đồng mời. |
+| Quản lý CLB | `POST /api/clubs/{clubId}/members` | **Đã bổ sung kiểm tra roster**: bắt buộc semesterId; email trường/tài khoản hiện có, actor hợp lệ, revision và account kiểm tra lại ở mời/consent/duyệt; có outbox cho người được mời. Không tự tạo account hoặc auto-approve. |
 | Nội bộ | `GET /api/internal/experience/workspace-catalog` | Chỉ service-to-service: cần internal token **và** bearer hợp lệ. FE không được gọi hoặc nhận token này. Không thay policy backoffice của `/api/v1/semesters`. |
 
-Trong 16 operation có consumer nhưng thiếu route tại mốc audit 21/10, đã triển khai withdrawal; còn **15 operation** chưa có route. Năm GET mới bổ sung nguồn đọc/handoff ngoài nhóm consumer đang thiếu đó. Số còn lại theo actor dưới đây có giao nhau vì một operation có thể dùng cho nhiều actor; đây không phải tổng mọi thiếu sót của toàn bộ contract:
+Trong 16 operation có consumer nhưng thiếu route tại audit 21/10, withdrawal đã có ở checkpoint trước và 15 operation còn lại đã có handler ở đợt bổ sung hiện tại. **Còn 0 route thiếu trong nhóm này**, không đồng nghĩa toàn bộ contract đã xong. Actor dùng chung operation nên không cộng các hàng thành tổng.
 
-| Actor | Operation có consumer vẫn thiếu route |
+| Actor | Operation có consumer vẫn thiếu route trong nhóm 16 |
 | --- | ---: |
-| Quản lý CLB | 13 |
-| Sinh viên | 3 |
-| Người xác minh | 2 |
-| CTSV/Admin | 1 |
+| Quản lý CLB | 0 |
+| Sinh viên | 0 |
+| Người xác minh | 0 |
+| CTSV/Admin | 0 |
 
-Danh sách method/route/consumer cụ thể và trạng thái đọc máy ở [JSON bàn giao](TRIEN_KHAI_CONTRACT_BE_2026-10-22.json).
+Danh sách mới, điểm chưa tương thích ở FE, schema roster, migration và giới hạn ở [bàn giao hiện tại](HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md) và [JSON bàn giao](TRIEN_KHAI_CONTRACT_BE_2026-10-22.json).
 
 ## Cách FE dùng các phần đã có
 
@@ -102,10 +104,11 @@ GitNexus dùng distribution 1.6.12 và receipt schema 4 đã kiểm tra theo sou
 
 ## Phần còn lại giữ CHƯA HOÀN THÀNH
 
-- P03: roster/import/carry-forward/eligible-members; format và identity schema O-04 chưa chốt. Catalog/lời mời có metadata không thay thế xác nhận roster. Lời mời hiện lưu inbox/consent; chưa có delivery outbox/email/push riêng cho hợp đồng mời mới.
-- P05–P07: governance, biểu mẫu/publication/action/staffing/final report và settlement raw budget theo contract mới. Quyền duyệt cuối, formula/caps/allocation, điều chỉnh/hoàn raw cần quyết định được phê duyệt. Điểm đang có không tự đổi sang công thức đề xuất.
-- P08: task → CLUB_CREDIT, wallet/redemption/reward/bundle; quy tắc reversal/debt và loại tài sản còn mở. Không tạo thêm ví hay đổi raw XP thành credit tùy ý.
-- P09–P10: các owner media mới, shape/FRAME, phần mở rộng profile/resources và timetable chưa được đánh hoàn thành bởi các route trong đợt này. Chuẩn shape PNG/SVG còn mâu thuẫn cần chốt; alias/cửa sổ catalog cần dữ liệu cấu hình thật.
-- +1/linear versus saturated ERI, PERIOD/CUMULATIVE, reset/rollover và các mục tùy chọn giữ nguyên trạng thái cần đặc tả; không xóa khỏi contract.
+- P03/P04: đã có roster/import/carry-forward/eligible-members và xác nhận lời mời theo email trường hiện có. Notification có outbox; delivery live chưa nghiệm thu.
+- P05: governance đa nhóm/quyền xuyên service còn thiếu.
+- P06/P07: phần vận hành hồ sơ/publication/staffing/recruitment/completion đã có. Estimates/final-report award/settlement raw budget và mọi tính/cộng/thu hồi điểm mới **tạm hoãn theo yêu cầu chủ dự án**. FE application adapter còn yêu cầu expectedRawXp là số; BE trả null với trạng thái hoãn, cần FE xử lý riêng.
+- P08: task → CLUB_CREDIT, wallet/redemption/reward/bundle và reversal/debt còn mở, phụ thuộc quy tắc điểm chưa chốt.
+- P09/P10: media owners/shape/FRAME, profile/resources và calendar/timetable chưa được hoàn thành bởi nhóm route này; chuẩn shape PNG/SVG cần chốt.
+- +1/linear versus saturated ERI, PERIOD/CUMULATIVE, reset/rollover và các mục tùy chọn giữ trạng thái hoãn/cần đặc tả; không xóa.
 
 Plan tổng thể vẫn chưa đạt toàn bộ Definition of Done. Những mục trên không được đổi nhãn thành hoàn thành chỉ vì route cũ hoặc test cũ tồn tại. Test ở workspace không xác nhận đã deploy, đã áp migration trên môi trường dùng chung hay FE đã chuyển consumer.

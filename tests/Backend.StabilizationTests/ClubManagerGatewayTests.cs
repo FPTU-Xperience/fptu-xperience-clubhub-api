@@ -16,6 +16,16 @@ namespace Backend.StabilizationTests;
 public sealed partial class CrossServiceWorkflowAuthorizationTests
 {
     [Theory]
+    [InlineData("GET", "/api/clubs/1/eligible-members", "club-service")]
+    [InlineData("POST", "/api/v1/semesters/FALL2026/roster-imports/preview", "admin-service")]
+    [InlineData("POST", "/api/v1/semesters/FALL2026/roster-imports/11111111-1111-1111-1111-111111111111/commit", "admin-service")]
+    [InlineData("POST", "/api/activity-applications", "activity-service")]
+    [InlineData("GET", "/api/activity-applications/1", "activity-service")]
+    [InlineData("POST", "/api/activity-applications/1/review", "activity-service")]
+    [InlineData("GET", "/api/clubs/1/activity-recruitments", "activity-service")]
+    [InlineData("GET", "/api/activities/1/staffing", "activity-service")]
+    [InlineData("PATCH", "/api/activities/1/publication", "activity-service")]
+    [InlineData("POST", "/api/activities/1/recruitment/positions/11111111-1111-1111-1111-111111111111/join", "activity-service")]
     [InlineData("POST", "/api/media/upload-intents", "auth-service")]
     [InlineData("GET", "/api/contributions/11111111-1111-1111-1111-111111111111", "admin-service")]
     [InlineData("POST", "/api/activities/1/contributions", "admin-service")]

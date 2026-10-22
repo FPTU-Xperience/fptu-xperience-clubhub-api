@@ -46,6 +46,11 @@ builder.Services.AddHttpClient<WorkspaceCatalogClient>(client =>
     client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
     client.Timeout = TimeSpan.FromSeconds(15);
 }).AddCorrelationIdForwarding();
+builder.Services.AddHttpClient<ClubReportHub.Shared.Rosters.SemesterRosterClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddCorrelationIdForwarding();
 
 // HTTP Client for Activity Service
 builder.Services.AddHttpClient<ActivityStatisticsClient>(client =>
@@ -122,6 +127,7 @@ app.MapGet("/", () => Results.Ok(new { service = "Club Service", status = "runni
 
 app.MapClubEndpoints();             // Club CRUD operations
 app.MapClubWorkspaceCatalogEndpoints();
+app.MapClubRosterEligibilityEndpoints();
 app.MapSelfMembershipApplicationEndpoints();
 app.MapApplicationEndpoints();      // Club creation applications
 app.MapMembershipEndpoints();       // Membership requests & management

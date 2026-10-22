@@ -64,6 +64,8 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         var name = Guid.NewGuid().ToString();
         builder.Services.AddDbContext<ClubDbContext>(o => { if (connection is null) o.UseInMemoryDatabase(name); else o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()); });
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
+        builder.Services.AddSingleton(new ClubReportHub.Shared.Rosters.SemesterRosterClient(
+            new HttpClient(new CanonicalSemesterRosterHandler(104, "Canonical student")) { BaseAddress = new Uri("http://roster-fixture.invalid/") }, builder.Configuration));
         builder.Services.AddSingleton(new CurrentUserProfileClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
         { Content = JsonContent.Create(new[] { new InternalUserProfile(104, "Canonical student", "student@example.invalid", targetCampus ?? CampusCodes.Hanoi, true, targetLocked, null) }) }), builder.Configuration));
         var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization(); app.MapClubEndpoints(); app.MapMembershipEndpoints();

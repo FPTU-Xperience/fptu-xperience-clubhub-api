@@ -14,8 +14,34 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     public DbSet<ActivitySessionAudit> SessionAudits => Set<ActivitySessionAudit>();
     public DbSet<ActivityExperienceInbox> ExperienceInbox => Set<ActivityExperienceInbox>();
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ValidateActionHistory();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateActionHistory();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ValidateActionHistory();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void ValidateActionHistory()
+    {
+        if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule
+            && x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Application history, approved rules and execution audit are append-only.");
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ActivityActionConfiguration.Configure(modelBuilder);
         modelBuilder.Entity<ClubActivity>(entity =>
         {
             entity.Property(x => x.Version).IsConcurrencyToken();

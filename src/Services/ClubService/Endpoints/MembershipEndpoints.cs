@@ -105,6 +105,13 @@ public static class MembershipEndpoints
             return Results.BadRequest(new { message = validationError });
         }
 
+        var currentInvitation = await db.ClubMemberships.AsNoTracking().FirstOrDefaultAsync(x => x.ClubId == id
+            && x.UserId == userId && x.Source == ClubMembershipSources.Invitation, cancellationToken);
+        if (currentInvitation is not null)
+        {
+            var eligibility = await ClubRosterEligibility.Invitation(currentInvitation, club, http, cancellationToken);
+            if (eligibility.Error is not null) return eligibility.Error;
+        }
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
             var existing = await db.ClubMemberships
@@ -115,6 +122,9 @@ public static class MembershipEndpoints
                 if (existing.Status == ClubMembershipStatuses.Pending &&
                     (!existing.AcceptedClubRules || !existing.CommittedToParticipate))
                 {
+                    var eligibility = await ClubRosterEligibility.Invitation(existing, club, http, cancellationToken);
+                    if (eligibility.Error is not null) return eligibility.Error;
+                    ClubRosterEligibility.Apply(existing, eligibility.Roster);
                     ClubMappers.ApplyJoinRequest(existing, request);
                     existing.ConcurrencyToken = Guid.NewGuid();
                     existing.ConsentedAtUtc = DateTimeOffset.UtcNow;
@@ -206,6 +216,8 @@ public static class MembershipEndpoints
             return Results.Forbid();
         }
 
+        var invitationEligibility = await ClubRosterEligibility.Invitation(membership, membership.Club, httpContext, cancellationToken);
+        if (invitationEligibility.Error is not null) return invitationEligibility.Error;
         return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
         {
             if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken)) return Results.Forbid();
@@ -220,6 +232,9 @@ public static class MembershipEndpoints
             {
                 return Results.Conflict(new { message = "The invited member must personally accept the club rules before approval." });
             }
+            var currentEligibility = await ClubRosterEligibility.Invitation(membership, membership.Club, httpContext, cancellationToken);
+            if (currentEligibility.Error is not null) return currentEligibility.Error;
+            ClubRosterEligibility.Apply(membership, currentEligibility.Roster);
 
             membership.Status = ClubMembershipStatuses.Approved;
             membership.Role = ClubMemberRoles.Member;

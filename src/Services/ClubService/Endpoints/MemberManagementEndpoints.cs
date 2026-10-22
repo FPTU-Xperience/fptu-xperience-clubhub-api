@@ -33,6 +33,7 @@ public static class MemberManagementEndpoints
             .WithDescription("List all members of a club with pagination and filtering");
 
         clubs.MapPost("/{clubId:int}/members", InviteClubMember)
+            .AddEndpointFilter<ClubReportHub.Shared.Rosters.RosterExceptionFilter>()
             .WithName("InviteClubMember")
             .WithDescription("Create a pending invitation; the member must accept the club rules through /join before approval");
 
@@ -63,12 +64,12 @@ public static class MemberManagementEndpoints
 
     private static async Task<IResult> InviteClubMember(
         int clubId,
-        JsonElement request,
         ClaimsPrincipal user,
         ClubDbContext db,
         HttpContext http,
         CancellationToken cancellationToken)
     {
+        var request = await BoundedJsonRequest.ReadAsync<JsonElement>(http, 16 * 1024, cancellationToken);
         if (request.ValueKind != JsonValueKind.Object ||
             !request.TryGetProperty("userId", out var userIdValue) ||
             !request.TryGetProperty("fullName", out var fullNameValue) ||
@@ -90,6 +91,18 @@ public static class MemberManagementEndpoints
         {
             return Results.BadRequest(new { message = "Invitation requires a positive userId, a valid name and CLUB_MEMBER role." });
         }
+        if (!request.TryGetProperty("semesterId", out var semesterValue) || semesterValue.ValueKind != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(semesterValue.GetString()) || semesterValue.GetString()!.Length > 40)
+            return ApiOperations.Error(400, "SEMESTER_REQUIRED", "Select the canonical invitation semester.");
+        if (request.EnumerateObject().Any(x => x.Name is not ("userId" or "fullName" or "role" or "semesterId" or "expectedRosterVersion")))
+            return ApiOperations.Error(400, "UNKNOWN_INVITATION_FIELD", "Use only the documented invitation fields.");
+        Guid? expectedRoster = null;
+        if (request.TryGetProperty("expectedRosterVersion", out var rosterValue))
+        {
+            if (rosterValue.ValueKind != JsonValueKind.String || !Guid.TryParse(rosterValue.GetString(), out var parsed))
+                return ApiOperations.Error(400, "INVALID_ROSTER_VERSION", "Use the roster GUID version returned by the search.");
+            expectedRoster = parsed;
+        }
 
         var club = await db.Clubs.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == clubId && x.IsActive, cancellationToken);
@@ -98,12 +111,6 @@ public static class MemberManagementEndpoints
             return Results.Forbid();
         if (!user.IsSuperAdmin() && club.CampusCode != CampusCodes.Global && user.GetCampus() != club.CampusCode)
             return Results.Forbid();
-        if (await db.ClubManagerAssignments.AnyAsync(x =>
-                x.ClubId == clubId && x.ManagerUserId == parsedNumber && x.IsActive, cancellationToken))
-            return Results.Conflict(new { message = "The club manager is already attached to this club." });
-        if (await db.ClubMemberships.IgnoreQueryFilters().AnyAsync(x =>
-                x.ClubId == clubId && x.UserId == parsedNumber && !x.IsDeleted, cancellationToken))
-            return Results.Conflict(new { message = "Membership or invitation already exists for this user." });
 
         var profiles = http.RequestServices.GetService<CurrentUserProfileClient>();
         if (profiles is null) return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account client is unconfigured.");
@@ -117,44 +124,69 @@ public static class MemberManagementEndpoints
         fullName = target.DisplayName.Trim();
         if (string.IsNullOrEmpty(fullName) || fullName.Length > 200)
             return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "The canonical account name is invalid.");
-
-        var membership = new ClubMembership
+        var rosterCampus = club.CampusCode == CampusCodes.Global ? target.CampusCode : club.CampusCode;
+        if (club.CampusCode == CampusCodes.Global && !user.IsSuperAdmin() && rosterCampus != user.GetCampus()) return Results.Forbid();
+        var eligibility = await ClubRosterEligibility.Check(club, parsedNumber, semesterValue.GetString(), rosterCampus, http, cancellationToken);
+        if (eligibility.Error is not null) return eligibility.Error;
+        return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
-            ClubId = clubId,
-            UserId = parsedNumber,
-            FullName = fullName,
-            Role = ClubMemberRoles.Member,
-            Status = ClubMembershipStatuses.Pending,
-            AcceptedClubRules = false,
-            CommittedToParticipate = false,
-            Source = ClubMembershipSources.Invitation,
-            InvitedByUserId = user.GetUserId(),
-            InvitedAtUtc = DateTimeOffset.UtcNow
-        };
-        db.ClubMemberships.Add(membership);
-        try
-        {
+            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)) return Results.Forbid();
+            if (await db.ClubManagerAssignments.AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == parsedNumber && x.IsActive, cancellationToken)
+                || await db.ClubMemberships.IgnoreQueryFilters().AnyAsync(x => x.ClubId == clubId && x.UserId == parsedNumber && !x.IsDeleted, cancellationToken))
+                return ApiOperations.Error(409, "MEMBERSHIP_EXISTS", "A current membership, invitation or manager assignment already exists.");
+            var latest = await ClubRosterEligibility.Check(club, parsedNumber, semesterValue.GetString(), rosterCampus, http, cancellationToken);
+            if (latest.Error is not null) return latest.Error;
+            if (expectedRoster.HasValue && expectedRoster != latest.Roster!.Version)
+                return ApiOperations.Error(409, "ROSTER_CHANGED", "The roster changed after the search. Select the student again.");
+            var membership = new ClubMembership
+            {
+                ClubId = clubId,
+                UserId = parsedNumber,
+                FullName = fullName,
+                Role = ClubMemberRoles.Member,
+                Status = ClubMembershipStatuses.Pending,
+                AcceptedClubRules = false,
+                CommittedToParticipate = false,
+                Source = ClubMembershipSources.Invitation,
+                InvitedByUserId = user.GetUserId(),
+                InvitedAtUtc = DateTimeOffset.UtcNow
+            };
+            ClubRosterEligibility.Apply(membership, latest.Roster);
+            membership.InvitedRosterRevisionId = latest.Roster!.RevisionId;
+            membership.InvitedRosterVersion = latest.Roster.Version;
+            db.ClubMemberships.Add(membership);
             await db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            return Results.Conflict(new { message = "Membership or invitation already exists for this user." });
-        }
-
-        return Results.Created($"/api/clubs/memberships/{membership.Id}", new
-        {
-            membership.Id,
-            membership.ClubId,
-            membership.UserId,
-            membership.FullName,
-            role = AuthRoles.ClubMember,
-            membership.Status,
-            membership.RequestedAtUtc,
-            membership.Source,
-            invitedAt = membership.InvitedAtUtc,
-            membership.SemesterId,
-            version = membership.ConcurrencyToken
-        });
+            db.MembershipActions.Add(new ClubMembershipAction
+            {
+                MembershipId = membership.Id,
+                ActorUserId = user.GetUserId(),
+                Action = "INVITED",
+                PreviousStatus = "",
+                Status = membership.Status,
+                PreviousVersion = Guid.Empty,
+                Version = membership.ConcurrencyToken,
+                OccurredAtUtc = DateTimeOffset.UtcNow
+            });
+            db.AddOutboxMessage(new ExperienceNotificationEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, clubId,
+                [membership.UserId], "CLUB_INVITATION", "Bạn nhận được lời mời tham gia CLB", "/v2/my-clubs"), ExperienceRoutingKeys.Notification);
+            return Results.Created($"/api/clubs/memberships/{membership.Id}", new
+            {
+                membership.Id,
+                membership.ClubId,
+                membership.UserId,
+                membership.FullName,
+                role = AuthRoles.ClubMember,
+                membership.Status,
+                membership.RequestedAtUtc,
+                membership.Source,
+                invitedAt = membership.InvitedAtUtc,
+                membership.SemesterId,
+                membership.RosterRevisionId,
+                membership.RosterVersion,
+                membership.InvitedRosterRevisionId,
+                version = membership.ConcurrencyToken
+            });
+        }, cancellationToken, required: false);
     }
 
     private static async Task<IResult> ListClubMembers(

@@ -48,6 +48,11 @@ public static class ServiceCollectionExtensions
         }).AddCorrelationIdForwarding();
 
         services.AddScoped<MemberActivityStatisticsService>();
+        services.AddHttpClient<SemesterCatalogClient>(client =>
+        {
+            client.BaseAddress = new Uri(configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+            client.Timeout = TimeSpan.FromSeconds(15);
+        }).AddCorrelationIdForwarding();
 
         services.AddHttpClient<ClubMemberRosterClient>(client =>
         {

@@ -9,6 +9,11 @@ public sealed class ClubMembership
     public int UserId { get; set; }
     public string Source { get; set; } = ClubMembershipSources.Unknown;
     public string? SemesterId { get; set; }
+    public Guid? RosterRevisionId { get; set; }
+    public Guid? RosterVersion { get; set; }
+    public Guid? InvitedRosterRevisionId { get; set; }
+    public Guid? InvitedRosterVersion { get; set; }
+    public string? RosterCampusCode { get; set; }
     public int? PreviousApplicationId { get; set; }
     public int? InvitedByUserId { get; set; }
     public DateTimeOffset? InvitedAtUtc { get; set; }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Experience;
+using ClubReportHub.Shared.Rosters;
 using ClubService.Data;
 using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,13 @@ public static class ClubWorkspaceCatalogEndpoints
                 result.AsOf
             });
         }
+        IReadOnlyList<RosterSummary> rosterSummaries = [];
+        if (projection == "invitation" && http.RequestServices.GetService<SemesterRosterClient>() is { } rosterClient)
+        {
+            try { rosterSummaries = await rosterClient.SummariesAsync(club.CampusCode == CampusCodes.Global ? http.User.GetCampus() : club.CampusCode, ct); }
+            catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+            { return ApiOperations.Error(503, "ROSTER_AUTHORITY_UNAVAILABLE", "The invitation roster catalog is unavailable."); }
+        }
         return Results.Ok(new
         {
             clubId,
@@ -68,8 +76,10 @@ public static class ClubWorkspaceCatalogEndpoints
                 x.Label,
                 x.IsCurrent,
                 editable = x.Editable && (manager || backoffice),
-                canInvite = false,
-                invitationAvailability = "ROSTER_UNAVAILABLE",
+                canInvite = projection == "invitation" && (manager || backoffice) && x.IsCurrent
+                    && rosterSummaries.Any(r => r.SemesterKey == x.Id && r.ActiveCount > 0),
+                invitationAvailability = rosterSummaries.Any(r => r.SemesterKey == x.Id)
+                    ? rosterSummaries.Any(r => r.SemesterKey == x.Id && r.ActiveCount > 0) ? "AVAILABLE" : "EMPTY" : "ROSTER_UNAVAILABLE",
                 x.StartUtc,
                 x.EndUtc,
                 x.ReportPeriod,

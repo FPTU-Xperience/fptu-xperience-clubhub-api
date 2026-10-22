@@ -109,6 +109,8 @@ public sealed class ClubAuthorizationRegressionTests
             options.UseInMemoryDatabase(databaseName));
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
         builder.Configuration["Security:InternalWorkflowToken"] = "CANONICAL-MEMBERSHIP-TEST-ONLY-TOKEN";
+        builder.Services.AddSingleton(new ClubReportHub.Shared.Rosters.SemesterRosterClient(
+            new HttpClient(new CanonicalSemesterRosterHandler(202, "Auth verified member")) { BaseAddress = new Uri("http://roster-fixture.invalid/") }, builder.Configuration));
         builder.Services.AddSingleton(new ClubReportHub.Shared.Experience.CurrentUserProfileClient(
             new HttpClient(new CanonicalMembershipProfileHandler()) { BaseAddress = new Uri("http://profile-fixture.invalid/") }, builder.Configuration));
         await using var app = builder.Build();
@@ -138,7 +140,7 @@ public sealed class ClubAuthorizationRegressionTests
         member.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(202, AuthRoles.ClubMember));
 
         var invite = await manager.PostAsJsonAsync("/api/clubs/1/members",
-            new { userId = "202", fullName = "Proposed name", role = "CLUB_MEMBER" });
+            new { userId = "202", fullName = "Proposed name", role = "CLUB_MEMBER", semesterId = "FALL2026" });
         Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
         var invited = await invite.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal(ClubMembershipStatuses.Pending, invited.GetProperty("status").GetString());

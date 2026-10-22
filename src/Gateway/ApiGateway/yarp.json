@@ -104,6 +104,20 @@
           "Path": "/api/clubs/{clubId}/activities/{**catch-all}"
         }
       },
+      "activity-applications": {
+        "Order": -30,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/activity-applications/{**catch-all}" }
+      },
+      "club-activity-recruitments": {
+        "Order": -30,
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs/{clubId}/activity-recruitments" }
+      },
       "activities": {
         "ClusterId": "activity-service",
         "AuthorizationPolicy": "Default",

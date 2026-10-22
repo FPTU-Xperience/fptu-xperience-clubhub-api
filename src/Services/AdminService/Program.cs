@@ -8,6 +8,7 @@ using AdminService.OpenApi;
 using AdminService.Security;
 using AdminService.Services;
 using ClubReportHub.Shared.Experience;
+using ClubReportHub.Shared.Rosters;
 using ClubReportHub.Shared.Messaging;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
@@ -48,6 +49,11 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddClubReportTracing();
 builder.Services.AddScoped<StudentExperienceSourceClient>();
+builder.Services.AddHttpClient<SchoolAccountClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddClubAccessClient(builder.Configuration);
 builder.Services.AddHttpClient<CurrentUserProfileClient>(client =>
 { client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/"); client.Timeout = TimeSpan.FromSeconds(10); });
@@ -127,6 +133,7 @@ app.MapQuestEndpoints();
 app.MapAnomalyEndpoints();
 app.MapSettingsEndpoints();
 app.MapSemesterEndpoints();
+app.MapSemesterRosterEndpoints();
 app.MapExperiencePolicyEndpoints();
 app.MapWorkspaceCatalogEndpoints();
 app.MapVerificationAssignmentEndpoints();

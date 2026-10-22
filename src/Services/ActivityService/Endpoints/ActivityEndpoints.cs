@@ -21,6 +21,7 @@ public static class ActivityEndpoints
         var activities = app
             .MapGroup("/api/activities")
             .WithTags("Activities")
+            .AddEndpointFilter<ActivityPublicationReadFilter>()
             .RequireAuthorization(AuthPolicies.BusinessAccess);
 
         // Implemented endpoints

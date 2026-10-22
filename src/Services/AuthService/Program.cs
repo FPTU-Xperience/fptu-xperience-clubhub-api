@@ -65,6 +65,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapCanonicalProfileEndpoints();
 app.MapInternalAccountEndpoints();
+app.MapSchoolAccountEndpoints();
 app.MapPublicMediaEndpoints();
 app.MapRoleEndpoints();
 

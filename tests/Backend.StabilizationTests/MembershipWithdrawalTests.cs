@@ -101,7 +101,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>(); (await db.ClubMemberships.SingleAsync()).IsDeleted = true; await db.SaveChangesAsync();
         }
         using var manager = CreateAdminContractClient(app, 100, AuthRoles.ClubManager);
-        var invite = await manager.PostAsJsonAsync("/api/clubs/1/members", new { userId = 104, fullName = "Legacy invite label", role = "CLUB_MEMBER" });
+        var invite = await manager.PostAsJsonAsync("/api/clubs/1/members", new { userId = 104, fullName = "Legacy invite label", role = "CLUB_MEMBER", semesterId = "FALL2026" });
         Assert.Equal(HttpStatusCode.Created, invite.StatusCode);
         Assert.Equal("Canonical student", (await invite.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("fullName").GetString());
         using var student = CreateAdminContractClient(app, 104, AuthRoles.ClubMember);
@@ -159,7 +159,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         }
         using var manager = CreateAdminContractClient(app, 100, AuthRoles.ClubManager);
         Assert.Equal((HttpStatusCode)422, (await manager.PostAsJsonAsync("/api/clubs/1/members",
-            new { userId = 104, fullName = "Forged name", role = "CLUB_MEMBER" })).StatusCode);
+            new { userId = 104, fullName = "Forged name", role = "CLUB_MEMBER", semesterId = "FALL2026" })).StatusCode);
     }
 
     [Fact]
@@ -203,9 +203,11 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         db.ClubMemberships.Add(legacy); await db.SaveChangesAsync();
         var id = legacy.Id; var version = legacy.ConcurrencyToken;
         var migrations = db.Database.GetMigrations().ToArray();
-        Assert.EndsWith("MembershipApplicationHistory", migrations[^1]);
+        Assert.Contains(migrations, x => x.EndsWith("MembershipApplicationHistory", StringComparison.Ordinal));
+        Assert.Contains(migrations, x => x.EndsWith("InvitationRosterValidation", StringComparison.Ordinal));
+        Assert.EndsWith("InvitationRosterAuditContext", migrations[^1]);
         // Materialize the real preceding schema with legacy data, then exercise its upgrade.
-        await db.GetService<IMigrator>().MigrateAsync(migrations[^2]);
+        await db.GetService<IMigrator>().MigrateAsync(migrations.TakeWhile(x => !x.EndsWith("MembershipApplicationHistory", StringComparison.Ordinal)).Last());
         db.ChangeTracker.Clear(); await db.Database.MigrateAsync();
         var upgraded = await db.ClubMemberships.SingleAsync(x => x.Id == id);
         Assert.Equal(version, upgraded.ConcurrencyToken);

@@ -46,6 +46,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ClubMembership>().Property(x => x.RosterCampusCode).HasMaxLength(40);
         modelBuilder.Entity<Club>(entity =>
         {
             entity.HasIndex(x => x.Code).IsUnique();

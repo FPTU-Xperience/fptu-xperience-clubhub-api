@@ -22,6 +22,194 @@ namespace ActivityService.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("ActivityService.Models.ActivityActionCompletion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActionRuleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Evidence")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("OccurrenceKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("OccurrenceLabel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("VerifiedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("ActionRuleId", "UserId", "OccurrenceKey")
+                        .IsUnique();
+
+                    b.ToTable("ActivityActionCompletion");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityActionRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId", "ClientId")
+                        .IsUnique();
+
+                    b.ToTable("ActivityActionRule");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityApplication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SemesterId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId", "SemesterId", "Status");
+
+                    b.ToTable("ActivityApplication");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityApplicationHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ActivityApplicationHistory");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityAttendance", b =>
                 {
                     b.Property<int>("Id")
@@ -115,6 +303,70 @@ namespace ActivityService.Migrations
                     b.ToTable("ActivityAttendances");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityExecution", b =>
+                {
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ApplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("PublicationVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("ActivityId");
+
+                    b.HasIndex("ApplicationId")
+                        .IsUnique();
+
+                    b.ToTable("ActivityExecution");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityExecutionAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("ActivityExecutionAudit");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityExperienceInbox", b =>
                 {
                     b.Property<Guid>("EventId")
@@ -166,6 +418,82 @@ namespace ActivityService.Migrations
                         .IsUnique();
 
                     b.ToTable("ActivityParticipants");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecruitment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Eligibility")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId")
+                        .IsUnique();
+
+                    b.ToTable("ActivityRecruitment");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecruitmentPosition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActionRuleId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AssignmentKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("RecruitmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActionRuleId");
+
+                    b.HasIndex("RecruitmentId", "ActionRuleId")
+                        .IsUnique()
+                        .HasFilter("[IsArchived] = 0");
+
+                    b.ToTable("ActivityRecruitmentPosition");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivitySession", b =>
@@ -299,6 +627,64 @@ namespace ActivityService.Migrations
                     b.HasIndex("ActivityId", "CreatedAtUtc");
 
                     b.ToTable("SessionAudits");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityStaffAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActionRuleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AssignmentKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("CancelledBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("PositionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActionRuleId");
+
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("ActivityId", "ActionRuleId", "UserId")
+                        .IsUnique()
+                        .HasFilter("[Status] <> 'REMOVED'");
+
+                    b.ToTable("ActivityStaffAssignment");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ClubActivity", b =>
@@ -565,6 +951,45 @@ namespace ActivityService.Migrations
                     b.ToTable("OutboxMessages");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityActionCompletion", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityActionRule", null)
+                        .WithMany()
+                        .HasForeignKey("ActionRuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityStaffAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityActionRule", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityApplicationHistory", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityAttendance", b =>
                 {
                     b.HasOne("ActivityService.Models.ClubActivity", "Activity")
@@ -581,6 +1006,30 @@ namespace ActivityService.Migrations
                     b.Navigation("Activity");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityExecution", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityExecution", "ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityApplication", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityExecution", "ApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityExecutionAudit", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityParticipant", b =>
                 {
                     b.HasOne("ActivityService.Models.ClubActivity", "Activity")
@@ -592,6 +1041,30 @@ namespace ActivityService.Migrations
                     b.Navigation("Activity");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityRecruitment", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityExecution", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityRecruitment", "ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecruitmentPosition", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityActionRule", null)
+                        .WithMany()
+                        .HasForeignKey("ActionRuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityRecruitment", null)
+                        .WithMany()
+                        .HasForeignKey("RecruitmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivitySession", b =>
                 {
                     b.HasOne("ActivityService.Models.ClubActivity", "Activity")
@@ -601,6 +1074,26 @@ namespace ActivityService.Migrations
                         .IsRequired();
 
                     b.Navigation("Activity");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityStaffAssignment", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityActionRule", null)
+                        .WithMany()
+                        .HasForeignKey("ActionRuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityRecruitmentPosition", null)
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ActivityService.Models.ClubActivity", b =>
