@@ -54,12 +54,14 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
             || ChangeTracker.Entries<ApprovedExperiencePolicy>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
             || ChangeTracker.Entries<SemesterRosterRevision>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
             || ChangeTracker.Entries<SemesterRosterRow>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
-            || ChangeTracker.Entries<SemesterRosterImport>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            || ChangeTracker.Entries<SemesterRosterImport>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<AcademicCalendarRevision>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Experience ledger, revisions, decisions and approved policies are append-only.");
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        AcademicCalendarModel.Apply(modelBuilder);
         SemesterRosterModel.Apply(modelBuilder);
         VerifiedExperienceModel.Apply(modelBuilder, Database.ProviderName);
         var audit = modelBuilder.Entity<AuditRecord>();

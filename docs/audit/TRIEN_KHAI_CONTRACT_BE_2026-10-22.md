@@ -4,6 +4,8 @@ Phạm vi: BE, trên nhánh `feat/backend-contract-completion`. Nguồn yêu c�
 
 > Cập nhật tiếp ngày 22/10: xem [bàn giao hoạt động, phân công và roster](HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md). Nhóm 16 consumer operation thiếu route ban đầu hiện đã có đủ handler; tính điểm đang hoãn và các nhóm contract khác vẫn có phần chưa hoàn thành. Kết quả 788 test dưới đây là checkpoint trước đợt bổ sung này.
 
+> Bổ sung tiếp: [6 API lịch học và lịch học kỳ](HOAN_THIEN_LICH_HOC_BE_2026-10-22.md) đã có persistence, version và kiểm thử SQL; FE consumer vẫn cần chuyển từ localStorage.
+
 ## Trạng thái từng phần
 
 | Actor / phần | API | Trạng thái BE và giới hạn |
@@ -108,7 +110,7 @@ GitNexus dùng distribution 1.6.12 và receipt schema 4 đã kiểm tra theo sou
 - P05: governance đa nhóm/quyền xuyên service còn thiếu.
 - P06/P07: phần vận hành hồ sơ/publication/staffing/recruitment/completion đã có. Estimates/final-report award/settlement raw budget và mọi tính/cộng/thu hồi điểm mới **tạm hoãn theo yêu cầu chủ dự án**. FE application adapter còn yêu cầu expectedRawXp là số; BE trả null với trạng thái hoãn, cần FE xử lý riêng.
 - P08: task → CLUB_CREDIT, wallet/redemption/reward/bundle và reversal/debt còn mở, phụ thuộc quy tắc điểm chưa chốt.
-- P09/P10: media owners/shape/FRAME, profile/resources và calendar/timetable chưa được hoàn thành bởi nhóm route này; chuẩn shape PNG/SVG cần chốt.
+- P09: media owners/shape/FRAME và profile/resources chưa hoàn thành; chuẩn shape PNG/SVG cần chốt. P10 đã có source lịch học/calendar, xem bàn giao riêng; FE/live còn chờ nghiệm thu.
 - +1/linear versus saturated ERI, PERIOD/CUMULATIVE, reset/rollover và các mục tùy chọn giữ trạng thái hoãn/cần đặc tả; không xóa.
 
 Plan tổng thể vẫn chưa đạt toàn bộ Definition of Done. Những mục trên không được đổi nhãn thành hoàn thành chỉ vì route cũ hoặc test cũ tồn tại. Test ở workspace không xác nhận đã deploy, đã áp migration trên môi trường dùng chung hay FE đã chuyển consumer.

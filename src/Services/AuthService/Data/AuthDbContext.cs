@@ -15,6 +15,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        StudyScheduleModel.Apply(modelBuilder);
         modelBuilder.ApplyApiOperationConfiguration();
         modelBuilder.Entity<PublicMediaIntent>(entity =>
         {

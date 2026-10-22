@@ -324,6 +324,8 @@ public sealed class DemoDatasetSeeder(DemoSeederOptions options)
         await clubDb.ClubMemberships.IgnoreQueryFilters().ExecuteDeleteAsync(cancellationToken);
         await clubDb.Clubs.ExecuteDeleteAsync(cancellationToken);
 
+        await authDb.Set<AuthService.Models.StudyScheduleCell>().ExecuteDeleteAsync(cancellationToken);
+        await authDb.Set<AuthService.Models.StudyScheduleBlock>().ExecuteDeleteAsync(cancellationToken);
         await authDb.RefreshTokens.ExecuteDeleteAsync(cancellationToken);
         await authDb.UserRoles.ExecuteDeleteAsync(cancellationToken);
         await authDb.Users.ExecuteDeleteAsync(cancellationToken);

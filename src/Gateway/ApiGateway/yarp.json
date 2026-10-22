@@ -1,6 +1,13 @@
 {
   "ReverseProxy": {
     "Routes": {
+      "academic-calendar": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/academic-calendar/{**catch-all}" }
+      },
       "auth-google": {
         "Order": 1,
         "ClusterId": "auth-service",

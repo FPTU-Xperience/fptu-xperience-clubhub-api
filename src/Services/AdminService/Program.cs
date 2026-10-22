@@ -134,6 +134,7 @@ app.MapAnomalyEndpoints();
 app.MapSettingsEndpoints();
 app.MapSemesterEndpoints();
 app.MapSemesterRosterEndpoints();
+app.MapAcademicCalendarEndpoints();
 app.MapExperiencePolicyEndpoints();
 app.MapWorkspaceCatalogEndpoints();
 app.MapVerificationAssignmentEndpoints();

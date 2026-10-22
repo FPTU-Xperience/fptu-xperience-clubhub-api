@@ -105,7 +105,7 @@ Có test SQL Server hai người nhận ghế cuối và hai import thay cùng r
 ## Chưa được đánh hoàn thành
 
 - Tính điểm/estimates/final-report award/budget settlement, +1/ERI/reset/rollover và wallet/credit/redemption: **tạm hoãn theo yêu cầu chủ dự án**, không xóa.
-- Governance đa nhóm/quyền xuyên service, các mở rộng profile/media/resources, academic calendar/timetable: vẫn là backlog của kế hoạch tổng thể, không được đổi thành Done bằng các route trên.
+- Governance đa nhóm/quyền xuyên service và các mở rộng profile/media/resources: vẫn là backlog của kế hoạch tổng thể. Calendar/timetable đã được bổ sung ở [bàn giao lịch học](HOAN_THIEN_LICH_HOC_BE_2026-10-22.md); FE/live có trạng thái riêng.
 - Optional directory/pins/custom forms/physical fulfillment/contest/office succession: giữ nhãn bỏ qua/cần đặc tả theo phạm vi cũ.
 - Tích hợp FE, deploy, áp migration shared và delivery/storage live: chưa nghiệm thu.
 

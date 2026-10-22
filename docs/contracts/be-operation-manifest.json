@@ -275,12 +275,78 @@
       "status": "SOURCE_IMPLEMENTED",
       "test": "SemesterRosterContractTests",
       "limitation": "Existing school-email accounts only; no implicit account creation."
+    },
+    {
+      "method": "GET",
+      "route": "/api/academic-calendar/{year}/{term}",
+      "actors": [
+        "Tất cả actor"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
+      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+    },
+    {
+      "method": "PUT",
+      "route": "/api/academic-calendar/{year}/{term}",
+      "actors": [
+        "CTSV/Admin"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
+      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}",
+      "actors": [
+        "Tất cả actor: self-only"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
+      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+    },
+    {
+      "method": "PUT",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}/{week}/{day}/{slotId}",
+      "actors": [
+        "Tất cả actor: self-only"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
+      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}/{week}/{day}/{slotId}",
+      "actors": [
+        "Tất cả actor: self-only"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
+      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+    },
+    {
+      "method": "POST",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}/bulk-import",
+      "actors": [
+        "Tất cả actor: self-only"
+      ],
+      "status": "SOURCE_IMPLEMENTED",
+      "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
+      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
     }
   ],
   "deferred": [
     "NEW_SCORING_BY_PRODUCT_OWNER: estimates, raw-budget/final-report awards, +1/index/rollover, task credits/wallet/redemption",
     "Governance multiple groups and cross-service capabilities",
-    "Remaining profile/media/resources and academic calendar/private timetable",
+    "Remaining profile/media/resources",
     "Shape asset format decision and optional/unapproved scopes"
   ],
   "currentHandoff": "../audit/HOAN_THIEN_API_BE_KHONG_TINH_DIEM_2026-10-22.md",
@@ -288,9 +354,9 @@
   "rosterIdentity": "EXISTING_SCHOOL_EMAIL_NO_ACCOUNT_CREATION",
   "verification": {
     "totals": {
-      "total": 831,
-      "executed": 831,
-      "passed": 831,
+      "total": 860,
+      "executed": 860,
+      "passed": 860,
       "failed": 0,
       "notExecuted": 0
     },
@@ -313,9 +379,9 @@
       },
       {
         "assembly": "backend.stabilizationtests.dll",
-        "total": 623,
-        "executed": 623,
-        "passed": 623,
+        "total": 652,
+        "executed": 652,
+        "passed": 652,
         "failed": 0,
         "notExecuted": 0
       }
@@ -324,73 +390,81 @@
       {
         "name": "format",
         "exitCode": 0,
-        "seconds": 11.55
+        "seconds": 12.92
       },
       {
         "name": "format-verify",
         "exitCode": 0,
-        "seconds": 11.34
+        "seconds": 11.4
       },
       {
         "name": "release-build",
         "exitCode": 0,
-        "seconds": 12.03
+        "seconds": 19.15
       },
       {
         "name": "full-release-tests",
         "exitCode": 0,
-        "seconds": 178.22
+        "seconds": 176.58
       },
       {
         "name": "diff-check",
         "exitCode": 0,
-        "seconds": 0.12
+        "seconds": 0.11
       }
     ],
-    "coverageCollected": true,
-    "sql": "Configured SQL Server connection; isolated prefix-validated disposable test databases; prior-schema upgrade and concurrent mutations.",
-    "proofDirectory": "C:\\Users\\ADMIN\\Downloads\\DOAN\\.contract-audit\\be-work-2026-10-21\\operational-final-results",
     "ciStyleModelChecks": [
       {
         "name": "style-AdminService",
         "exitCode": 0,
-        "seconds": 16.13
+        "seconds": 16.81
       },
       {
         "name": "style-AuthService",
         "exitCode": 0,
-        "seconds": 12.67
+        "seconds": 11.34
       },
       {
         "name": "style-ClubService",
         "exitCode": 0,
-        "seconds": 15.05
+        "seconds": 13.84
       },
       {
         "name": "style-AdminService.IntegrationTests",
         "exitCode": 0,
-        "seconds": 11.97
+        "seconds": 11.35
       },
       {
         "name": "style-Backend.StabilizationTests",
         "exitCode": 0,
-        "seconds": 30.31
+        "seconds": 28.64
       },
       {
         "name": "model-ActivityService",
         "exitCode": 0,
-        "seconds": 4.94
+        "seconds": 4.62
       },
       {
         "name": "model-AdminService",
         "exitCode": 0,
-        "seconds": 5.94
+        "seconds": 4.6
+      },
+      {
+        "name": "model-AuthService",
+        "exitCode": 0,
+        "seconds": 4.14
       },
       {
         "name": "model-ClubService",
         "exitCode": 0,
-        "seconds": 5.75
+        "seconds": 4.32
       }
-    ]
-  }
+    ],
+    "coverageCollected": true,
+    "sql": "Configured SQL Server disposable databases; prior-schema upgrade; concurrent roster, staffing and schedule writes.",
+    "proofDirectory": "C:\\Users\\ADMIN\\Downloads\\DOAN\\.contract-audit\\be-work-2026-10-21\\p10-final-results"
+  },
+  "additionalHandoffs": [
+    "../audit/HOAN_THIEN_LICH_HOC_BE_2026-10-22.md"
+  ]
 }

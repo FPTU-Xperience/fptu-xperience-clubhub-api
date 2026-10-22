@@ -12,6 +12,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add all services
 builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+builder.Services.AddHttpClient<ClubReportHub.Shared.Schedules.AcademicCalendarClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddClubAccessClient(builder.Configuration);
 builder.Services.AddScoped<AuthService.Services.IPublicMediaStorage, AuthService.Services.PublicMediaStorage>();
 builder.Services.AddHttpClient("MediaActivity", client =>
@@ -64,6 +69,7 @@ app.MapGet("/", () => Results.Ok(new { service = "Auth Service", status = "runni
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapCanonicalProfileEndpoints();
+app.MapStudyScheduleEndpoints();
 app.MapInternalAccountEndpoints();
 app.MapSchoolAccountEndpoints();
 app.MapPublicMediaEndpoints();
