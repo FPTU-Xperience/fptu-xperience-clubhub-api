@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Data;
 using AuthService.Contracts;
 using AuthService.Data;
 using AuthService.Models;
@@ -109,12 +110,6 @@ public sealed class RefreshTokenService
         var tokenHash = HashToken(rawRefreshToken);
         var cacheKey = $"rotated_refresh:{tokenHash}";
 
-        // Fast path for concurrent multi-tab / parallel requests:
-        if (_cache.TryGetValue(cacheKey, out AuthResponse? cachedResponse) && cachedResponse is not null)
-        {
-            return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: cachedResponse);
-        }
-
         var oldToken = await GetRefreshTokenAsync(rawRefreshToken);
 
         if (oldToken is null)
@@ -122,7 +117,7 @@ public sealed class RefreshTokenService
             return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid);
         }
 
-        if (!ActorAccountPolicy.HasValidActorConfiguration(oldToken.User))
+        if (!oldToken.User.IsActive || oldToken.User.IsLocked || !ActorAccountPolicy.HasValidActorConfiguration(oldToken.User))
         {
             return new RotateRefreshTokenResult(RefreshTokenStatus.AccountNotAllowed, User: oldToken.User);
         }
@@ -134,6 +129,11 @@ public sealed class RefreshTokenService
 
         if (oldToken.IsRevoked)
         {
+            var activeExpiries = await _db.RefreshTokens.AsNoTracking()
+                .Where(x => x.UserId == oldToken.UserId && x.FamilyId == oldToken.FamilyId && x.RevokedAtUtc == null)
+                .Select(x => x.ExpiresAtUtc).ToListAsync();
+            if (oldToken.ReplacedByToken is null || !activeExpiries.Any(expiry => expiry > DateTimeOffset.UtcNow))
+                return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: oldToken.User);
             var revokedAt = oldToken.RevokedAtUtc ?? DateTimeOffset.MinValue;
             var elapsed = DateTimeOffset.UtcNow - revokedAt;
 
@@ -143,7 +143,8 @@ public sealed class RefreshTokenService
                 // Give the winner a short window to populate the cache if it hasn't yet:
                 for (var attempt = 0; attempt < 30; attempt++)
                 {
-                    if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentWinner) && concurrentWinner is not null)
+                    var concurrentWinner = await GetActiveCachedRotationAsync(cacheKey);
+                    if (concurrentWinner is not null)
                     {
                         return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentWinner);
                     }
@@ -198,7 +199,8 @@ public sealed class RefreshTokenService
             // Give the winning request a short window to populate this process-local cache.
             for (var attempt = 0; attempt < 30; attempt++)
             {
-                if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentResponse) && concurrentResponse is not null)
+                var concurrentResponse = await GetActiveCachedRotationAsync(cacheKey);
+                if (concurrentResponse is not null)
                 {
                     return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentResponse);
                 }
@@ -244,27 +246,42 @@ public sealed class RefreshTokenService
 
     public async Task RevokeFamilyAsync(string familyId, string? clientIp)
     {
-        var tokens = await _db.RefreshTokens
-            .Where(x => x.FamilyId == familyId && x.RevokedAtUtc == null)
-            .ToListAsync();
+        await using var transaction = _db.Database.IsRelational() && _db.Database.CurrentTransaction is null
+            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        var tokens = await FamilyForUpdate(_db, familyId).ToListAsync();
 
-        foreach (var token in tokens)
+        foreach (var token in tokens) _cache.Remove($"rotated_refresh:{token.Token}");
+        if (_db.Database.IsRelational())
         {
-            token.RevokedAtUtc = DateTimeOffset.UtcNow;
-            token.RevokedByIp = clientIp;
+            var revokedAt = DateTimeOffset.UtcNow;
+            await _db.RefreshTokens.Where(x => x.FamilyId == familyId && x.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedAtUtc, revokedAt)
+                    .SetProperty(x => x.RevokedByIp, clientIp));
+        }
+        else
+        {
+            foreach (var token in tokens)
+            {
+                if (token.IsRevoked) continue;
+                token.RevokedAtUtc = DateTimeOffset.UtcNow;
+                token.RevokedByIp = clientIp;
+            }
         }
 
-        await _db.SaveChangesAsync();
+        if (!_db.Database.IsRelational()) await _db.SaveChangesAsync();
+        if (transaction is not null) await transaction.CommitAsync();
     }
 
     public async Task RevokeForUserAsync(int userId, string? clientIp = null)
     {
         var tokens = await _db.RefreshTokens
-            .Where(x => x.UserId == userId && x.RevokedAtUtc == null)
+            .Where(x => x.UserId == userId)
             .ToListAsync();
 
         foreach (var token in tokens)
         {
+            _cache.Remove($"rotated_refresh:{token.Token}");
+            if (token.IsRevoked) continue;
             token.RevokedAtUtc = DateTimeOffset.UtcNow;
             token.RevokedByIp = clientIp;
         }
@@ -320,6 +337,21 @@ public sealed class RefreshTokenService
         rng.GetBytes(randomBytes);
         return Convert.ToBase64String(randomBytes);
     }
+
+    private async Task<AuthResponse?> GetActiveCachedRotationAsync(string cacheKey)
+    {
+        if (!_cache.TryGetValue(cacheKey, out AuthResponse? response) || response?.RefreshToken is null) return null;
+        var hash = HashToken(response.RefreshToken);
+        var token = await _db.RefreshTokens.AsNoTracking().SingleOrDefaultAsync(x => x.Token == hash);
+        return token is not null && token.IsActive ? response : null;
+    }
+
+    // Call inside a serializable transaction. Update locks serialize grant creation/revocation
+    // without the shared-range-lock upgrade deadlocks caused by two simultaneous redemptions.
+    internal static IQueryable<RefreshToken> FamilyForUpdate(AuthDbContext db, string familyId) =>
+        db.Database.IsSqlServer()
+            ? db.RefreshTokens.FromSqlInterpolated($"SELECT * FROM [RefreshTokens] WITH (UPDLOCK, HOLDLOCK) WHERE [FamilyId] = {familyId}")
+            : db.RefreshTokens.Where(x => x.FamilyId == familyId);
 
     private static bool IsSha256HashFormat(string value) =>
         value.Length == 64 && value.All(char.IsAsciiHexDigit);

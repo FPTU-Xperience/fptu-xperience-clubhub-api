@@ -16,7 +16,7 @@ jobs:
 
   deploy:
     needs: validate
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cuongnk/implement-api-contract'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Required-reviewer protection can be configured for this environment in repository settings.

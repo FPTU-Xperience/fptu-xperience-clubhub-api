@@ -21,7 +21,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Backend.StabilizationTests;
 
-public sealed class RefreshTokenSecurityTests
+public sealed partial class RefreshTokenSecurityTests
 {
     private const string SigningKey = "test-only-signing-key-at-least-32-characters";
 
