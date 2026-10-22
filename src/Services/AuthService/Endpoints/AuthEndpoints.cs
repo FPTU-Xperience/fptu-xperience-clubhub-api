@@ -16,6 +16,7 @@ public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapStaffSsoEndpoints();
         var auth = app.MapGroup("/api/auth").WithTags("Authentication");
 
         // Google login remains available for provisioned legacy accounts.
@@ -199,6 +200,7 @@ public static class AuthEndpoints
         if (!string.IsNullOrWhiteSpace(request?.RefreshToken))
         {
             var token = await refreshTokenService.GetRefreshTokenAsync(request.RefreshToken);
+            if (token is not null && token.UserId != userId) return Results.Forbid();
             if (token is not null)
             {
                 await refreshTokenService.RevokeFamilyAsync(token.FamilyId, null);

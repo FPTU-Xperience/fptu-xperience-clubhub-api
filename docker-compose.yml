@@ -105,6 +105,7 @@ services:
       Cors__AllowedOrigins__2: "https://*.fptux-clubhub-ui.pages.dev"
       Cors__AllowedOrigins__3: "https://fptux-legacy-ui.pages.dev"
       Cors__AllowedOrigins__4: "https://*.fptux-legacy-ui.pages.dev"
+      Cors__AllowedOrigins__5: "https://fptux-admin-ui.pages.dev"
       Cors__AdditionalOrigins: "${CORS_ADDITIONAL_ORIGINS:-}"
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"

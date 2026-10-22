@@ -22,6 +22,24 @@ namespace AuthService.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("AuthService.Models.StaffSsoTicket", b =>
+                {
+                    b.Property<string>("CodeHash").HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.Property<int>("UserId").HasColumnType("int");
+                    b.Property<string>("FamilyId").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<int>("SecurityVersion").HasColumnType("int");
+                    b.Property<string>("TargetOrigin").IsRequired().HasMaxLength(300).HasColumnType("nvarchar(300)");
+                    b.Property<string>("CodeChallenge").IsRequired().HasMaxLength(43).HasColumnType("nvarchar(43)");
+                    b.Property<DateTimeOffset>("ExpiresAtUtc").HasColumnType("datetimeoffset");
+                    b.Property<DateTimeOffset?>("ConsumedAtUtc").HasColumnType("datetimeoffset");
+                    b.HasKey("CodeHash");
+                    b.HasIndex("UserId");
+                    b.HasIndex("ExpiresAtUtc");
+                    b.ToTable("StaffSsoTickets");
+                    b.HasOne("AuthService.Models.User", null).WithMany().HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+
             modelBuilder.Entity("AuthService.Models.CanonicalUserProfile", b =>
                 {
                     b.Property<int>("UserId")
@@ -160,6 +178,8 @@ namespace AuthService.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FamilyId");
 
                     b.HasIndex("Token")
                         .IsUnique();
