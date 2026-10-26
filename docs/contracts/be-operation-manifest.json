@@ -8,37 +8,43 @@
       "method": "GET",
       "route": "/api/clubs/{clubId}/workspace-semesters",
       "status": "READ_IMPLEMENTED",
-      "limitation": "Overall workspace attribution/governance remains partial."
+      "limitation": "Overall workspace attribution/governance remains partial.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
       "route": "/api/clubs/{clubId}/invitation-semesters",
       "status": "READ_AND_INVITATION_WORKFLOW_IMPLEMENTED",
-      "limitation": "Availability from authoritative roster revision; revalidate identity on invite/consent/approval."
+      "limitation": "Availability from authoritative roster revision; revalidate identity on invite/consent/approval.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
       "route": "/api/clubs/{clubId}/experience-policies",
       "status": "READ_IMPLEMENTED",
-      "limitation": "Canonical semester; approved PERIOD/environment policies only."
+      "limitation": "Canonical semester; approved PERIOD/environment policies only.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
       "route": "/api/v2/activities/{activityId}/sessions",
       "status": "SAFE_SOURCE_READ_IMPLEMENTED",
-      "limitation": "Registration/current eligibility required; submission authority revalidates writes."
+      "limitation": "Registration/current eligibility required; submission authority revalidates writes.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
       "route": "/api/clubs/me/membership-applications",
       "status": "SELF_HISTORY_IMPLEMENTED",
-      "limitation": "Legacy UNKNOWN is preserved; self-only capabilities."
+      "limitation": "Legacy UNKNOWN is preserved; self-only capabilities.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
       "route": "/api/clubs/me/membership-applications/{applicationId}/withdraw",
       "status": "IMPLEMENTED",
-      "limitation": "Own pending APPLICATION only; no body, optional Idempotency-Key."
+      "limitation": "Own pending APPLICATION only; no body, optional Idempotency-Key.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -48,7 +54,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -59,7 +66,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -70,7 +78,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PATCH",
@@ -80,7 +89,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -90,7 +100,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -100,7 +111,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -111,7 +123,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+      "limitation": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PATCH",
@@ -121,7 +134,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -133,7 +147,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -143,7 +158,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -153,7 +169,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -163,7 +180,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -173,7 +191,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -183,7 +202,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -193,7 +213,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PATCH",
@@ -203,7 +224,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PATCH",
@@ -213,7 +235,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -223,7 +246,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": "No new point award; manual attendance claims are not QR check-in."
+      "limitation": "No new point award; manual attendance claims are not QR check-in.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -234,7 +258,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "ActivityActionContractTests",
-      "limitation": ""
+      "limitation": "",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -244,7 +269,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "SemesterRosterContractTests",
-      "limitation": ""
+      "limitation": "",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -254,7 +280,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "SemesterRosterContractTests",
-      "limitation": "Existing school-email accounts only; no implicit account creation."
+      "limitation": "Existing school-email accounts only; no implicit account creation.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -264,7 +291,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "SemesterRosterContractTests",
-      "limitation": "Existing school-email accounts only; no implicit account creation."
+      "limitation": "Existing school-email accounts only; no implicit account creation.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -274,7 +302,8 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "SemesterRosterContractTests",
-      "limitation": "Existing school-email accounts only; no implicit account creation."
+      "limitation": "Existing school-email accounts only; no implicit account creation.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -284,8 +313,9 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
-      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
-      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+      "limitation": "Production FE uses versioned API repositories; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PUT",
@@ -295,8 +325,9 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
-      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
-      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+      "limitation": "Production FE uses versioned API repositories; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -306,8 +337,9 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
-      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
-      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+      "limitation": "Production FE uses versioned API repositories; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PUT",
@@ -317,8 +349,9 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
-      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
-      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+      "limitation": "Production FE uses versioned API repositories; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "DELETE",
@@ -328,8 +361,9 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
-      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
-      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+      "limitation": "Production FE uses versioned API repositories; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -339,8 +373,9 @@
       ],
       "status": "SOURCE_IMPLEMENTED",
       "test": "StudyScheduleContractTests; ClubManager_GatewayRoutesNewApisToOwningServiceBeforeLegacyCatchAll",
-      "limitation": "FE consumer still browser-local; deployment/live acceptance pending.",
-      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query"
+      "limitation": "Production FE uses versioned API repositories; deployment/live acceptance pending.",
+      "version": "GUID; block expectedVersion plus expectedCalendarVersion on self writes; DELETE versions in query",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -351,7 +386,8 @@
         "SCOPED_PUBLIC_VIEWER"
       ],
       "status": "EMBED_GALLERY_SOURCE_IMPLEMENTED",
-      "limitation": "Authenticated scope only; CLUB links limited to current club member/manager; no anonymous or private file delivery."
+      "limitation": "Authenticated scope only; CLUB links limited to current club member/manager; no anonymous or private file delivery.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "POST",
@@ -360,7 +396,8 @@
         "CURRENT_CLUB_MANAGER"
       ],
       "status": "EMBED_ONLY_SOURCE_IMPLEMENTED",
-      "limitation": "DOCUMENT/MEDIA not implemented (501); required Idempotency-Key; at most 100 attached resources."
+      "limitation": "DOCUMENT/MEDIA not implemented (501); required Idempotency-Key; at most 100 attached resources.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "PATCH",
@@ -369,7 +406,8 @@
         "CURRENT_CLUB_MANAGER"
       ],
       "status": "EMBED_METADATA_SOURCE_IMPLEMENTED",
-      "limitation": "GUID expectedVersion; title/visibility/position only; required Idempotency-Key."
+      "limitation": "GUID expectedVersion; title/visibility/position only; required Idempotency-Key.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "DELETE",
@@ -378,7 +416,8 @@
         "CURRENT_CLUB_MANAGER"
       ],
       "status": "AUDITED_DETACH_SOURCE_IMPLEMENTED",
-      "limitation": "JSON expectedVersion/reason and Idempotency-Key; soft detach retains immutable audit."
+      "limitation": "JSON expectedVersion/reason and Idempotency-Key; soft detach retains immutable audit.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     },
     {
       "method": "GET",
@@ -387,7 +426,8 @@
         "CURRENT_CLUB_MANAGER"
       ],
       "status": "IMMUTABLE_HISTORY_SOURCE_IMPLEMENTED",
-      "limitation": "Current authority required; paginated; no former-manager grant."
+      "limitation": "Current authority required; paginated; no former-manager grant.",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED"
     }
   ],
   "deferred": [
@@ -625,5 +665,13 @@
     "runner": "GitNexus 1.6.12",
     "receiptSchema": 4,
     "limitation": "C# receiver typing and bounded process extraction mean the graph is not exhaustive. UNKNOWNs verified with source/HTTP/SQL; final staged gate required partial=false/truncated=false with no unresolved symbol IDs."
+  },
+  "frontendReconciliation": {
+    "date": "2026-10-26",
+    "branch": "cuongnk/implement-api-contract",
+    "backendMain": "b1edcbf1f4aefb95c5d8020ee9f7d159b9c20a62",
+    "document": "../audit/UI_INTEGRATION_RECONCILIATION_2026-10-26.md",
+    "status": "SOURCE_INTEGRATED_WITH_REMAINING_GAPS",
+    "liveAccepted": false
   }
 }

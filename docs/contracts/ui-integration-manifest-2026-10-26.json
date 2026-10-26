@@ -1,0 +1,288 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "branch": "cuongnk/implement-api-contract",
+  "backendMain": "b1edcbf1f4aefb95c5d8020ee9f7d159b9c20a62",
+  "backendHead": "a3b8a883f63b6721071a0e09861ac32b3c81eacf",
+  "sourceStatusOnly": true,
+  "liveAccepted": false,
+  "backendSymbolsChanged": false,
+  "newPublicOperations": [
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/workspace-semesters",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Overall workspace attribution/governance remains partial."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/invitation-semesters",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Availability from authoritative roster revision; revalidate identity on invite/consent/approval."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/experience-policies",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Canonical semester; approved PERIOD/environment policies only."
+    },
+    {
+      "method": "GET",
+      "route": "/api/v2/activities/{activityId}/sessions",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Registration/current eligibility required; submission authority revalidates writes."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/me/membership-applications",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Legacy UNKNOWN is preserved; self-only capabilities."
+    },
+    {
+      "method": "POST",
+      "route": "/api/clubs/me/membership-applications/{applicationId}/withdraw",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Own pending APPLICATION only; no body, optional Idempotency-Key."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications/{id}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activity-applications/{id}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications/{id}/submit",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "POST",
+      "route": "/api/activity-applications/{id}/review",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "GET",
+      "route": "/api/activity-applications/{id}/history",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "expectedRawXp=null; scoringStatus=DEFERRED_BY_PRODUCT_OWNER"
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{id}/publication",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{id}/staffing",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments/{assignmentId}/cancel",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments/{assignmentId}/completions",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/assignments/{assignmentId}/attendance-claims",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/action-completions/{completionId}/verify",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/recruitment",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{id}/recruitment",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{id}/recruitment/status",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{id}/recruitment/positions/{positionId}/join",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "No new point award; manual attendance claims are not QR check-in."
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/activity-recruitments",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": null
+    },
+    {
+      "method": "GET",
+      "route": "/api/clubs/{clubId}/eligible-members",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": null
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/semesters/{identifier}/roster-imports/preview",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Existing school-email accounts only; no implicit account creation."
+    },
+    {
+      "method": "POST",
+      "route": "/api/v1/semesters/{identifier}/roster-imports/{importId}/commit",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Existing school-email accounts only; no implicit account creation."
+    },
+    {
+      "method": "GET",
+      "route": "/api/v1/semesters/{identifier}/student-roster",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Existing school-email accounts only; no implicit account creation."
+    },
+    {
+      "method": "GET",
+      "route": "/api/academic-calendar/{year}/{term}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Production FE uses versioned API repositories; deployment/live acceptance pending."
+    },
+    {
+      "method": "PUT",
+      "route": "/api/academic-calendar/{year}/{term}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Production FE uses versioned API repositories; deployment/live acceptance pending."
+    },
+    {
+      "method": "GET",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Production FE uses versioned API repositories; deployment/live acceptance pending."
+    },
+    {
+      "method": "PUT",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}/{week}/{day}/{slotId}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Production FE uses versioned API repositories; deployment/live acceptance pending."
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}/{week}/{day}/{slotId}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Production FE uses versioned API repositories; deployment/live acceptance pending."
+    },
+    {
+      "method": "POST",
+      "route": "/api/users/me/study-schedule/{year}/{term}/{block}/bulk-import",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Production FE uses versioned API repositories; deployment/live acceptance pending."
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{activityId}/resources",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Authenticated scope only; CLUB links limited to current club member/manager; no anonymous or private file delivery."
+    },
+    {
+      "method": "POST",
+      "route": "/api/activities/{activityId}/resources",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "DOCUMENT/MEDIA not implemented (501); required Idempotency-Key; at most 100 attached resources."
+    },
+    {
+      "method": "PATCH",
+      "route": "/api/activities/{activityId}/resources/{resourceId}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "GUID expectedVersion; title/visibility/position only; required Idempotency-Key."
+    },
+    {
+      "method": "DELETE",
+      "route": "/api/activities/{activityId}/resources/{resourceId}",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "JSON expectedVersion/reason and Idempotency-Key; soft detach retains immutable audit."
+    },
+    {
+      "method": "GET",
+      "route": "/api/activities/{activityId}/resources/history",
+      "frontendStatus": "SOURCE_ADAPTER_INTEGRATED",
+      "remainingBoundary": "Current authority required; paginated; no former-manager grant."
+    }
+  ],
+  "existingImplementedConsumers": [
+    "GET/PATCH /api/users/me/profile: canonical self fields, private academic projection and owner-verified basic images",
+    "POST /api/media/upload-intents: existing signing/owned attach contract reused",
+    "PUT /api/clubs/{id}/public-images: expectedVersion and partial image presence",
+    "PATCH /api/clubs/{id}/public-profile: changed fields, persisted categories and structured semester schedule",
+    "PUT /api/activities/{id}/cover-image: legacy GUID version",
+    "GET /api/v2/activities/feed: paginated student scope; no management fallback",
+    "GET /api/v2/activities/{id}: student projection with separate scoped gallery read",
+    "GET /api/v2/recommendations/activities: server rank and recommendationId",
+    "GET /api/users/me/experience-summary: private PERIOD summary and nullable source counters",
+    "GET /api/v1/declarations/me/radar: authoritative six-axis projection only",
+    "GET /api/users/me/contributions: existing personal-experience page owns list/detail/evidence workflow"
+  ],
+  "remaining": {
+    "deferredByProductOwner": [
+      "action-XP/final-report award/budget settlement",
+      "credit wallet/redemption/rewards"
+    ],
+    "backendContractsOpen": [
+      "governance/specialist capability cutover",
+      "onboarding/preferences",
+      "advanced cosmetics/layout",
+      "DOCUMENT/MEDIA upload and private delivery",
+      "custom registration forms",
+      "optional directory/pins",
+      "anonymous publication"
+    ],
+    "acceptancePending": [
+      "gateway/auth/campus and revoked permissions",
+      "shared DB migrations",
+      "R2 CORS/verification/public delivery",
+      "two-account live mutations"
+    ],
+    "browserSuiteLimitation": "Admin: 205 responsive route cases passed; later login assertion at ui-smoke.mjs:285 failed. No full-suite pass claim."
+  },
+  "documentation": "docs/audit/UI_INTEGRATION_RECONCILIATION_2026-10-26.md"
+}
