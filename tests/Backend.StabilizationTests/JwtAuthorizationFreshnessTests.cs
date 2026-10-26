@@ -362,6 +362,7 @@ public sealed partial class JwtAuthorizationFreshnessTests
             });
 
             builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+            builder.Services.AddClubAccessClient(builder.Configuration);
             var descriptor = builder.Services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AuthDbContext>));
             if (descriptor != null)
             {

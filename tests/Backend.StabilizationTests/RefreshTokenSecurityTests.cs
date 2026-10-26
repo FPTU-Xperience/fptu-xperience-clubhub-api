@@ -259,7 +259,7 @@ public sealed partial class RefreshTokenSecurityTests
 
         public HttpClient CreateClient() => App.GetTestClient();
 
-        public static async Task<RefreshTestFixture> CreateAsync()
+        public static async Task<RefreshTestFixture> CreateAsync(string environmentName = "Development")
         {
             var dbName = $"refresh_test_{Guid.NewGuid():N}";
             var connStr = $"Data Source=file:{dbName}?mode=memory&cache=shared";
@@ -268,7 +268,7 @@ public sealed partial class RefreshTokenSecurityTests
 
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
-                EnvironmentName = Environments.Development
+                EnvironmentName = environmentName
             });
             builder.WebHost.UseTestServer();
 
@@ -283,6 +283,8 @@ public sealed partial class RefreshTokenSecurityTests
             });
 
             builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+            // Match production: ClubAccessClient configures the shared cache with SizeLimit.
+            builder.Services.AddClubAccessClient(builder.Configuration);
             var descriptor = builder.Services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AuthDbContext>));
             if (descriptor != null)
             {

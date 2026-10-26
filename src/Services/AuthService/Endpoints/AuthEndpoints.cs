@@ -24,7 +24,7 @@ public static class AuthEndpoints
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
 
-        // The admin UI uses email-based dev login in every deployed environment.
+        // Production dev login requires the private local proxy key and a temporary email allow-list.
         auth.MapPost("/dev-login", HandleDevLogin)
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
@@ -104,8 +104,10 @@ public static class AuthEndpoints
     {
         var logger = loggerFactory.CreateLogger("AuthService.DevLogin");
         var environment = httpContext.RequestServices.GetRequiredService<IHostEnvironment>();
-        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing") && !environment.IsEnvironment("Test"))
-            return Results.NotFound();
+        var configuration = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+        if (!LocalDevLoginPolicy.Allows(httpContext.Request, environment, configuration, request?.Email))
+            return Results.Json(new { code = "dev_login_unavailable", message = "Đăng nhập email chưa được cấp quyền trên máy chủ. Vui lòng dùng Google hoặc liên hệ quản trị viên." },
+                statusCode: StatusCodes.Status403Forbidden);
         var correlationId = httpContext.GetCorrelationId();
         var clientIp = httpContext.Connection.RemoteIpAddress?.ToString();
 

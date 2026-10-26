@@ -54,7 +54,11 @@ public sealed class AuthDbContextSecurityStampValidator(
                         Roles: roles);
                 }
 
-                cache.Set(cacheKey, stamp, CacheDuration);
+                cache.Set(cacheKey, stamp, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = CacheDuration,
+                    Size = 1
+                });
             }
 
             if (stamp is null || !stamp.Exists || !stamp.IsActive || stamp.IsLocked)

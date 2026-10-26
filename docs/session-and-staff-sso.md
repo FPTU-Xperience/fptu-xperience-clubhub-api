@@ -62,3 +62,21 @@ The GitNexus native runtime failed on this Windows host; the user explicitly aut
 - Chrome fixture: both SSO directions; login/logout in already-open tabs; logout and timeout from both app origins ending at ClubHub `/v2` passed. API responses are simulated in this browser check.
 - The broader Admin UI smoke route sweep passed before its workflow checks stopped at the XP history text assertion `Đang xem 1 dòng · 5 điểm thô đề xuất` in `scripts/workflow-ui-checks.mjs`. That XP assertion remains unresolved; it is not counted as a successful complete UI smoke.
 - No production deploy, live Google login, production migration or remote push was performed.
+
+## Local frontend login against the deployed API
+
+Local ClubHub 5173 and Admin 5174 continue to use the production API and real database. Student Google login calls the production Google endpoint directly. Email dev-login uses only the local Vite proxy at `/api/auth/dev-login`, enabled with `VITE_LOCAL_DEV_LOGIN=true` and a non-VITE `LOCAL_DEV_LOGIN_KEY` in git-ignored `.env.development.local`. The proxy requires a loopback connection and its exact local browser Origin, then attaches `X-Local-Dev-Login-Key` server-side. The key must never be placed in a VITE variable or browser bundle.
+
+Production AuthService accepts this email login only when `LOCAL_DEV_LOGIN_KEY` is at least 32 characters, matches the request key in constant time, `LOCAL_DEV_LOGIN_EMAILS` contains the email, and `LOCAL_DEV_LOGIN_EXPIRES_AT` is a future UTC timestamp. Missing, invalid, or expired configuration returns 403 with `code: dev_login_unavailable`, rather than disguising a configured route as 404. Existing active/unlocked account and actor-policy checks still apply. Deployment obtains the key from the production environment secret and the allow-list/expiry from production environment variables. Removing the secret or expiring the window disables this login method; existing sessions follow normal revocation/expiry rules.
+
+`LOCAL_SSO_ENABLED=true` additionally permits exactly `http://localhost:5174` and `http://localhost:5173` as a separate SSO pair. Production-to-production SSO remains available; ticket issuance between a production origin and a local origin is rejected. The endpoint still requires a valid CTSV session, source refresh ownership, and PKCE. No API Testing service or synthetic user is needed for this flow.
+
+This section documents the source change; deployment and browser verification must be recorded separately.
+
+## Login-loop correction (2026-10-26)
+
+`AddClubAccessClient` sets `SizeLimit = 10000` on the shared memory cache. Auth security stamps, remote security stamps and cached refresh rotation responses must each specify `Size = 1`, consistent with the club-access entry-count budget. Without this, a new token is rejected when the Auth security-stamp lookup throws; refresh commits its database rotation and then throws while caching its response, leaving the client with the old revoked token. The observed sequence is `/api/users/me` 401, `/api/auth/refresh` 500, then refresh 401. The browser's refresh-on-401 behavior is reactive, not an immediate-expiry policy.
+
+Regression fixtures now register the production club-access cache configuration. Coverage includes new email login → identity → refresh → identity, duplicate rotation inside grace, revoked security versions in a bounded remote cache, and existing two-site SSO/revocation tests. No tokens or production secrets are required by these tests.
+
+Google sign-in accepts verified `fpt.edu.vn` and `gmail.com` email domains. Explicitly allowed Gmail accounts do not require the Workspace `hd` claim, which personal Google accounts do not have; the configured school hosted-domain restriction still applies to school accounts. Signature, issuer, audience, lifetime, verified email, pre-existing account, account status and role checks remain required. Accepting a domain does not create or enable an account.

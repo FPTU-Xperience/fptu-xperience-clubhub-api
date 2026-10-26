@@ -28,11 +28,16 @@ public static class StaffSsoEndpoints
         return app;
     }
 
-    private static string[] Origins(IConfiguration configuration, IHostEnvironment environment) =>
-    [
-        (configuration["Sso:AdminOrigin"] ?? (environment.IsDevelopment() ? "http://localhost:5174" : "https://fptux-admin-ui.pages.dev")).TrimEnd('/'),
-        (configuration["Sso:ClubHubOrigin"] ?? (environment.IsDevelopment() ? "http://localhost:5173" : "https://fptux-clubhub-ui.pages.dev")).TrimEnd('/')
-    ];
+    private static string[] Origins(IConfiguration configuration, IHostEnvironment environment)
+    {
+        string[] deployed =
+        [
+            (configuration["Sso:AdminOrigin"] ?? (environment.IsDevelopment() ? "http://localhost:5174" : "https://fptux-admin-ui.pages.dev")).TrimEnd('/'),
+            (configuration["Sso:ClubHubOrigin"] ?? (environment.IsDevelopment() ? "http://localhost:5173" : "https://fptux-clubhub-ui.pages.dev")).TrimEnd('/')
+        ];
+        return configuration.GetValue<bool>("Sso:AllowLocalOrigins")
+            ? [.. deployed, "http://localhost:5174", "http://localhost:5173"] : deployed;
+    }
 
     private static bool IsStaff(User user) => user.IsActive && !user.IsLocked
         && ActorAccountPolicy.HasValidActorConfiguration(user)
@@ -56,7 +61,9 @@ public static class StaffSsoEndpoints
         var origins = Origins(configuration, environment);
         var source = context.Request.Headers.Origin.ToString();
         if (!origins.Contains(source, StringComparer.Ordinal) || !origins.Contains(request.TargetOrigin, StringComparer.Ordinal)
-            || source == request.TargetOrigin || !IsPkce(request.CodeChallenge)) return Results.BadRequest();
+            || source == request.TargetOrigin
+            || Array.IndexOf(origins, source) / 2 != Array.IndexOf(origins, request.TargetOrigin) / 2
+            || !IsPkce(request.CodeChallenge)) return Results.BadRequest();
         var token = await refresh.GetRefreshTokenAsync(request.RefreshToken);
         if (token is null || !token.IsActive || token.UserId != actor.GetUserId() || !IsStaff(token.User)) return Results.Unauthorized();
         var code = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));

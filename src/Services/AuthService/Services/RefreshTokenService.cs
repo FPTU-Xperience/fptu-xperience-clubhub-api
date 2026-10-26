@@ -189,7 +189,11 @@ public sealed class RefreshTokenService
             await _db.SaveChangesAsync();
 
             var response = CreateAuthResponse(oldToken.User, rotatedToken, newRawToken);
-            _cache.Set(cacheKey, response, TimeSpan.FromSeconds(RotationGracePeriodSeconds));
+            _cache.Set(cacheKey, response, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(RotationGracePeriodSeconds),
+                Size = 1
+            });
 
             return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: response, NewToken: rotatedToken, User: oldToken.User);
         }

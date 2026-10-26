@@ -52,6 +52,43 @@ public sealed partial class RefreshTokenSecurityTests
         return payload.GetProperty("code").GetString()!;
     }
 
+    [Fact]
+    public async Task Production_LocalEmailLoginRequiresPrivateProxyKey()
+    {
+        await using var fixture = await RefreshTestFixture.CreateAsync("Production");
+        await StaffSession(fixture);
+        fixture.App.Configuration["LocalDevLogin:AccessKey"] = "test-only-proxy-key-at-least-32-characters";
+        fixture.App.Configuration["LocalDevLogin:AllowedEmails"] = "refresh@fpt.edu.vn";
+        fixture.App.Configuration["LocalDevLogin:ExpiresAtUtc"] = DateTimeOffset.UtcNow.AddHours(1).ToString("O");
+        using var client = fixture.CreateClient();
+        client.DefaultRequestHeaders.Add("Origin", AdminOrigin);
+        var denied = await client.PostAsJsonAsync("/api/auth/dev-login", new { email = "refresh@fpt.edu.vn" });
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        client.DefaultRequestHeaders.Add("X-Local-Dev-Login-Key", "test-only-proxy-key-at-least-32-characters");
+        var result = await client.PostAsJsonAsync("/api/auth/dev-login", new { email = "refresh@fpt.edu.vn" });
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        var identity = await result.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.Contains(AuthRoles.StudentAffairsAdmin, identity!.User.Roles);
+    }
+
+    [Fact]
+    public async Task Production_LocalSsoUsesSeparateOriginPair()
+    {
+        await using var fixture = await RefreshTestFixture.CreateAsync("Production");
+        var session = await StaffSession(fixture);
+        using var source = StaffClient(fixture, session);
+        var disabled = await source.PostAsJsonAsync("/api/auth/sso/tickets", new { refreshToken = session.RefreshToken, targetOrigin = ClubOrigin, codeChallenge = Challenge });
+        Assert.Equal(HttpStatusCode.BadRequest, disabled.StatusCode);
+        fixture.App.Configuration["Sso:AllowLocalOrigins"] = "true";
+        var mixed = await source.PostAsJsonAsync("/api/auth/sso/tickets", new { refreshToken = session.RefreshToken, targetOrigin = "https://fptux-clubhub-ui.pages.dev", codeChallenge = Challenge });
+        Assert.Equal(HttpStatusCode.BadRequest, mixed.StatusCode);
+        var code = await Ticket(source, session);
+        using var target = fixture.CreateClient();
+        target.DefaultRequestHeaders.Add("Origin", ClubOrigin);
+        var result = await target.PostAsJsonAsync("/api/auth/sso/redeem", new { code, codeVerifier = Verifier });
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+    }
+
     [Theory]
     [InlineData(AdminOrigin, ClubOrigin)]
     [InlineData(ClubOrigin, AdminOrigin)]
