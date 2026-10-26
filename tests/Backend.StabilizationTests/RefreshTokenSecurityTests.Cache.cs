@@ -12,7 +12,7 @@ public sealed partial class RefreshTokenSecurityTests
     {
         await using var fixture = await RefreshTestFixture.CreateAsync();
         using var client = fixture.CreateClient();
-        var login = await client.PostAsJsonAsync("/api/auth/dev-login", new { email = "refresh@fpt.edu.vn" });
+        var login = await client.PostAsJsonAsync("/api/auth/email-login", new { email = "refresh@fpt.edu.vn", password = EmailPassword });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var initial = await login.Content.ReadFromJsonAsync<AuthResponse>();
         Assert.NotNull(initial);

@@ -115,10 +115,7 @@ services:
       GoogleAuthentication__ClientId: "${GOOGLE_CLIENT_ID:-}"
       GoogleAuthentication__AllowedHostedDomain: "${GOOGLE_ALLOWED_HOSTED_DOMAIN:-}"
       GoogleAuthentication__AllowedEmailDomains: "${GOOGLE_ALLOWED_EMAIL_DOMAINS:-fpt.edu.vn, gmail.com}"
-      LocalDevLogin__AccessKey: "${LOCAL_DEV_LOGIN_KEY:-}"
-      LocalDevLogin__AllowedEmails: "${LOCAL_DEV_LOGIN_EMAILS:-}"
-      LocalDevLogin__ExpiresAtUtc: "${LOCAL_DEV_LOGIN_EXPIRES_AT:-}"
-      Sso__AllowLocalOrigins: "${LOCAL_SSO_ENABLED:-false}"
+      Sso__AllowLocalOrigins: "${LOCAL_SSO_ENABLED:-true}"
     deploy:
       resources:
         limits:

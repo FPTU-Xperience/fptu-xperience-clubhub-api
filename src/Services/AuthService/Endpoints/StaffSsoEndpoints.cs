@@ -35,13 +35,13 @@ public static class StaffSsoEndpoints
             (configuration["Sso:AdminOrigin"] ?? (environment.IsDevelopment() ? "http://localhost:5174" : "https://fptux-admin-ui.pages.dev")).TrimEnd('/'),
             (configuration["Sso:ClubHubOrigin"] ?? (environment.IsDevelopment() ? "http://localhost:5173" : "https://fptux-clubhub-ui.pages.dev")).TrimEnd('/')
         ];
-        return configuration.GetValue<bool>("Sso:AllowLocalOrigins")
+        return configuration.GetValue("Sso:AllowLocalOrigins", true)
             ? [.. deployed, "http://localhost:5174", "http://localhost:5173"] : deployed;
     }
 
     private static bool IsStaff(User user) => user.IsActive && !user.IsLocked
         && ActorAccountPolicy.HasValidActorConfiguration(user)
-        && user.UserRoles.Any(x => x.Role.Name == AuthRoles.StudentAffairsAdmin);
+        && user.UserRoles.Any(x => x.Role.Name is AuthRoles.StudentAffairsAdmin or AuthRoles.Admin);
 
     private static bool IsPkce(string? value, int min = 43, int max = 43) => value is not null
         && value.Length >= min && value.Length <= max

@@ -1,5 +1,8 @@
 # Admin / ClubHub sessions and CTSV SSO
 
+Current authentication contract: [Email/password login and shared sessions](email-password-login.md).
+The historical dev-login instructions below are superseded: passwordless dev-login and its temporary proxy key were removed.
+
 Implementation: 2026-10-22. Source changes require deployment; browser fixtures are not live OAuth or production acceptance.
 
 ## Browser behavior

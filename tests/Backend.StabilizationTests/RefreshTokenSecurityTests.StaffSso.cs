@@ -57,15 +57,11 @@ public sealed partial class RefreshTokenSecurityTests
     {
         await using var fixture = await RefreshTestFixture.CreateAsync("Production");
         await StaffSession(fixture);
-        fixture.App.Configuration["LocalDevLogin:AccessKey"] = "test-only-proxy-key-at-least-32-characters";
-        fixture.App.Configuration["LocalDevLogin:AllowedEmails"] = "refresh@fpt.edu.vn";
-        fixture.App.Configuration["LocalDevLogin:ExpiresAtUtc"] = DateTimeOffset.UtcNow.AddHours(1).ToString("O");
         using var client = fixture.CreateClient();
         client.DefaultRequestHeaders.Add("Origin", AdminOrigin);
-        var denied = await client.PostAsJsonAsync("/api/auth/dev-login", new { email = "refresh@fpt.edu.vn" });
-        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
-        client.DefaultRequestHeaders.Add("X-Local-Dev-Login-Key", "test-only-proxy-key-at-least-32-characters");
-        var result = await client.PostAsJsonAsync("/api/auth/dev-login", new { email = "refresh@fpt.edu.vn" });
+        var denied = await client.PostAsJsonAsync("/api/auth/email-login", new { email = "refresh@fpt.edu.vn", password = "wrong-password" });
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+        var result = await client.PostAsJsonAsync("/api/auth/email-login", new { email = "refresh@fpt.edu.vn", password = EmailPassword });
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
         var identity = await result.Content.ReadFromJsonAsync<AuthResponse>();
         Assert.Contains(AuthRoles.StudentAffairsAdmin, identity!.User.Roles);
@@ -75,6 +71,7 @@ public sealed partial class RefreshTokenSecurityTests
     public async Task Production_LocalSsoUsesSeparateOriginPair()
     {
         await using var fixture = await RefreshTestFixture.CreateAsync("Production");
+        fixture.App.Configuration["Sso:AllowLocalOrigins"] = "false";
         var session = await StaffSession(fixture);
         using var source = StaffClient(fixture, session);
         var disabled = await source.PostAsJsonAsync("/api/auth/sso/tickets", new { refreshToken = session.RefreshToken, targetOrigin = ClubOrigin, codeChallenge = Challenge });

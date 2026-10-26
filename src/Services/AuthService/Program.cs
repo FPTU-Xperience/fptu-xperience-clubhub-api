@@ -32,6 +32,12 @@ builder.Services.AddHttpClient("MediaActivity", client =>
 
 var app = builder.Build();
 
+if (args.Length == 2 && args[0] == "--set-password")
+{
+    await AuthService.Services.PasswordSetupCommand.Run(app.Services, args[1]);
+    return;
+}
+
 // ============================================================================
 // Pipeline Configuration
 // ============================================================================

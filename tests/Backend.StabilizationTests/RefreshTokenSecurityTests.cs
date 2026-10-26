@@ -24,6 +24,7 @@ namespace Backend.StabilizationTests;
 public sealed partial class RefreshTokenSecurityTests
 {
     private const string SigningKey = "test-only-signing-key-at-least-32-characters";
+    private const string EmailPassword = "test-only-email-password-2026";
 
     [Fact]
     public async Task RefreshToken_StoredInDatabaseAsSha256Hash_NotPlaintext()
@@ -321,6 +322,7 @@ public sealed partial class RefreshTokenSecurityTests
                 SecurityVersion = 1
             };
             db.Users.Add(user);
+            user.PasswordHash = new Microsoft.AspNetCore.Identity.PasswordHasher<User>().HashPassword(user, EmailPassword);
             await db.SaveChangesAsync();
 
             db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id });
