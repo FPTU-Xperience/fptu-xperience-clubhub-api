@@ -77,13 +77,17 @@ public static class ProcessedRecommendationEndpoints
                 foreach (var item in ranking)
                 {
                     var club = live.Clubs.SingleOrDefault(x => x.ClubId == item.GetProperty("id").GetInt32());
-                    if (club is null || club.IsApprovedMember || club.CampusCode != user.CampusCode || club.Version.ToString() != item.GetProperty("candidateVersion").GetString())
+                    if (club is null || !club.IsRecruiting || club.IsApprovedMember || club.CampusCode != user.CampusCode || club.Version.ToString() != item.GetProperty("candidateVersion").GetString())
                     { filtered = true; continue; }
                     items.Add(new { recommendationId = RecommendationId(userId, snapshot, kind, club.ClubId), rank = items.Count + 1,
                         score = item.GetProperty("score"), reasons = item.GetProperty("reasons"), club });
                 }
             }
-            if (filtered) await client.InvalidateAsync([userId], ct);
+            if (filtered)
+            {
+                await client.InvalidateAsync([userId], ct);
+                http.RequestServices.GetService<RecommendationWakeSignal>()?.Wake();
+            }
             return Results.Ok(new
             {
                 items = items.Take(limit ?? 6), available = true, status = filtered ? "PARTIAL" : status,
