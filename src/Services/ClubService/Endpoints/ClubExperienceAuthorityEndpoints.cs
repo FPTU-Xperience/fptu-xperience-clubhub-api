@@ -55,6 +55,7 @@ public static class ClubExperienceAuthorityEndpoints
                 x.Code,
                 x.Name,
                 x.Category,
+                x.IsRecruiting,
                 x.CampusCode,
                 x.ConcurrencyToken,
                 Owner = x.ManagerAssignments.Any(m => m.ManagerUserId == request.UserId && m.IsActive)
@@ -67,7 +68,7 @@ public static class ClubExperienceAuthorityEndpoints
             var member = members.GetValueOrDefault(x.Id);
             return new StudentClubMetadata(x.Id, x.Code, x.Name, x.Category, x.CampusCode,
                 member is not null, member is not null || x.Owner, member?.ReviewedAtUtc ?? member?.RequestedAtUtc,
-                x.ConcurrencyToken, member?.ConcurrencyToken);
+                x.ConcurrencyToken, member?.ConcurrencyToken) { IsRecruiting = x.IsRecruiting };
         }).ToArray();
         var fingerprint = string.Join("|", items.Select(x => $"{x.ClubId}:{x.Version}:{x.MembershipVersion}:{x.IsApprovedMember}:{x.CanViewPrivate}"));
         return new(items, DateTimeOffset.UtcNow, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint))));

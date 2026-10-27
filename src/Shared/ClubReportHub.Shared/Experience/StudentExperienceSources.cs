@@ -5,7 +5,10 @@ namespace ClubReportHub.Shared.Experience;
 
 public sealed record StudentClubScopeRequest(int UserId, string CampusCode);
 public sealed record StudentClubMetadata(int ClubId, string ClubCode, string ClubName, string Category, string CampusCode,
-    bool IsApprovedMember, bool CanViewPrivate, DateTimeOffset? JoinedAt, Guid Version, Guid? MembershipVersion);
+    bool IsApprovedMember, bool CanViewPrivate, DateTimeOffset? JoinedAt, Guid Version, Guid? MembershipVersion)
+{
+    public bool IsRecruiting { get; init; }
+}
 public sealed record StudentClubScope(IReadOnlyList<StudentClubMetadata> Clubs, DateTimeOffset AsOf, string Version);
 public sealed record StudentCandidateQuery(int UserId, int Page = 1, int PageSize = 100,
     string? SemesterId = null, IReadOnlyList<int>? ActivityIds = null, bool IncludeRegistered = false,

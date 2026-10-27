@@ -131,7 +131,7 @@ public static class StudentActivityEndpoints
             {
                 // No required/optional flag exists yet. Treat every published session as
                 // required conservatively; never invent an attendable aggregate interval.
-                RecommendationSource = candidates ? new(a.RegistrationClosesAt,
+                RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,
                     Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{a.Version}:" +
                         string.Join("|", sessions.Where(s => s.ActivityId == a.Id).Select(s => $"{s.Id}:{s.Version}"))))),
                     sessions.Where(s => s.ActivityId == a.Id).Select(s => new RecommendationSession(s.Id,

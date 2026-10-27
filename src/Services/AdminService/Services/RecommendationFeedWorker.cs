@@ -114,8 +114,7 @@ public sealed class RecommendationFeedWorker(IServiceScopeFactory scopes, IConfi
         }).Where(x => x.pillarWeights.Count > 0 && Math.Abs(x.pillarWeights.Values.Sum() - 1) < 0.000001m).ToArray();
         // Club matching requires explicit recruitment + scoring metadata. Category
         // labels alone are not sufficient evidence to fabricate a club profile.
-        var clubRows = authority.Clubs.Where(x => x.CampusCode == student.CampusCode &&
-            configuration.GetValue<bool>($"Recommendation:Clubs:{x.ClubCode}:Recruiting"))
+        var clubRows = authority.Clubs.Where(x => x.CampusCode == student.CampusCode && x.IsRecruiting)
             .Select(x => new
             {
                 id = x.ClubId, version = x.Version.ToString(), x.CampusCode, active = true, recruiting = true,
