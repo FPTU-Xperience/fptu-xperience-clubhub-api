@@ -130,6 +130,67 @@ public sealed class SelfProfileExtensionsContractTests
         await f.Db(async db => { Assert.False(db.Database.HasPendingModelChanges()); Assert.Equal(3, await db.Users.CountAsync()); });
     }
 
+    [Fact]
+    public async Task Onboarding_IsCanonicalPrivateVersionedAndSurvivesLaterProfileEdits()
+    {
+        await using var f = await Fixture.Create(); using var client = f.Client();
+        var payload = new
+        {
+            expectedVersion = Guid.Empty,
+            academic = new { major = "Kỹ thuật phần mềm" },
+            profile = new { interests = new[] { "Công nghệ", "Thiết kế", "Cộng đồng" } },
+            onboarding = new { version = 1, completed = true, syncTimetable = true }
+        };
+        var response = await Patch(client, payload, "onboarding");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var second = f.Client(); var read = await Get(second);
+        Assert.Equal("Kỹ thuật phần mềm", read.GetProperty("academic").GetProperty("major").GetString());
+        var completed = read.GetProperty("onboarding").GetProperty("completedAt").GetString();
+        Assert.NotNull(completed);
+        Assert.True(read.GetProperty("onboarding").GetProperty("syncTimetable").GetBoolean());
+        Assert.Equal("SELF_DECLARED", read.GetProperty("academic").GetProperty("majorAvailability").GetString());
+        using var internalClient = f.App.GetTestClient();
+        internalClient.DefaultRequestHeaders.Add("X-Internal-Workflow-Token", Secret);
+        var projection = await internalClient.PostAsJsonAsync("/api/internal/experience/user-profiles", new[] { 100 });
+        Assert.Equal(HttpStatusCode.OK, projection.StatusCode);
+        using var projectionJson = JsonDocument.Parse(await projection.Content.ReadAsStringAsync());
+        var projectedProfile = projectionJson.RootElement[0].GetProperty("profile");
+        Assert.False(projectedProfile.TryGetProperty("academic", out _));
+        Assert.False(projectedProfile.TryGetProperty("onboarding", out _));
+        Assert.Equal(HttpStatusCode.Conflict, (await Patch(client, payload, "stale-onboarding")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Patch(second, new { expectedVersion = read.GetProperty("version").GetGuid(), profile = new { interests = Array.Empty<string>() } }, "later-edit")).StatusCode);
+        Assert.Equal(completed, (await Get(client)).GetProperty("onboarding").GetProperty("completedAt").GetString());
+        using var other = f.Client(101);
+        Assert.Equal(JsonValueKind.Null, (await Get(other)).GetProperty("onboarding").GetProperty("completedAt").ValueKind);
+        await f.Db(async db => { (await db.Users.SingleAsync(x => x.Id == 100)).IsLocked = true; await db.SaveChangesAsync(); });
+        Assert.Equal(HttpStatusCode.Forbidden, (await Patch(client, payload, "onboarding")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("duplicate")]
+    [InlineData("major")]
+    [InlineData("version")]
+    [InlineData("identity")]
+    [InlineData("timestamp")]
+    public async Task Onboarding_InvalidCompletionIsAtomic(string mode)
+    {
+        await using var f = await Fixture.Create(); using var client = f.Client();
+        var academic = new Dictionary<string, object> { ["major"] = mode == "major" ? "Unknown major" : "Kỹ thuật phần mềm" };
+        var onboarding = new Dictionary<string, object> { ["version"] = mode == "version" ? "1" : (object)1, ["completed"] = true };
+        if (mode == "identity") academic["studentCode"] = "forged";
+        if (mode == "timestamp") onboarding["completedAt"] = "2020-01-01";
+        var payload = new
+        {
+            expectedVersion = Guid.Empty,
+            academic,
+            onboarding,
+            profile = new { interests = mode == "duplicate" ? new[] { "Code", "CODE", "code" } : new[] { "Code", "Art", "Sport" } }
+        };
+        Assert.Equal(mode is "identity" or "timestamp" ? HttpStatusCode.Forbidden : HttpStatusCode.BadRequest,
+            (await Patch(client, payload, "invalid-onboarding")).StatusCode);
+        await f.Db(async db => Assert.Equal(0, await db.UserProfiles.CountAsync()));
+    }
+
     private static async Task<JsonElement> Get(HttpClient client)
     { var response = await client.GetAsync(Route); Assert.Equal(HttpStatusCode.OK, response.StatusCode); return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone(); }
     private static Task<HttpResponseMessage> Patch(HttpClient client, object input, string key)
