@@ -74,6 +74,11 @@ public static class StudentExperienceEndpoints
     private static async Task<IResult> RecommendationsAsync(int? limit, string? semesterId, string? scope,
         AdminDbContext db, HttpContext http, IConfiguration configuration, StudentExperienceSourceClient sources, CancellationToken ct)
     {
+        if (configuration.GetValue<bool>("Recommendation:Enabled"))
+            return await ProcessedRecommendationEndpoints.ReadAsync("activities", limit, semesterId, scope, db, http,
+                http.RequestServices.GetRequiredService<RecommendationClient>(), sources,
+                http.RequestServices.GetRequiredService<ClubExperienceAuthorityClient>(),
+                http.RequestServices.GetRequiredService<CurrentUserProfileClient>(), ct);
         if (limit is < 1 or > 6) return ApiOperations.Error(400, "INVALID_LIMIT", "Use limit 1–6.");
         var userId = http.User.GetUserId();
         var read = await StudentExperienceReadService.ReadAsync(db, userId, semesterId, scope, null, "Student", string.Empty,

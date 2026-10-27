@@ -6,6 +6,16 @@ namespace ClubService.Data;
 
 public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbContext(options)
 {
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
     public DbSet<Club> Clubs => Set<Club>();
     public DbSet<ClubManagerAssignment> ClubManagerAssignments => Set<ClubManagerAssignment>();
     public DbSet<ClubMembership> ClubMemberships => Set<ClubMembership>();

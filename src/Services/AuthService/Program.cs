@@ -7,6 +7,7 @@ using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Security;
 using ClubReportHub.Shared.Tracing;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,11 @@ builder.Services.AddHttpClient<ClubReportHub.Shared.Schedules.AcademicCalendarCl
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddClubAccessClient(builder.Configuration);
+if (!builder.Environment.IsEnvironment("Test") && !builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddRedisStreamEventBus(builder.Configuration);
+    builder.Services.AddTransactionalOutbox<AuthDbContext>();
+}
 builder.Services.AddScoped<AuthService.Services.IPublicMediaStorage, AuthService.Services.PublicMediaStorage>();
 builder.Services.AddHttpClient("MediaActivity", client =>
 {
@@ -81,6 +87,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapCanonicalProfileEndpoints();
 app.MapStudyScheduleEndpoints();
+app.MapRecommendationSourceEndpoints();
 app.MapInternalAccountEndpoints();
 app.MapSchoolAccountEndpoints();
 app.MapPublicMediaEndpoints();

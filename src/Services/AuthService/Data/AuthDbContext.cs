@@ -6,6 +6,17 @@ namespace AuthService.Data;
 
 public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options)
 {
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
@@ -17,6 +28,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         StudyScheduleModel.Apply(modelBuilder);
+        modelBuilder.ApplyOutboxConfiguration();
         modelBuilder.ApplyApiOperationConfiguration();
         modelBuilder.Entity<StaffSsoTicket>(entity =>
         {

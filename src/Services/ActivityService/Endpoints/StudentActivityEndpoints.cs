@@ -127,7 +127,16 @@ public static class StudentActivityEndpoints
                 a.CoverImageUrl, start, end, session?.Location ?? a.Location,
                 a.Status == ActivityStatuses.Cancelled ? "CANCELLED" : end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE",
                 action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,
-                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? []);
+                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])
+            {
+                // No required/optional flag exists yet. Treat every published session as
+                // required conservatively; never invent an attendable aggregate interval.
+                RecommendationSource = candidates ? new(a.RegistrationClosesAt,
+                    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{a.Version}:" +
+                        string.Join("|", sessions.Where(s => s.ActivityId == a.Id).Select(s => $"{s.Id}:{s.Version}"))))),
+                    sessions.Where(s => s.ActivityId == a.Id).Select(s => new RecommendationSession(s.Id,
+                        s.StartTimeUtc, s.EndTimeUtc, true)).ToArray()) : null
+            };
         }).ToArray();
         if (detailId.HasValue) return items.Length == 0 ? Results.NotFound() : Results.Ok(items[0]);
         return Results.Ok(new StudentActivityPage(items, page, size, total, (int)Math.Ceiling((decimal)total / size), now, authority.Version));

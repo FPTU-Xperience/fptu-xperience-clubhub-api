@@ -34,6 +34,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
 
     private void ValidateActionHistory()
     {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
         if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule or ActivityResourceAudit
             && x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Application history, approved rules and execution audit are append-only.");
