@@ -107,6 +107,38 @@ public sealed class SelfProfileMediaContractTests
         Assert.False(privateRead[0].GetProperty("profile").GetProperty("profile").TryGetProperty("coverImageUrl", out _));
     }
 
+    [Theory]
+    [InlineData("club-logo")]
+    [InlineData("club-cover")]
+    [InlineData("activity-cover")]
+    public async Task ManagedImage_IntentAndInternalAttachmentPreserveOwnerKindAndVerifiedBytes(string kind)
+    {
+        await using var f = await Fixture.Create(manage: true);
+        using var actor = f.Client();
+        var intent = await f.Intent(actor, kind);
+        f.Storage.Upload(intent);
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.Headers.Authorization = actor.DefaultRequestHeaders.Authorization!.ToString();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        { ["Security:InternalWorkflowToken"] = Secret }).Build();
+        using var internalHttp = f.Client();
+        var attachments = new ClubReportHub.Shared.Experience.MediaAttachmentClient(internalHttp, configuration);
+        var staging = intent.GetProperty("publicUrl").GetString()!;
+        var saved = await attachments.VerifyAsync(staging, null, kind, 100, context, default);
+        Assert.Equal(200, saved.StatusCode);
+        Assert.Contains("/verified/", saved.PublicUrl);
+        Assert.NotEqual(staging, saved.PublicUrl);
+        Assert.Equal(f.Storage.Png, f.Storage.Verified[saved.PublicUrl!]);
+        var replay = await attachments.VerifyAsync(saved.PublicUrl, null, kind, 100, context, default);
+        Assert.Equal(saved.PublicUrl, replay.PublicUrl);
+        Assert.Equal(1, f.Storage.VerificationCount);
+        Assert.Equal(409, (await attachments.VerifyAsync(staging, null, kind, 101, context, default)).StatusCode);
+        Assert.Equal(409, (await attachments.VerifyAsync(staging, null, "student-cover", 100, context, default)).StatusCode);
+        using var other = f.Client(101);
+        context.Request.Headers.Authorization = other.DefaultRequestHeaders.Authorization!.ToString();
+        Assert.Equal(409, (await attachments.VerifyAsync(staging, null, kind, 100, context, default)).StatusCode);
+    }
+
     [Fact]
     public async Task SqlServer_ImageMigrationPreservesExistingPrivateAndTextProfile()
     {
@@ -121,8 +153,21 @@ public sealed class SelfProfileMediaContractTests
     private static Task<JsonElement> Json(HttpResponseMessage response) => response.Content.ReadFromJsonAsync<JsonElement>();
     private static Task<HttpResponseMessage> Send(HttpClient client, HttpMethod method, string path, object body, string key)
     { var request = new HttpRequestMessage(method, path) { Content = JsonContent.Create(body) }; request.Headers.Add("Idempotency-Key", key); return client.SendAsync(request); }
-    private sealed class DeniedClubAccess : HttpMessageHandler
-    { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<ClubAccessSnapshot>()) }); }
+    private sealed class DeniedClubAccess(bool manage = false) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(manage
+                    ? new[] { new ClubAccessSnapshot(100, "Managed club", true, false, true, new[] { 100 }) }
+                    : Array.Empty<ClubAccessSnapshot>())
+            });
+    }
+    private sealed class ActivityAuthority : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { clubId = 100 }) });
+    }
     private sealed class Storage : IPublicMediaStorage
     {
         internal readonly Dictionary<string, byte[]> Staging = new(); internal readonly Dictionary<string, byte[]> Verified = new();
@@ -146,14 +191,16 @@ public sealed class SelfProfileMediaContractTests
     private sealed class Fixture(WebApplication app, string connection, Storage storage) : IAsyncDisposable
     {
         internal Storage Storage => storage;
-        internal static async Task<Fixture> Create(bool legacy = false)
+        internal static async Task<Fixture> Create(bool legacy = false, bool manage = false)
         {
             var connection = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable("ADMIN_SERVICE_TEST_CONNECTION_STRING") ?? "Server=(localdb)\\ClubManagerApiTests;Integrated Security=True;TrustServerCertificate=True") { InitialCatalog = "ClubHub_SelfMediaTests_" + Guid.NewGuid().ToString("N") }.ConnectionString;
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" }); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:Issuer"] = "ClubReportHub", ["Jwt:Audience"] = "ClubReportHub.Client", ["Jwt:SigningKey"] = Key, ["Security:InternalWorkflowToken"] = Secret });
             builder.Services.AddDbContext<AuthDbContext>(x => x.UseSqlServer(connection)); builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
             var storage = new Storage(); builder.Services.AddSingleton<IPublicMediaStorage>(storage); builder.Services.AddHttpClient();
-            builder.Services.AddSingleton(new ClubAccessClient(new HttpClient(new DeniedClubAccess()) { BaseAddress = new Uri("http://club/") }, new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 }), NullLogger<ClubAccessClient>.Instance));
+            builder.Services.AddSingleton(new ClubAccessClient(new HttpClient(new DeniedClubAccess(manage)) { BaseAddress = new Uri("http://club/") }, new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 }), NullLogger<ClubAccessClient>.Instance));
+            builder.Services.AddHttpClient("MediaActivity", client => client.BaseAddress = new Uri("http://activity/"))
+                .ConfigurePrimaryHttpMessageHandler(() => new ActivityAuthority());
             var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization(); app.MapCanonicalProfileEndpoints(); app.MapPublicMediaEndpoints(); var f = new Fixture(app, connection, storage);
             try
             {
