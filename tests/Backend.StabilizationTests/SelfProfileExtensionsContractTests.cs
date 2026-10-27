@@ -215,7 +215,7 @@ public sealed class SelfProfileExtensionsContractTests
                     if (sql) await db.GetService<IMigrator>().MigrateAsync("20261022143758_PrivateStudySchedules"); else await db.Database.EnsureCreatedAsync();
                     foreach (var id in new[] { 100, 101, 200 }) db.Add(new User { Id = id, Username = "profile" + id, FullName = "Account " + id, Email = id + "@fpt.edu.vn", CampusCode = "HAN", IsActive = true });
                     if (sql) { await db.Database.OpenConnectionAsync(); await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] ON"); }
-                    await db.SaveChangesAsync();
+                    if (sql) await HistoricalAuthFixture.SeedTrackedUsersAsync(db); else await db.SaveChangesAsync();
                     if (sql)
                     {
                         await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] OFF");

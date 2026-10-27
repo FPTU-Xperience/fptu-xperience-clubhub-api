@@ -209,7 +209,7 @@ public sealed class SelfProfileMediaContractTests
                     await db.GetService<IMigrator>().MigrateAsync("20261022152518_SelfProfilePrivateExtensions");
                     await db.Database.OpenConnectionAsync(); await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] ON");
                     foreach (var id in new[] { 100, 101 }) db.Add(new User { Id = id, Username = "image" + id, Email = id + "@fpt.edu.vn", FullName = "Account " + id, CampusCode = "HAN", IsActive = true });
-                    await db.SaveChangesAsync(); await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] OFF");
+                    await HistoricalAuthFixture.SeedTrackedUsersAsync(db); await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] OFF");
                     if (legacy) await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO [UserProfiles] ([UserId],[Version],[DisplayName],[About],[SkillsJson],[InterestsJson],[PhoneNumber],[UpdatedAtUtc],[Headline],[DateOfBirth],[Address]) VALUES ({100},{Guid.NewGuid()},{"Legacy"},{"About"},{"[]"},{"[]"},{"0901234567"},{DateTimeOffset.UtcNow},{"Preserved"},{"2004-02-29"},{"Address"})");
                     await db.Database.CloseConnectionAsync(); await db.Database.MigrateAsync();
                 }); await app.StartAsync(); return f;

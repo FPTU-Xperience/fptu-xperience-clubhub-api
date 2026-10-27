@@ -277,7 +277,7 @@ public sealed class StudyScheduleContractTests
                     foreach (var id in new[] { 100, 101, 200, 201, 202 })
                         db.Add(new User { Id = id, Username = "schedule" + id, FullName = "Account " + id, Email = id + "@fpt.edu.vn", CampusCode = id is 101 or 201 ? "HCM" : id == 202 ? "GLOBAL" : "HAN", IsActive = true });
                     if (sql) { await db.Database.OpenConnectionAsync(); await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] ON"); }
-                    await db.SaveChangesAsync();
+                    if (sql) await HistoricalAuthFixture.SeedTrackedUsersAsync(db); else await db.SaveChangesAsync();
                     if (sql) { await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT [Users] OFF"); await db.Database.CloseConnectionAsync(); await db.Database.MigrateAsync(); }
                 });
                 await f.AdminDb(async db =>

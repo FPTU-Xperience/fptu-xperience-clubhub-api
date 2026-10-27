@@ -705,6 +705,15 @@
           "Path": "/api/v2/recommendations/activities"
         }
       },
+      "student-club-recommendations": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/recommendations/clubs"
+        }
+      },
       "student-experience-summary": {
         "Order": -30,
         "ClusterId": "admin-service",
