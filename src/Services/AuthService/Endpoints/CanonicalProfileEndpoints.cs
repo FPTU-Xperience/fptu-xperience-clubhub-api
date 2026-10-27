@@ -63,23 +63,31 @@ public static class CanonicalProfileEndpoints
             editable.AddRange(["profile.headline", "personal.dateOfBirth", "personal.address", "profile.avatarUrl", "profile.coverImageUrl"]);
             editable.AddRange(["academic.major", "onboarding.completed", "onboarding.version", "onboarding.syncTimetable"]);
         }
-        return new
+        var response = new Dictionary<string, object?>
         {
-            userId = user.Id,
-            version = profile?.Version ?? Guid.Empty,
-            profileSource = "user-profile",
-            identityProvenance = "PROJECT_ACCOUNT",
-            profile = text,
-            personal,
-            academic = includePrivate ? new { major = profile?.DeclaredMajor, majorAvailability = "SELF_DECLARED" } : null,
-            onboarding = includePrivate ? new
+            ["userId"] = user.Id,
+            ["version"] = profile?.Version ?? Guid.Empty,
+            ["profileSource"] = "user-profile",
+            ["identityProvenance"] = "PROJECT_ACCOUNT",
+            ["profile"] = text,
+            ["personal"] = personal,
+            ["editableFields"] = editable
+        };
+        if (includePrivate)
+        {
+            response["academic"] = new
+            {
+                major = profile?.DeclaredMajor,
+                majorAvailability = string.IsNullOrWhiteSpace(profile?.DeclaredMajor) ? "NO_AUTHORITATIVE_SOURCE" : "SELF_DECLARED"
+            };
+            response["onboarding"] = new
             {
                 version = profile?.OnboardingVersion ?? 0,
                 syncTimetable = profile?.SyncTimetable ?? false,
                 completedAt = profile?.OnboardingCompletedAtUtc
-            } : null,
-            editableFields = editable
-        };
+            };
+        }
+        return response;
     }
 
     private static async Task<IResult> PatchAsync(AuthDbContext db, HttpContext http, CancellationToken ct)

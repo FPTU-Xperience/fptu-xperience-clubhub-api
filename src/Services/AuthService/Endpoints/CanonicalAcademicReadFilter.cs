@@ -21,7 +21,9 @@ public sealed class CanonicalAcademicReadFilter : IEndpointFilter
         var output = json.EnumerateObject().ToDictionary(x => x.Name, x => (object?)x.Value.Clone());
         var academicFields = JsonSerializer.SerializeToElement(academic, Options).EnumerateObject()
             .ToDictionary(x => x.Name, x => (object?)x.Value.Clone());
-        if (json.TryGetProperty("academic", out var declared) && declared.ValueKind == JsonValueKind.Object)
+        if (json.TryGetProperty("academic", out var declared) && declared.ValueKind == JsonValueKind.Object
+            && declared.TryGetProperty("major", out var major) && major.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(major.GetString()))
             foreach (var field in declared.EnumerateObject()) academicFields[field.Name] = field.Value.Clone();
         output["academic"] = academicFields;
         http.Response.Headers.CacheControl = "no-store";

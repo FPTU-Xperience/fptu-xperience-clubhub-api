@@ -148,6 +148,15 @@ public sealed class SelfProfileExtensionsContractTests
         var completed = read.GetProperty("onboarding").GetProperty("completedAt").GetString();
         Assert.NotNull(completed);
         Assert.True(read.GetProperty("onboarding").GetProperty("syncTimetable").GetBoolean());
+        Assert.Equal("SELF_DECLARED", read.GetProperty("academic").GetProperty("majorAvailability").GetString());
+        using var internalClient = f.App.GetTestClient();
+        internalClient.DefaultRequestHeaders.Add("X-Internal-Workflow-Token", Secret);
+        var projection = await internalClient.PostAsJsonAsync("/api/internal/experience/user-profiles", new[] { 100 });
+        Assert.Equal(HttpStatusCode.OK, projection.StatusCode);
+        using var projectionJson = JsonDocument.Parse(await projection.Content.ReadAsStringAsync());
+        var projectedProfile = projectionJson.RootElement[0].GetProperty("profile");
+        Assert.False(projectedProfile.TryGetProperty("academic", out _));
+        Assert.False(projectedProfile.TryGetProperty("onboarding", out _));
         Assert.Equal(HttpStatusCode.Conflict, (await Patch(client, payload, "stale-onboarding")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Patch(second, new { expectedVersion = read.GetProperty("version").GetGuid(), profile = new { interests = Array.Empty<string>() } }, "later-edit")).StatusCode);
         Assert.Equal(completed, (await Get(client)).GetProperty("onboarding").GetProperty("completedAt").GetString());
