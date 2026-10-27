@@ -22,10 +22,17 @@ public sealed class MediaAttachmentClient(HttpClient client, IConfiguration conf
         try
         {
             using var response = await client.SendAsync(request, ct);
-            if (!response.IsSuccessStatusCode) return new(null, (int)response.StatusCode is 400 or 403 or 409 ? (int)response.StatusCode : 503, "MEDIA_ATTACHMENT_REJECTED");
-            var result = await response.Content.ReadFromJsonAsync<MediaUrl>(ct); return new(result?.PublicUrl, result is null ? 503 : 200, null);
+            if (!response.IsSuccessStatusCode)
+                return new(null, (int)response.StatusCode is 400 or 403 or 409 ? (int)response.StatusCode : 503, "MEDIA_ATTACHMENT_REJECTED");
+            var result = await response.Content.ReadFromJsonAsync<MediaUrl>(ct);
+            if (string.IsNullOrWhiteSpace(result?.PublicUrl) || !Uri.TryCreate(result.PublicUrl, UriKind.Absolute, out var verified)
+                || verified.Scheme != "https" || !string.IsNullOrEmpty(verified.UserInfo) || verified.AbsolutePath.StartsWith("/staging/", StringComparison.Ordinal))
+                return new(null, 503, "INVALID_MEDIA_VERIFICATION_RESPONSE");
+            return new(result.PublicUrl, 200, null);
         }
         catch (HttpRequestException) { return new(null, 503, "MEDIA_SERVICE_UNAVAILABLE"); }
+        catch (System.Text.Json.JsonException) { return new(null, 503, "INVALID_MEDIA_VERIFICATION_RESPONSE"); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(null, 503, "MEDIA_SERVICE_UNAVAILABLE"); }
     }
     private sealed record MediaUrl(string PublicUrl);
 }

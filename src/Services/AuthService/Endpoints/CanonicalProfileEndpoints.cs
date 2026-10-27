@@ -61,6 +61,7 @@ public static class CanonicalProfileEndpoints
             text["avatarUrl"] = profile?.AvatarUrl; text["coverImageUrl"] = profile?.CoverImageUrl;
             personal["dateOfBirth"] = profile?.DateOfBirth; personal["address"] = profile?.Address;
             editable.AddRange(["profile.headline", "personal.dateOfBirth", "personal.address", "profile.avatarUrl", "profile.coverImageUrl"]);
+            editable.AddRange(["academic.major", "onboarding.completed", "onboarding.version", "onboarding.syncTimetable"]);
         }
         return new
         {
@@ -70,6 +71,13 @@ public static class CanonicalProfileEndpoints
             identityProvenance = "PROJECT_ACCOUNT",
             profile = text,
             personal,
+            academic = includePrivate ? new { major = profile?.DeclaredMajor, majorAvailability = "SELF_DECLARED" } : null,
+            onboarding = includePrivate ? new
+            {
+                version = profile?.OnboardingVersion ?? 0,
+                syncTimetable = profile?.SyncTimetable ?? false,
+                completedAt = profile?.OnboardingCompletedAtUtc
+            } : null,
             editableFields = editable
         };
     }
@@ -77,7 +85,7 @@ public static class CanonicalProfileEndpoints
     private static async Task<IResult> PatchAsync(AuthDbContext db, HttpContext http, CancellationToken ct)
     {
         var request = await BoundedJsonRequest.ReadAsync<JsonElement>(http, 32768, ct);
-        if (request.ValueKind != JsonValueKind.Object || request.EnumerateObject().Any(x => x.Name is not ("expectedVersion" or "profile" or "personal"))
+        if (request.ValueKind != JsonValueKind.Object || request.EnumerateObject().Any(x => x.Name is not ("expectedVersion" or "profile" or "personal" or "academic" or "onboarding"))
             || request.EnumerateObject().GroupBy(x => x.Name).Any(x => x.Count() > 1)
             || !request.TryGetProperty("expectedVersion", out var version) || version.ValueKind != JsonValueKind.String || !version.TryGetGuid(out var expected))
             return ApiOperations.Error(400, "INVALID_SELF_PROFILE", "Provide editable profile/personal fields and expectedVersion.");
@@ -89,12 +97,41 @@ public static class CanonicalProfileEndpoints
             if ((row?.Version ?? Guid.Empty) != expected) return ApiOperations.Error(409, "STALE_PROFILE", "Reload your profile.");
             if (row is null) { row = new CanonicalUserProfile { UserId = user.Id, DisplayName = user.FullName }; db.UserProfiles.Add(row); }
             var changed = false;
+            var completeOnboarding = false;
             foreach (var section in request.EnumerateObject().Where(x => x.Name != "expectedVersion"))
             {
                 if (section.Value.ValueKind != JsonValueKind.Object || section.Value.EnumerateObject().GroupBy(x => x.Name).Any(x => x.Count() > 1)) return Results.BadRequest();
                 foreach (var field in section.Value.EnumerateObject())
                 {
                     var path = section.Name + "." + field.Name;
+                    if (section.Name is "academic" or "onboarding")
+                    {
+                        if (path == "academic.major")
+                        {
+                            if (field.Value.ValueKind != JsonValueKind.String || !StudentOnboardingRules.IsMajor(field.Value.GetString()))
+                                return ApiOperations.Error(400, "INVALID_MAJOR", "Choose a supported declared major.");
+                            row.DeclaredMajor = field.Value.GetString()!.Trim();
+                        }
+                        else if (path == "onboarding.version")
+                        {
+                            if (field.Value.ValueKind != JsonValueKind.Number || !field.Value.TryGetInt32(out var schema) || schema != 1)
+                                return ApiOperations.Error(400, "INVALID_ONBOARDING_VERSION", "Use onboarding version 1.");
+                            row.OnboardingVersion = schema;
+                        }
+                        else if (path == "onboarding.syncTimetable")
+                        {
+                            if (field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return Results.BadRequest();
+                            row.SyncTimetable = field.Value.GetBoolean();
+                        }
+                        else if (path == "onboarding.completed")
+                        {
+                            if (field.Value.ValueKind != JsonValueKind.True) return Results.BadRequest();
+                            completeOnboarding = true;
+                        }
+                        else return ApiOperations.Error(403, "PROFILE_FIELD_FORBIDDEN", "Academic identity and completion timestamps are server-owned.");
+                        changed = true;
+                        continue;
+                    }
                     if (path is "profile.skills" or "profile.interests")
                     {
                         if (field.Value.ValueKind != JsonValueKind.Array || field.Value.GetArrayLength() > 30
@@ -132,6 +169,13 @@ public static class CanonicalProfileEndpoints
                 }
             }
             if (!changed) return ApiOperations.Error(400, "EMPTY_PATCH", "Provide an editable field.");
+            if (completeOnboarding)
+            {
+                if (row.OnboardingVersion != 1 || !StudentOnboardingRules.IsMajor(row.DeclaredMajor)
+                    || JsonSerializer.Deserialize<string[]>(row.InterestsJson)!.Distinct(StringComparer.OrdinalIgnoreCase).Count() < 3)
+                    return ApiOperations.Error(400, "INCOMPLETE_ONBOARDING", "Choose a major and at least three distinct interests.");
+                row.OnboardingCompletedAtUtc ??= http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
+            }
             row.Version = Guid.NewGuid(); row.UpdatedAtUtc = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct);
             return Results.Ok(Response(user, row));
         }, ct, required: false);
