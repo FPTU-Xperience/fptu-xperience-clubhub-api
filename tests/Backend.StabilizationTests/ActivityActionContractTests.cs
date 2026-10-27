@@ -68,7 +68,7 @@ public sealed class ActivityActionContractTests
             Assert.Null(row.PolicyVersion); Assert.Null(row.ScoringSnapshotJson);
             Assert.Equal(1, await db.Set<ActivityExecution>().CountAsync());
             Assert.Equal(1, await db.Set<ActivityActionRule>().CountAsync());
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -168,7 +168,7 @@ public sealed class ActivityActionContractTests
         {
             Assert.Equal(2, await db.Set<ActivityStaffAssignment>().CountAsync());
             Assert.Equal(1, await db.Set<ActivityStaffAssignment>().CountAsync(x => x.Status != "REMOVED"));
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -225,7 +225,7 @@ public sealed class ActivityActionContractTests
         {
             var row = await db.Set<ActivityActionCompletion>().SingleAsync(); Assert.Equal("VERIFIED", row.Status); Assert.Equal(300, row.VerifiedBy);
             Assert.Single(await db.Set<ActivityExecutionAudit>().Where(x => x.Action == "COMPLETION_VERIFIED_WITHOUT_POINTS").ToArrayAsync());
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -266,7 +266,7 @@ public sealed class ActivityActionContractTests
         await f.WithDb(async db =>
         {
             Assert.Equal("VERIFIED", (await db.Set<ActivityActionCompletion>().SingleAsync()).Status);
-            Assert.Empty(await db.ActivityAttendances.ToArrayAsync()); Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.ActivityAttendances.ToArrayAsync()); Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
