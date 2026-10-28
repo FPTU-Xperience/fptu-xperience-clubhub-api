@@ -89,7 +89,11 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
+      Redis__ConnectionString: "redis:6379"
+      Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
       Services__ActivityService__BaseUrl: "http://activity-service:8080/"
