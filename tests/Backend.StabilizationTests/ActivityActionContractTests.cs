@@ -443,20 +443,18 @@ public sealed class ActivityActionContractTests
                     if (upgrade)
                     {
                         await db.GetService<IMigrator>().MigrateAsync("20261013142006_StudentActivityDiscovery");
-                        db.Add(new ClubActivity
-                        {
-                            ClubId = 1,
-                            ClubName = "Legacy",
-                            Title = "Legacy row",
-                            Description = "Preserved",
-                            Location = "Hall",
-                            StartTimeUtc = Instant.AddDays(-2),
-                            EndTimeUtc = Instant.AddDays(-1),
-                            CreatedByUserId = 200
-                        });
-                        await db.SaveChangesAsync();
+                        // Seed only columns that existed at the historical migration boundary.
+                        await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            INSERT INTO Activities
+                                (ClubId, ClubName, Title, Description, Location, StartTimeUtc, EndTimeUtc,
+                                 MeetingDaysCsv, Status, CreatedByUserId, CreatedAtUtc, UpdatedAtUtc)
+                            VALUES (1, N'Legacy', N'Legacy row', N'Preserved', N'Hall',
+                                {Instant.AddDays(-2)}, {Instant.AddDays(-1)}, N'', {ActivityStatuses.Scheduled},
+                                200, {Instant}, {Instant})
+                            """);
                     }
                     await db.Database.MigrateAsync();
+                    if (upgrade) Assert.True((await db.Activities.SingleAsync()).IsInternal);
                 });
             }
             catch { await f.DisposeAsync(); throw; }
