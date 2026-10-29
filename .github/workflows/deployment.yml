@@ -29,7 +29,9 @@ jobs:
 
   validate-rcm:
     if: inputs.deploy_rcm
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 rejects the newer kernel on ubuntu-latest (SERVER-121912).
+    # The Ubuntu 22.04 runner uses the compatible 6.8 kernel family.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     outputs:
       sha: ${{ steps.revision.outputs.sha }}
