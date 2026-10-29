@@ -54,6 +54,9 @@ internal static class ActivityLifecycleEndpoints
                 activity.RegistrationClosesAt = request.RegistrationClosesAt ?? activity.RegistrationClosesAt;
                 activity.Eligibility = request.Eligibility ?? activity.Eligibility;
                 activity.DiscoveryVisibility = request.DiscoveryVisibility ?? activity.DiscoveryVisibility;
+                activity.IsInternal = request.IsInternal ?? (request.DiscoveryVisibility is not null
+                    ? request.DiscoveryVisibility != "CAMPUS_PUBLIC" : activity.IsInternal);
+                activity.DiscoveryVisibility = activity.IsInternal ? "CLUB_ONLY" : "CAMPUS_PUBLIC";
                 activity.EvidenceRequirements = request.EvidenceRequirements?.Trim() ?? activity.EvidenceRequirements;
                 activity.PolicyVersion = request.PolicyVersion ?? activity.PolicyVersion;
                 if (request.PillarWeights is not null)

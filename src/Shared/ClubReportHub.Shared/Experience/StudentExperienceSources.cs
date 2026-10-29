@@ -23,6 +23,7 @@ public sealed record StudentActivityItem(int Id, int ClubId, string ClubCode, st
     IReadOnlyList<PillarWeight> PillarWeights)
 {
     public RecommendationActivitySource? RecommendationSource { get; init; }
+    public bool IsInternal { get; init; } = true;
 }
 public sealed record StudentActivityPage(IReadOnlyList<StudentActivityItem> Items, int Page, int PageSize,
     int TotalItems, int TotalPages, DateTimeOffset AsOf, string ScopeVersion);

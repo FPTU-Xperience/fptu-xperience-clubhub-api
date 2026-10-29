@@ -49,6 +49,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
             entity.Property(x => x.Version).IsConcurrencyToken();
             entity.Property(x => x.PublicationStatus).HasMaxLength(20).HasDefaultValue("LEGACY");
             entity.Property(x => x.DiscoveryVisibility).HasMaxLength(20).HasDefaultValue("CLUB_ONLY");
+            entity.Property(x => x.IsInternal).HasDefaultValue(true);
             entity.HasIndex(x => new { x.DiscoveryVisibility, x.PublicationStatus, x.ClubId });
             entity.Property(x => x.SemesterId).HasMaxLength(40);
             entity.Property(x => x.EffortTier).HasMaxLength(10).HasDefaultValue("T1");

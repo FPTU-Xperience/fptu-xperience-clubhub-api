@@ -37,6 +37,14 @@ public static class ProcessedRecommendationEndpoints
         {
             var user = (await profiles.GetAsync([userId], ct)).GetValueOrDefault(userId);
             if (user is not { IsActive: true, IsLocked: false }) return Results.Forbid();
+            var configuration = http.RequestServices.GetRequiredService<IConfiguration>();
+            var environment = configuration["Experience:Environment"] ?? "PROJECT";
+            var now = DateTimeOffset.UtcNow;
+            if (kind == "activities" && !await db.ApprovedExperiencePolicies.AsNoTracking().AnyAsync(x =>
+                x.SemesterId == semester[0].SemesterCode && x.Scope == "PERIOD" && x.Environment == environment
+                && x.ApprovedAt <= now && (x.EffectiveAt == null || x.EffectiveAt <= now), ct))
+                return await StudentExperienceEndpoints.ReadBaselineRecommendationsAsync(limit, semester[0].SemesterCode,
+                    "PERIOD", db, http, configuration, sources, ct);
             var result = await client.ReadAsync(userId, semester[0].SemesterCode, kind, ct);
             var available = result.GetProperty("available").GetBoolean();
             var status = result.GetProperty("status").GetString();
@@ -63,11 +71,16 @@ public static class ProcessedRecommendationEndpoints
                     { filtered = true; continue; }
                     items.Add(new
                     {
-                        recommendationId = RecommendationId(userId, snapshot, kind, activity.Id), rank = items.Count + 1,
-                        targetPillar = item.GetProperty("targetPillar"), reason = "Precomputed content recommendation.",
-                        reasons = item.GetProperty("reasons"), score = item.GetProperty("score"),
-                        suggestedSessionIds = item.GetProperty("suggestedSessionIds"), ruleVersion = rule,
-                        sourceLabel = "PROCESSED_RECOMMENDATION", activity
+                        recommendationId = RecommendationId(userId, snapshot, kind, activity.Id),
+                        rank = items.Count + 1,
+                        targetPillar = item.GetProperty("targetPillar"),
+                        reason = "Precomputed content recommendation.",
+                        reasons = item.GetProperty("reasons"),
+                        score = item.GetProperty("score"),
+                        suggestedSessionIds = item.GetProperty("suggestedSessionIds"),
+                        ruleVersion = rule,
+                        sourceLabel = "PROCESSED_RECOMMENDATION",
+                        activity
                     });
                 }
             }
@@ -79,8 +92,14 @@ public static class ProcessedRecommendationEndpoints
                     var club = live.Clubs.SingleOrDefault(x => x.ClubId == item.GetProperty("id").GetInt32());
                     if (club is null || !club.IsRecruiting || club.IsApprovedMember || club.CampusCode != user.CampusCode || club.Version.ToString() != item.GetProperty("candidateVersion").GetString())
                     { filtered = true; continue; }
-                    items.Add(new { recommendationId = RecommendationId(userId, snapshot, kind, club.ClubId), rank = items.Count + 1,
-                        score = item.GetProperty("score"), reasons = item.GetProperty("reasons"), club });
+                    items.Add(new
+                    {
+                        recommendationId = RecommendationId(userId, snapshot, kind, club.ClubId),
+                        rank = items.Count + 1,
+                        score = item.GetProperty("score"),
+                        reasons = item.GetProperty("reasons"),
+                        club
+                    });
                 }
             }
             if (filtered)
@@ -90,10 +109,16 @@ public static class ProcessedRecommendationEndpoints
             }
             return Results.Ok(new
             {
-                items = items.Take(limit ?? 6), available = true, status = filtered ? "PARTIAL" : status,
-                ruleVersion = rule, sourceLabel = "PROCESSED_RECOMMENDATION", snapshotId = snapshot,
-                generatedAt = result.GetProperty("generatedAt"), expiresAt = result.GetProperty("expiresAt"),
-                sourceVersions = result.GetProperty("sourceVersions"), warnings = result.GetProperty("warnings")
+                items = items.Take(limit ?? 6),
+                available = true,
+                status = filtered ? "PARTIAL" : status,
+                ruleVersion = rule,
+                sourceLabel = "PROCESSED_RECOMMENDATION",
+                snapshotId = snapshot,
+                generatedAt = result.GetProperty("generatedAt"),
+                expiresAt = result.GetProperty("expiresAt"),
+                sourceVersions = result.GetProperty("sourceVersions"),
+                warnings = result.GetProperty("warnings")
             });
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException or KeyNotFoundException or FormatException)

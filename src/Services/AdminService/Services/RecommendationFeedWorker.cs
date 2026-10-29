@@ -97,37 +97,57 @@ public sealed class RecommendationFeedWorker(IServiceScopeFactory scopes, IConfi
         object Meta(string version) => new { version, asOf = now };
         var versions = new Dictionary<string, object>
         {
-            ["account"] = Meta(student.AccountVersion), ["catalog"] = Meta(catalogVersion),
-            ["preferences"] = Meta(student.PreferenceVersion.ToString()), ["schedule"] = Meta(student.ScheduleVersion),
+            ["account"] = Meta(student.AccountVersion),
+            ["catalog"] = Meta(catalogVersion),
+            ["preferences"] = Meta(student.PreferenceVersion.ToString()),
+            ["schedule"] = Meta(student.ScheduleVersion),
             ["experience"] = new { radar.PolicyVersion, radar.LedgerRevision, asOf = now }
         };
         var membership = authority.Clubs.Where(x => x.IsApprovedMember).Select(x => x.ClubId).ToArray();
         var candidateRows = activities.OrderBy(x => x.Id).Select(x => new
         {
-            x.Id, version = x.RecommendationSource!.Version, x.ClubId, student.CampusCode,
-            published = true, cancelled = false, registrationOpen = true, x.RecommendationSource.RegistrationDeadline,
-            capacityAvailable = true, eligibleUserIds = new[] { student.UserId },
+            x.Id,
+            version = x.RecommendationSource!.Version,
+            x.ClubId,
+            x.IsInternal,
+            campusCode = authority.Clubs.Single(c => c.ClubId == x.ClubId).CampusCode,
+            published = true,
+            cancelled = false,
+            registrationOpen = true,
+            x.RecommendationSource.RegistrationDeadline,
+            capacityAvailable = true,
+            eligibleUserIds = new[] { student.UserId },
             interestIds = MapInterests(configuration.GetSection($"Recommendation:Activities:{x.Id}:Interests").Get<string[]>() ?? []),
             majorCodes = configuration.GetSection($"Recommendation:Activities:{x.Id}:MajorCodes").Get<string[]>() ?? [],
             pillarWeights = x.PillarWeights.Where(p => RadarPillars.CoreSix.Contains(p.Pillar)).ToDictionary(p => p.Pillar, p => p.Weight),
-            x.RecommendationSource.Sessions, scheduleAvailability = "KNOWN"
+            x.RecommendationSource.Sessions,
+            scheduleAvailability = "KNOWN"
         }).Where(x => x.pillarWeights.Count > 0 && Math.Abs(x.pillarWeights.Values.Sum() - 1) < 0.000001m).ToArray();
         // Club matching requires explicit recruitment + scoring metadata. Category
         // labels alone are not sufficient evidence to fabricate a club profile.
         var clubRows = authority.Clubs.Where(x => x.CampusCode == student.CampusCode && x.IsRecruiting)
             .Select(x => new
             {
-                id = x.ClubId, version = x.Version.ToString(), x.CampusCode, active = true, recruiting = true,
+                id = x.ClubId,
+                version = x.Version.ToString(),
+                x.CampusCode,
+                active = true,
+                recruiting = true,
                 interestIds = MapInterests(configuration.GetSection($"Recommendation:Clubs:{x.ClubCode}:Interests").Get<string[]>() ?? []),
                 majorCodes = configuration.GetSection($"Recommendation:Clubs:{x.ClubCode}:MajorCodes").Get<string[]>() ?? [],
                 pillarWeights = configuration.GetSection($"Recommendation:Clubs:{x.ClubCode}:PillarWeights").Get<Dictionary<string, double>>() ?? [],
-                meetingIntervals = Array.Empty<RecommendationBusyInterval>(), scheduleAvailability = "UNKNOWN"
+                meetingIntervals = Array.Empty<RecommendationBusyInterval>(),
+                scheduleAvailability = "UNKNOWN"
             }).Where(x => x.pillarWeights.Count > 0 && x.pillarWeights.Keys.All(RadarPillars.CoreSix.Contains)
                 && x.pillarWeights.Values.All(w => w is >= 0 and <= 1) && Math.Abs(x.pillarWeights.Values.Sum() - 1) < 0.000001).ToArray();
         var snapshot = new
         {
-            schemaVersion = "1.0", snapshotId = Guid.NewGuid().ToString(), asOf = now, expiresAt = now.AddMinutes(15),
-            semesterId = semester, radar.PolicyVersion,
+            schemaVersion = "1.0",
+            snapshotId = Guid.NewGuid().ToString(),
+            asOf = now,
+            expiresAt = now.AddMinutes(15),
+            semesterId = semester,
+            radar.PolicyVersion,
             students = new[] { new
             {
                 student.UserId, student.CampusCode,
@@ -137,7 +157,8 @@ public sealed class RecommendationFeedWorker(IServiceScopeFactory scopes, IConfi
                     pillars = radar.RadarAxes.Select(x => new { x.Pillar, score = ExperienceIndexCalculator.CalculateSaturatedScore(x.RawPointsSum, x.Tau) }) },
                 memberships = membership, activityRegistrations = Array.Empty<int>(), walletSignals = new Dictionary<string, object>(), sourceVersions = versions
             } },
-            clubs = clubRows, activities = candidateRows
+            clubs = clubRows,
+            activities = candidateRows
         };
         await services.GetRequiredService<RecommendationClient>().FeedAsync(snapshot, readStartedAt, ct);
     }
