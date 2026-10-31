@@ -199,13 +199,9 @@ public static class AuthEndpoints
         if (!string.IsNullOrWhiteSpace(request?.RefreshToken))
         {
             var token = await refreshTokenService.GetRefreshTokenAsync(request.RefreshToken);
-            if (token is not null)
+            if (token is not null && token.UserId == userId)
             {
                 await refreshTokenService.RevokeFamilyAsync(token.FamilyId, null);
-                if (userId <= 0)
-                {
-                    userId = token.UserId;
-                }
             }
         }
 

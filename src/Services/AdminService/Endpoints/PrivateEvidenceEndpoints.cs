@@ -53,7 +53,10 @@ public static class PrivateEvidenceEndpoints
         }).RequireAuthorization(AdminPolicies.AnyActor).DisableAntiforgery().WithTags("Private contribution evidence");
         Func<Guid, AdminDbContext, HttpContext, CancellationToken, Task<IResult>> download = async (id, db, http, ct) =>
         {
-            var file = await db.ContributionEvidence.SingleOrDefaultAsync(x => x.Id == id, ct);
+            var file = await db.ContributionEvidence.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => new { x.OwnerUserId, x.ContentType, x.Name })
+                .SingleOrDefaultAsync(ct);
             if (file is null) return Results.NotFound();
             var actor = http.User.GetUserId(); var allowed = actor == file.OwnerUserId;
             if (!allowed)
@@ -70,9 +73,14 @@ public static class PrivateEvidenceEndpoints
                         if (await ExperienceAuthorization.FindAsync(db, actor, "CLUB", request.ClubId, "attendance.verify", ct) is not null) { allowed = true; break; }
             }
             if (!allowed) return Results.Forbid();
+            var bytes = await db.ContributionEvidence.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => x.Bytes)
+                .SingleOrDefaultAsync(ct);
+            if (bytes is null) return Results.NotFound();
             http.Response.Headers.CacheControl = "private, no-store";
             http.Response.Headers.XContentTypeOptions = "nosniff";
-            return Results.File(file.Bytes, file.ContentType, file.Name);
+            return Results.File(bytes, file.ContentType, file.Name);
         };
         app.MapGet("/api/contributions/evidence/{id:guid}", download).RequireAuthorization(AdminPolicies.AnyActor).WithTags("Private contribution evidence");
         app.MapGet("/api/contributions/evidence/{id:guid}/download", download).RequireAuthorization(AdminPolicies.AnyActor).WithTags("Private contribution evidence");

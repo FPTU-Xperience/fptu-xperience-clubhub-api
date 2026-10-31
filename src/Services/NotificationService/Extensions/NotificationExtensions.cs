@@ -9,6 +9,9 @@ namespace NotificationService.Extensions;
 public static class NotificationExtensions
 {
     public static NotificationResponse ToResponse(Notification notification)
+        => ToResponse(notification, notification.IsRead);
+
+    public static NotificationResponse ToResponse(Notification notification, bool isRead)
     {
         var (title, message) = NormalizeLegacyNotification(notification);
         return new NotificationResponse(
@@ -18,7 +21,7 @@ public static class NotificationExtensions
             notification.EventType,
             title,
             message,
-            notification.IsRead,
+            isRead,
             notification.CreatedAtUtc);
     }
 

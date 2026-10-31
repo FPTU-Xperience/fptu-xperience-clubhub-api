@@ -286,6 +286,8 @@ namespace ActivityService.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ActivityId", "SessionId");
+
                     b.HasIndex("ActivityId", "Status");
 
                     b.HasIndex("SessionId", "UserId")
@@ -1105,7 +1107,8 @@ namespace ActivityService.Migrations
 
                     b.HasOne("ActivityService.Models.ActivitySession", null)
                         .WithMany()
-                        .HasForeignKey("SessionId")
+                        .HasForeignKey("ActivityId", "SessionId")
+                        .HasPrincipalKey("ActivityId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Activity");

@@ -14,7 +14,6 @@ public static class DatabaseStartupExtensions
         CancellationToken cancellationToken = default)
     {
         await RunWithRetryAsync(
-            db,
             () => db.Database.MigrateAsync(cancellationToken),
             "apply migrations",
             logger,
@@ -27,7 +26,6 @@ public static class DatabaseStartupExtensions
         CancellationToken cancellationToken = default)
     {
         await RunWithRetryAsync(
-            db,
             () => db.Database.EnsureCreatedAsync(cancellationToken),
             "ensure database exists",
             logger,
@@ -35,7 +33,6 @@ public static class DatabaseStartupExtensions
     }
 
     private static async Task RunWithRetryAsync(
-        DbContext db,
         Func<Task> operation,
         string operationName,
         ILogger logger,
@@ -50,20 +47,14 @@ public static class DatabaseStartupExtensions
             }
             catch (SqlException ex) when (IsDatabaseAlreadyExists(ex))
             {
-                if (await CanConnectAsync(db, cancellationToken))
-                {
-                    logger.LogWarning(ex, "Database or object already exists and is reachable; continuing service startup.");
-                    return;
-                }
-
                 if (attempt < MaxAttempts)
                 {
-                    logger.LogWarning(ex, "Database or object already exists while trying to {OperationName}. Retrying startup database check.", operationName);
+                    logger.LogWarning(ex, "Database or object already exists while trying to {OperationName}. Retrying the schema operation; connectivity alone does not confirm completion.", operationName);
                     await WaitBeforeRetryAsync(attempt, cancellationToken);
                     continue;
                 }
 
-                throw new InvalidOperationException($"Failed to {operationName} after {MaxAttempts} attempts: database already exists but is not reachable.", ex);
+                throw new InvalidOperationException($"Failed to {operationName} after {MaxAttempts} attempts. The existing database schema or migration history must be reconciled before startup can continue.", ex);
             }
             catch (SqlException ex) when (IsTransientStartupFailure(ex) && attempt < MaxAttempts)
             {
@@ -111,15 +102,4 @@ public static class DatabaseStartupExtensions
         return ex.Errors.Cast<SqlError>().Any(error => transientErrorNumbers.Contains(error.Number));
     }
 
-    private static async Task<bool> CanConnectAsync(DbContext db, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await db.Database.CanConnectAsync(cancellationToken);
-        }
-        catch (SqlException)
-        {
-            return false;
-        }
-    }
 }

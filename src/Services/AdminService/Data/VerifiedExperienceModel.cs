@@ -34,6 +34,7 @@ internal static class VerifiedExperienceModel
         });
         model.Entity<ContributionRevision>(entity =>
         {
+            entity.HasAlternateKey(x => new { x.ContributionId, x.Id });
             entity.HasIndex(x => new { x.ContributionId, x.Ordinal }).IsUnique();
             entity.HasOne<VerifiedContribution>().WithMany().HasForeignKey(x => x.ContributionId).OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.Reason).HasMaxLength(1000);
@@ -43,6 +44,10 @@ internal static class VerifiedExperienceModel
         {
             entity.HasIndex(x => new { x.ContributionId, x.TargetRevisionId }).IsUnique();
             entity.HasOne<VerifiedContribution>().WithMany().HasForeignKey(x => x.ContributionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ContributionRevision>().WithMany()
+                .HasForeignKey(x => new { x.ContributionId, x.RevisionId })
+                .HasPrincipalKey(x => new { x.ContributionId, x.Id })
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.Reason).HasMaxLength(1000);
             entity.Property(x => x.Decision).HasMaxLength(30);
         });
@@ -62,6 +67,10 @@ internal static class VerifiedExperienceModel
             entity.HasIndex(x => new { x.ContributionId, x.RevisionId, x.EffectType }).IsUnique();
             entity.HasIndex(x => new { x.UserId, x.SemesterId });
             entity.HasOne<VerifiedContribution>().WithMany().HasForeignKey(x => x.ContributionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ContributionRevision>().WithMany()
+                .HasForeignKey(x => new { x.ContributionId, x.RevisionId })
+                .HasPrincipalKey(x => new { x.ContributionId, x.Id })
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(x => x.Amount).HasPrecision(18, 4);
             entity.Property(x => x.SemesterId).HasMaxLength(40);
             entity.Property(x => x.EffectType).HasMaxLength(30);

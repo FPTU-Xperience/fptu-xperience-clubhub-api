@@ -96,13 +96,15 @@ public static class VerifiedContributionEndpoints
         var allocations = await db.ExperienceLedgerAllocations.AsNoTracking().Where(x => effectIds.Contains(x.EffectId)).ToListAsync(cancellationToken);
         var policyIds = effects.Select(x => x.PolicyVersion).Distinct().ToArray();
         var policies = await db.ApprovedExperiencePolicies.AsNoTracking().Where(x => policyIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
+        var allocationsByEffect = allocations.ToLookup(x => x.EffectId);
+        var revisionsById = revisions.ToDictionary(x => x.Id);
         var history = new List<object>();
         decimal historicalRaw = 0;
         var historicalAllocations = new Dictionary<string, decimal>();
         foreach (var effect in effects)
         {
-            var delta = allocations.Where(a => a.EffectId == effect.Id).ToDictionary(a => a.Pillar, a => a.Amount);
-            history.Add(StudentCalculationService.Effect(effect, revisions.SingleOrDefault(r => r.Id == effect.RevisionId),
+            var delta = allocationsByEffect[effect.Id].ToDictionary(a => a.Pillar, a => a.Amount);
+            history.Add(StudentCalculationService.Effect(effect, revisionsById.GetValueOrDefault(effect.RevisionId),
                 policies.TryGetValue(effect.PolicyVersion, out var policy) ? Read<ApprovedExperiencePolicySnapshot>(policy.SnapshotJson) : null,
                 delta, historicalRaw, new Dictionary<string, decimal>(historicalAllocations)));
             historicalRaw += effect.Amount;

@@ -218,7 +218,7 @@ public static class MemberManagementEndpoints
         query = ClubMemberQuery.ApplySort(query, sortBy, sortDirection);
 
         var totalItems = await query.CountAsync(cancellationToken);
-        var memberships = await query.Skip((actualPage - 1) * actualPageSize).Take(actualPageSize).ToListAsync(cancellationToken);
+        var memberships = await query.Skip(Pagination.Offset(actualPage, actualPageSize)).Take(actualPageSize).ToListAsync(cancellationToken);
 
         var memberUserIds = memberships.Select(x => x.UserId).ToArray();
         var activeManagerUserIds = await db.ClubManagerAssignments.AsNoTracking()
@@ -480,7 +480,7 @@ public static class MemberManagementEndpoints
         var rows = await query
             .OrderBy(x => x.FullName)
             .ThenBy(x => x.Id)
-            .Skip((page - 1) * pageSize)
+            .Skip(Pagination.Offset(page, pageSize))
             .Take(pageSize)
             .Select(x => new ClubMemberRosterItemResponse(
                 x.Id, x.UserId, x.FullName, x.Email, x.PhoneNumber,

@@ -261,7 +261,7 @@ public static class ReportFileEndpoints
         ClubAccessClient clubAccess,
         CancellationToken cancellationToken)
     {
-        var report = await db.Reports
+        var report = await db.Reports.AsNoTracking()
             .Include(x => x.UploadedFile)
             .FirstOrDefaultAsync(x => x.Id == reportId, cancellationToken);
 
@@ -280,21 +280,7 @@ public static class ReportFileEndpoints
             return Results.NotFound(new { message = "Báo cáo này không có file đính kèm hoặc file đã bị xóa." });
         }
 
-        var isDownloadAvailable = File.Exists(report.UploadedFile.StoragePath);
-        var isPreviewAvailable = !string.IsNullOrEmpty(report.UploadedFile.PreviewStoragePath) && File.Exists(report.UploadedFile.StoragePath);
-
-        return Results.Ok(new ReportUploadedFileResponse(
-            report.UploadedFile.Id,
-            report.UploadedFile.OriginalFileName,
-            report.UploadedFile.ContentType,
-            report.UploadedFile.FileExtension,
-            report.UploadedFile.SizeBytes,
-            report.UploadedFile.UploadedAtUtc,
-            report.UploadedFile.UploadedByUserId,
-            isDownloadAvailable,
-            report.UploadedFile.PreviewStatus ?? "Available",
-            isPreviewAvailable,
-            report.UploadedFile.PreviewErrorMessage));
+        return Results.Ok(ReportMappers.ToUploadedFileResponse(report.UploadedFile));
     }
 
     private static async Task<IResult> GetUploadedFilePreview(
@@ -354,8 +340,8 @@ public static class ReportFileEndpoints
         var uploadsDir = Path.GetFullPath(config["Uploads:StoragePath"]
             ?? Path.Combine(AppContext.BaseDirectory, "report-uploads"));
 
-        if (!previewPath.StartsWith(previewsDir, StringComparison.OrdinalIgnoreCase) &&
-            !previewPath.StartsWith(uploadsDir, StringComparison.OrdinalIgnoreCase))
+        if (!ReportAttachmentPolicy.IsPathUnderRoot(previewPath, previewsDir) &&
+            !ReportAttachmentPolicy.IsPathUnderRoot(previewPath, uploadsDir))
         {
             return Results.BadRequest(new { message = "Đường dẫn file xem trước không hợp lệ." });
         }
@@ -377,7 +363,7 @@ public static class ReportFileEndpoints
         IConfiguration config,
         CancellationToken cancellationToken)
     {
-        var report = await db.Reports
+        var report = await db.Reports.AsNoTracking()
             .Include(x => x.UploadedFile)
             .FirstOrDefaultAsync(x => x.Id == reportId, cancellationToken);
 

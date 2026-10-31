@@ -92,7 +92,10 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
             entity.Property(x => x.VerificationStatus).HasMaxLength(20).HasDefaultValue("UNVERIFIED");
             entity.Property(x => x.VerificationMethod).HasMaxLength(40);
             entity.Property(x => x.RecognitionStatus).HasMaxLength(30).HasDefaultValue("NOT_REQUESTED");
-            entity.HasOne<ActivitySession>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ActivitySession>().WithMany()
+                .HasForeignKey(x => new { x.ActivityId, x.SessionId })
+                .HasPrincipalKey(x => new { x.ActivityId, x.Id })
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.UserId, x.AttendanceDate }).IncludeProperties(x => new { x.ActivityId, x.Status });
             entity.HasIndex(x => new { x.ActivityId, x.Status });
             entity.Property(x => x.FullName).HasMaxLength(200);

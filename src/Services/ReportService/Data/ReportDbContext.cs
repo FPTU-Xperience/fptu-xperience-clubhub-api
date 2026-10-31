@@ -65,6 +65,7 @@ public sealed class ReportDbContext(DbContextOptions<ReportDbContext> options) :
 
         modelBuilder.Entity<ReportDetail>(entity =>
         {
+            entity.HasAlternateKey(x => new { x.ReportId, x.Id });
             entity.Property(x => x.ActivityName).HasMaxLength(200);
             entity.Property(x => x.Description).HasMaxLength(2000);
             entity.Property(x => x.Outcome).HasMaxLength(1000);
@@ -77,6 +78,10 @@ public sealed class ReportDbContext(DbContextOptions<ReportDbContext> options) :
 
         modelBuilder.Entity<ReportAttachment>(entity =>
         {
+            entity.HasOne<ReportDetail>().WithMany()
+                .HasForeignKey(x => new { x.ReportId, x.ReportDetailId })
+                .HasPrincipalKey(x => new { x.ReportId, x.Id })
+                .OnDelete(DeleteBehavior.NoAction);
             entity.Property(x => x.FileName).HasMaxLength(260);
             entity.Property(x => x.ContentType).HasMaxLength(120);
             entity.Property(x => x.StoragePath).HasMaxLength(500);

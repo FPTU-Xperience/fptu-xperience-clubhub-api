@@ -53,7 +53,10 @@ public static class ClubMappers
         };
     }
 
-    public static ClubDirectoryResponse ToDirectoryResponse(Club club)
+    public static ClubDirectoryResponse ToDirectoryResponse(Club club) =>
+        ToDirectoryResponse(club, club.Memberships.Count(x => x.Status == ClubMembershipStatuses.Approved));
+
+    public static ClubDirectoryResponse ToDirectoryResponse(Club club, int approvedMemberCount)
     {
         var managers = club.ManagerAssignments
             .OrderByDescending(x => x.IsActive)
@@ -67,8 +70,6 @@ public static class ClubMappers
                 x.IsActive))
             .ToArray();
 
-        var memberCount = club.Memberships.Count(x => x.Status == ClubMembershipStatuses.Approved);
-
         return new ClubDirectoryResponse(
             club.Id,
             club.Code,
@@ -80,7 +81,7 @@ public static class ClubMappers
             club.ContactPhone,
             club.ScheduleLabel,
             club.IsRecruiting,
-            memberCount,
+            approvedMemberCount,
             club.IsActive,
             managers,
             club.CampusCode);

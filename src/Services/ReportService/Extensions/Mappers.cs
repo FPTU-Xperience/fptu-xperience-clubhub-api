@@ -8,10 +8,6 @@ public static class ReportMappers
 {
     public static ReportResponse ToResponse(Report report, bool includeFinance = true)
     {
-        var isUploadedFileAvailable = report.UploadedFile is not null
-            && report.UploadedFile.IsActive
-            && File.Exists(report.UploadedFile.StoragePath);
-
         return new(
             report.Id,
             report.ClubId,
@@ -73,19 +69,27 @@ public static class ReportMappers
                 x.Message,
                 x.CreatedAtUtc)).ToArray(),
             report.ContentSource ?? ReportContentSources.StructuredForm,
-            report.UploadedFile is null || !report.UploadedFile.IsActive
-                ? null
-                : new ReportUploadedFileResponse(
-                    report.UploadedFile.Id,
-                    report.UploadedFile.OriginalFileName,
-                    report.UploadedFile.ContentType,
-                    report.UploadedFile.FileExtension,
-                    report.UploadedFile.SizeBytes,
-                    report.UploadedFile.UploadedAtUtc,
-                    report.UploadedFile.UploadedByUserId,
-                    isUploadedFileAvailable,
-                    report.UploadedFile.PreviewStatus ?? "Available",
-                    !string.IsNullOrEmpty(report.UploadedFile.PreviewStoragePath) && File.Exists(report.UploadedFile.PreviewStoragePath),
-                    report.UploadedFile.PreviewErrorMessage));
+            ToUploadedFileResponse(report.UploadedFile));
+    }
+
+    public static ReportUploadedFileResponse? ToUploadedFileResponse(ReportUploadedFile? file)
+    {
+        if (file is null || !file.IsActive)
+        {
+            return null;
+        }
+
+        return new ReportUploadedFileResponse(
+            file.Id,
+            file.OriginalFileName,
+            file.ContentType,
+            file.FileExtension,
+            file.SizeBytes,
+            file.UploadedAtUtc,
+            file.UploadedByUserId,
+            File.Exists(file.StoragePath),
+            file.PreviewStatus ?? "Available",
+            !string.IsNullOrEmpty(file.PreviewStoragePath) && File.Exists(file.PreviewStoragePath),
+            file.PreviewErrorMessage);
     }
 }

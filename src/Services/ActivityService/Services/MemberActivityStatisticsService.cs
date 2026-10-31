@@ -1,6 +1,7 @@
 using ActivityService.Contracts;
 using ActivityService.Data;
 using ActivityService.Models;
+using ClubReportHub.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace ActivityService.Services;
@@ -85,13 +86,25 @@ public sealed class MemberActivityStatisticsService(ActivityDbContext db)
     {
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
-        var activities = await db.Activities.AsNoTracking()
+        var eligibleActivities = db.Activities.AsNoTracking()
             .Where(x => x.ClubId == clubId
                 && x.StartTimeUtc >= request.JoinedAtUtc
                 && x.StartTimeUtc <= now
                 && (x.PublicationStatus == "LEGACY" || x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED" || x.PublicationStatus == "COMPLETED")
-                && x.Status != ActivityStatuses.Cancelled)
+                && x.Status.ToUpper() != "CANCELLED");
+        var totalItems = await eligibleActivities.CountAsync(cancellationToken);
+        var attended = await db.ActivityAttendances.AsNoTracking()
+            .Where(x => x.UserId == request.UserId
+                && (x.SessionId == null || x.VerificationStatus == "VERIFIED")
+                && (x.Status.ToUpper() == "PRESENT" || x.Status.ToUpper() == "LATE")
+                && eligibleActivities.Any(a => a.Id == x.ActivityId))
+            .Select(x => x.ActivityId).Distinct().CountAsync(cancellationToken);
+        var statistics = new MemberStatisticsResponse(request.UserId, totalItems, attended,
+            totalItems == 0 ? 0m : Math.Round(attended * 100m / totalItems, 2, MidpointRounding.AwayFromZero));
+        var activities = await eligibleActivities
             .OrderByDescending(x => x.StartTimeUtc)
+            .ThenByDescending(x => x.Id)
+            .Skip(Pagination.Offset(page, pageSize)).Take(pageSize)
             .Select(x => new EligibleActivity(x.Id, x.ClubId, x.Title, x.StartTimeUtc, x.Status))
             .ToListAsync(cancellationToken);
 
@@ -104,13 +117,10 @@ public sealed class MemberActivityStatisticsService(ActivityDbContext db)
                 .Select(x => new RecordedAttendance(x.ActivityId, x.UserId, x.Status))
                 .ToListAsync(cancellationToken);
 
-        var statistics = MemberActivityStatisticsCalculator.Calculate(
-            new MemberStatisticsInput(request.UserId, request.JoinedAtUtc), activities, attendances, now);
         var attendanceByActivity = attendances
             .GroupBy(x => x.ActivityId)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(a => a.Status == AttendanceStatuses.Present).First().Status);
-        var totalItems = activities.Count;
-        var items = activities.Skip((page - 1) * pageSize).Take(pageSize)
+        var items = activities
             .Select(x => new MemberActivityHistoryResponse(
                 x.Id,
                 x.Title,

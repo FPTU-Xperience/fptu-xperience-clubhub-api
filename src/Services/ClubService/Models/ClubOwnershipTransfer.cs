@@ -7,6 +7,7 @@ namespace ClubService.Models;
 public sealed class ClubOwnershipTransfer
 {
     public int Id { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
 
     public int ClubId { get; set; }
 

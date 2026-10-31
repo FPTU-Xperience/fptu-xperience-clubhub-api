@@ -96,7 +96,6 @@ public static class DisbandEndpoints
 
         try
         {
-            await db.SaveChangesAsync(ct);
             db.ClubDisbandRequests.Add(disbandRequest);
             await db.SaveChangesAsync(ct);
         }
@@ -197,7 +196,14 @@ public static class DisbandEndpoints
         disbandRequest.Club.DeletedAtUtc = DateTimeOffset.UtcNow;
         disbandRequest.Club.DeletedByUserId = reviewerUserId;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "The disband request was already reviewed." });
+        }
 
         logger.LogInformation(
             "Club {ClubId} ({ClubName}) disbanded and approved by admin {AdminId}",
@@ -237,7 +243,14 @@ public static class DisbandEndpoints
         disbandRequest.ReviewedByUserId = reviewerUserId;
         disbandRequest.ReviewedAtUtc = DateTimeOffset.UtcNow;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "The disband request was already reviewed." });
+        }
 
         logger.LogInformation(
             "Club {ClubId} disband request rejected by admin {AdminId}",

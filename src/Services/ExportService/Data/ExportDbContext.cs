@@ -53,6 +53,7 @@ public sealed class ExportDbContext(DbContextOptions<ExportDbContext> options) :
         {
             entity.HasIndex(x => x.Status);
             entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasIndex(x => new { x.RequestedByUserId, x.CreatedAtUtc }).IsDescending(false, true);
             entity.Property(x => x.ExportType).HasMaxLength(20);
             entity.Property(x => x.Scope).HasMaxLength(40);
             entity.Property(x => x.Status).HasMaxLength(30);

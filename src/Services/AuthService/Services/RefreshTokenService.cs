@@ -35,6 +35,8 @@ public sealed class RefreshTokenService
 
     public const int RotationGracePeriodSeconds = 30;
 
+    private sealed record CachedRotation(AuthResponse Response, int SecurityVersion, string FamilyId, string ReplacementTokenHash);
+
     public RefreshTokenService(
         AuthDbContext db,
         JwtTokenFactory tokenFactory,
@@ -109,11 +111,10 @@ public sealed class RefreshTokenService
         var tokenHash = HashToken(rawRefreshToken);
         var cacheKey = $"rotated_refresh:{tokenHash}";
 
-        // Fast path for concurrent multi-tab / parallel requests:
-        if (_cache.TryGetValue(cacheKey, out AuthResponse? cachedResponse) && cachedResponse is not null)
-        {
-            return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: cachedResponse);
-        }
+        // A parallel tab can reuse the winning raw pair only while its session
+        // and account still exist in their current authorized state.
+        var cached = await TryGetCachedRotationAsync(cacheKey);
+        if (cached is not null) return cached;
 
         var oldToken = await GetRefreshTokenAsync(rawRefreshToken);
 
@@ -122,9 +123,12 @@ public sealed class RefreshTokenService
             return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid);
         }
 
-        if (!ActorAccountPolicy.HasValidActorConfiguration(oldToken.User))
+        var currentUser = await _db.Users.AsNoTracking()
+            .Include(x => x.UserRoles).ThenInclude(x => x.Role)
+            .SingleOrDefaultAsync(x => x.Id == oldToken.UserId);
+        if (currentUser is null || !CanIssueTokens(currentUser))
         {
-            return new RotateRefreshTokenResult(RefreshTokenStatus.AccountNotAllowed, User: oldToken.User);
+            return new RotateRefreshTokenResult(RefreshTokenStatus.AccountNotAllowed, User: currentUser);
         }
 
         if (oldToken.IsExpired)
@@ -139,21 +143,10 @@ public sealed class RefreshTokenService
 
             if (elapsed <= TimeSpan.FromSeconds(RotationGracePeriodSeconds))
             {
-                // A concurrent request on this same instance may have just completed rotation.
-                // Give the winner a short window to populate the cache if it hasn't yet:
-                for (var attempt = 0; attempt < 30; attempt++)
-                {
-                    if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentWinner) && concurrentWinner is not null)
-                    {
-                        return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentWinner);
-                    }
-
-                    await Task.Delay(TimeSpan.FromMilliseconds(50));
-                }
-
                 // If not in cache after wait, the replacement is stored only as a hash and must never
                 // be returned as a bearer credential. The client must use the winner's response.
-                return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: oldToken.User);
+                return await WaitForCachedRotationAsync(cacheKey)
+                    ?? new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: currentUser);
             }
 
             // Outside grace period: token reuse / replay detected! Revoke entire family!
@@ -187,27 +180,63 @@ public sealed class RefreshTokenService
         {
             await _db.SaveChangesAsync();
 
-            var response = CreateAuthResponse(oldToken.User, rotatedToken, newRawToken);
-            _cache.Set(cacheKey, response, TimeSpan.FromSeconds(RotationGracePeriodSeconds));
+            var response = CreateAuthResponse(currentUser, rotatedToken, newRawToken);
+            _cache.Set(cacheKey, new CachedRotation(response, currentUser.SecurityVersion, oldToken.FamilyId, newTokenHash),
+                new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(RotationGracePeriodSeconds),
+                    Size = 1
+                });
 
-            return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: response, NewToken: rotatedToken, User: oldToken.User);
+            return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: response, NewToken: rotatedToken, User: currentUser);
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Another concurrent request committed the rotation at this exact instant!
-            // Give the winning request a short window to populate this process-local cache.
-            for (var attempt = 0; attempt < 30; attempt++)
-            {
-                if (_cache.TryGetValue(cacheKey, out AuthResponse? concurrentResponse) && concurrentResponse is not null)
-                {
-                    return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: concurrentResponse);
-                }
-
-                await Task.Delay(TimeSpan.FromMilliseconds(50));
-            }
-
-            return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: oldToken.User);
+            return await WaitForCachedRotationAsync(cacheKey)
+                ?? new RotateRefreshTokenResult(RefreshTokenStatus.Invalid, User: currentUser);
         }
+    }
+
+    private static bool CanIssueTokens(User user) =>
+        user.IsActive && !user.IsLocked && ActorAccountPolicy.HasValidActorConfiguration(user);
+
+    private async Task<RotateRefreshTokenResult?> TryGetCachedRotationAsync(string cacheKey)
+    {
+        if (!_cache.TryGetValue(cacheKey, out CachedRotation? cached) || cached is null) return null;
+        var replacement = await _db.RefreshTokens.AsNoTracking()
+            .Include(x => x.User).ThenInclude(x => x.UserRoles).ThenInclude(x => x.Role)
+            .SingleOrDefaultAsync(x => x.Token == cached.ReplacementTokenHash);
+        if (replacement is null || replacement.UserId != cached.Response.User.Id
+            || replacement.FamilyId != cached.FamilyId || !replacement.IsActive)
+        {
+            _cache.Remove(cacheKey);
+            return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid);
+        }
+        var user = replacement.User;
+        if (!CanIssueTokens(user))
+        {
+            _cache.Remove(cacheKey);
+            return new RotateRefreshTokenResult(RefreshTokenStatus.AccountNotAllowed, User: user);
+        }
+        var roles = user.UserRoles.Select(x => x.Role.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (user.SecurityVersion != cached.SecurityVersion || !roles.SetEquals(cached.Response.User.Roles)
+            || !string.Equals(user.CampusCode, cached.Response.User.CampusCode, StringComparison.Ordinal))
+        {
+            _cache.Remove(cacheKey);
+            return new RotateRefreshTokenResult(RefreshTokenStatus.Invalid);
+        }
+        return new RotateRefreshTokenResult(RefreshTokenStatus.Success, Response: cached.Response);
+    }
+
+    private async Task<RotateRefreshTokenResult?> WaitForCachedRotationAsync(string cacheKey)
+    {
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            var result = await TryGetCachedRotationAsync(cacheKey);
+            if (result is not null) return result;
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
+        return null;
     }
 
     public async Task<RefreshToken?> RotateRefreshTokenAsync(

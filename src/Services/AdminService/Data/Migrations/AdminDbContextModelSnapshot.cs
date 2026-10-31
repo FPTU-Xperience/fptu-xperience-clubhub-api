@@ -286,6 +286,8 @@ namespace AdminService.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContributionId", "RevisionId");
+
                     b.HasIndex("ContributionId", "TargetRevisionId")
                         .IsUnique();
 
@@ -1863,6 +1865,13 @@ namespace AdminService.Data.Migrations
                         .HasForeignKey("ContributionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("AdminService.Data.ContributionRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ContributionId", "RevisionId")
+                        .HasPrincipalKey("ContributionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("AdminService.Data.ContributionRevision", b =>
@@ -1897,6 +1906,13 @@ namespace AdminService.Data.Migrations
                     b.HasOne("AdminService.Data.VerifiedContribution", null)
                         .WithMany()
                         .HasForeignKey("ContributionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AdminService.Data.ContributionRevision", null)
+                        .WithMany()
+                        .HasForeignKey("ContributionId", "RevisionId")
+                        .HasPrincipalKey("ContributionId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

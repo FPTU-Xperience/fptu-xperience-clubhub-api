@@ -291,7 +291,7 @@ namespace ReportService.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ReportId");
+                    b.HasIndex("ReportId", "ReportDetailId");
 
                     b.ToTable("ReportAttachments");
                 });
@@ -357,8 +357,6 @@ namespace ReportService.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ReportId");
 
                     b.ToTable("ReportDetails");
                 });
@@ -520,6 +518,12 @@ namespace ReportService.Migrations
                         .HasForeignKey("ReportId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("ReportService.Models.ReportDetail", null)
+                        .WithMany()
+                        .HasForeignKey("ReportId", "ReportDetailId")
+                        .HasPrincipalKey("ReportId", "Id")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Report");
                 });

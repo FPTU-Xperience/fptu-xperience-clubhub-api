@@ -112,6 +112,11 @@ public static class ActivityStaffingEndpoints
         }
         var positions = recruitment is null ? [] : await db.Set<ActivityRecruitmentPosition>().AsNoTracking()
             .Where(x => x.RecruitmentId == recruitment.Id && !x.IsArchived).OrderBy(x => x.Id).ToArrayAsync(ct);
+        var definitions = rules.ToDictionary(x => x.Id, Definition);
+        var completionsByAssignment = completions.ToLookup(x => x.AssignmentId);
+        var activeAssignments = assignments.Where(x => x.Status != "REMOVED").ToArray();
+        var assignmentsByPosition = activeAssignments.ToLookup(x => x.PositionId);
+        var assignmentsByAction = activeAssignments.ToLookup(x => x.ActionRuleId);
         var recruitmentVisible = recruitment is not null && (privileged || verify.Attendance || verify.Work
             || source.Scope.Club.IsApprovedMember || recruitment.Visibility == "PUBLIC");
         return Results.Ok(new
@@ -126,7 +131,7 @@ public static class ActivityStaffingEndpoints
             capabilities = new { canManageAssignments = source.Scope.Manager && Operational(source, http), canManageRecruitment = source.Scope.Manager && Operational(source, http), canVerify = verify.Attendance || verify.Work },
             actions = rules.Select(x =>
             {
-                var d = Definition(x); return new
+                var d = definitions[x.Id]; return new
                 {
                     x.Id,
                     d.ClientId,
@@ -141,7 +146,8 @@ public static class ActivityStaffingEndpoints
             }),
             assignments = visible.Select(x =>
             {
-                var rule = Definition(rules.Single(r => r.Id == x.ActionRuleId));
+                var rule = definitions[x.ActionRuleId];
+                var assignmentCompletions = completionsByAssignment[x.Id];
                 var mayVerify = rule.VerificationMethod == "ATTENDANCE" ? verify.Attendance : verify.Work;
                 return new
                 {
@@ -153,9 +159,9 @@ public static class ActivityStaffingEndpoints
                     x.AssignmentKind,
                     x.Status,
                     canRemove = source.Scope.Manager && x.Status != "REMOVED" && Operational(source, http),
-                    verifiedOccurrences = completions.Count(c => c.AssignmentId == x.Id && c.Status == "VERIFIED"),
+                    verifiedOccurrences = assignmentCompletions.Count(c => c.Status == "VERIFIED"),
                     pendingRawXp = (decimal?)null,
-                    completions = completions.Where(c => c.AssignmentId == x.Id).Select(c => new
+                    completions = assignmentCompletions.Select(c => new
                     {
                         c.Id,
                         c.Version,
@@ -182,14 +188,14 @@ public static class ActivityStaffingEndpoints
                 {
                     p.Id,
                     p.ActionRuleId,
-                    actionName = Definition(rules.Single(r => r.Id == p.ActionRuleId)).Name,
+                    actionName = definitions[p.ActionRuleId].Name,
                     p.Capacity,
                     p.AssignmentKind,
-                    filledCount = assignments.Count(a => a.PositionId == p.Id && a.Status != "REMOVED"),
-                    myAssignmentId = assignments.Where(a => a.PositionId == p.Id && a.UserId == source.Scope.Account.Id && a.Status != "REMOVED").Select(a => (Guid?)a.Id).SingleOrDefault(),
-                    canJoin = CanJoin(source, recruitment, http) && assignments.Count(a => a.PositionId == p.Id && a.Status != "REMOVED") < p.Capacity
-                        && assignments.Count(a => a.ActionRuleId == p.ActionRuleId && a.Status != "REMOVED") < Definition(rules.Single(r => r.Id == p.ActionRuleId)).ExpectedPeople
-                        && !assignments.Any(a => a.ActionRuleId == p.ActionRuleId && a.UserId == source.Scope.Account.Id && a.Status != "REMOVED"),
+                    filledCount = assignmentsByPosition[p.Id].Count(),
+                    myAssignmentId = assignmentsByPosition[p.Id].Where(a => a.UserId == source.Scope.Account.Id).Select(a => (Guid?)a.Id).SingleOrDefault(),
+                    canJoin = CanJoin(source, recruitment, http) && assignmentsByPosition[p.Id].Count() < p.Capacity
+                        && assignmentsByAction[p.ActionRuleId].Count() < definitions[p.ActionRuleId].ExpectedPeople
+                        && !assignmentsByAction[p.ActionRuleId].Any(a => a.UserId == source.Scope.Account.Id),
                     rawXpPerOccurrence = (decimal?)null
                 })
             }
@@ -489,7 +495,7 @@ public static class ActivityStaffingEndpoints
         var total = await query.CountAsync(ct);
         return Results.Ok(new
         {
-            items = await query.OrderBy(x => x.ActivityId).Skip((index - 1) * size).Take(size).ToArrayAsync(ct),
+            items = await query.OrderBy(x => x.ActivityId).Skip(Pagination.Offset(index, size)).Take(size).ToArrayAsync(ct),
             page = index,
             pageSize = size,
             totalItems = total,

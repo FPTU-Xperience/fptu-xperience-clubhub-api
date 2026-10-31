@@ -1,0 +1,623 @@
+{
+  "date": "2026-10-27",
+  "baselineCommit": "b1edcbf1f4aefb95c5d8020ee9f7d159b9c20a62",
+  "scope": "BE only; code and migrations implemented, production not deployed",
+  "implemented": [
+    {
+      "id": "DB-01",
+      "status": "FIXED_TESTED",
+      "change": "Startup retries the actual operation and fails on unresolved schema/history conflicts; connection success is no longer accepted as completion."
+    },
+    {
+      "id": "DB-02",
+      "status": "FIXED_TESTED",
+      "change": "Guarded Report migration reconciles 12 legacy columns and the BudgetProposal index on fresh and existing databases."
+    },
+    {
+      "id": "DB-03",
+      "status": "FIXED_TESTED",
+      "change": "Three Club request entities use CAS tokens; stale decisions return409 and side effects/outbox roll back atomically."
+    },
+    {
+      "id": "DB-04",
+      "status": "FIXED_TESTED",
+      "change": "Unique Submitted application per requester, resubmit guard and duplicate-data preflight51031; historical applications are preserved."
+    },
+    {
+      "id": "DB-05",
+      "status": "FIXED_TESTED",
+      "change": "Composite attachment/detail FK; invalid legacy links detached; replaced details leave attachments as report-level evidence."
+    },
+    {
+      "id": "DB-06",
+      "status": "FIXED_TESTED",
+      "change": "Personal NotificationReadReceipts keyed by(NotificationId,UserId), bounded idempotent writes, owned legacy backfill and broadcast marker reset."
+    },
+    {
+      "id": "ATTENDANCE-FK",
+      "status": "FIXED_TESTED",
+      "change": "Composite(ActivityId,SessionId) FK rejects a session from another activity while preserving legacy null SessionId."
+    },
+    {
+      "id": "REVISION-LINEAGE-FK",
+      "status": "FIXED_TESTED",
+      "change": "Composite(ContributionId,RevisionId) FKs protect real revision references; polymorphic TargetRevisionId remains unconstrained."
+    },
+    {
+      "id": "READ-OPTIMIZATION",
+      "status": "FIXED_TESTED",
+      "change": "Authorize evidence metadata before selecting BLOB; aggregate and page activity history in SQL; index token families and requester export history."
+    }
+  ],
+  "remaining": [
+    {
+      "id": "RETENTION",
+      "status": "DEFERRED_POLICY",
+      "detail": "Retention periods/deletion of historical records are not defined; no automatic data purge introduced."
+    },
+    {
+      "id": "EVIDENCE-RELATION",
+      "status": "FOLLOW_UP",
+      "detail": "Reviewer source lookup still searches EvidenceRefsJson; a normalized source-evidence relation needs its own backfill/design."
+    },
+    {
+      "id": "LEGACY-EXPORT-CLAIM",
+      "status": "FOLLOW_UP",
+      "detail": "Legacy ExportGenerationJob has not been converted to lease/CAS; newerPDFworkerclaimmechanism preserved."
+    },
+    {
+      "id": "STAFFING-TUPLES",
+      "status": "FOLLOW_UP",
+      "detail": "Attendance composite relationship hardened; otherstaffing/completiontupleconstraints still rely onexistingAPIguards."
+    },
+    {
+      "id": "OPERATIONS",
+      "status": "NOT_APPLIED",
+      "detail": "No production migration/deploy, SQLloginprovisioning, backuprestore drill orloadbenchmark executed."
+    },
+    {
+      "id": "SCORING",
+      "status": "USER_DEFERRED",
+      "detail": "No new scoring policy/formula/caps/carry-over rules implemented."
+    }
+  ],
+  "modelCounts": {
+    "TableCount": 92,
+    "ForeignKeyCount": 61,
+    "IndexCount": 169,
+    "UniqueIndexCount": 66,
+    "MigrationCount": 70
+  },
+  "migrations": [
+    {
+      "service": "Auth",
+      "name": "IndexRefreshTokenFamilies",
+      "file": "src\\Services\\AuthService\\Migrations\\20261026090152_IndexRefreshTokenFamilies.cs",
+      "exitCode": 0,
+      "seconds": 5.19
+    },
+    {
+      "service": "Export",
+      "name": "IndexExportsByRequester",
+      "file": "src\\Services\\ExportService\\Migrations\\20261026090157_IndexExportsByRequester.cs",
+      "exitCode": 0,
+      "seconds": 4.82
+    },
+    {
+      "service": "Activity",
+      "name": "EnforceAttendanceSessionActivity",
+      "file": "src\\Services\\ActivityService\\Migrations\\20261026090202_EnforceAttendanceSessionActivity.cs",
+      "exitCode": 0,
+      "seconds": 5.18
+    },
+    {
+      "service": "Admin",
+      "name": "EnforceContributionRevisionLineage",
+      "file": "src\\Services\\AdminService\\Data\\Migrations\\20261026090207_EnforceContributionRevisionLineage.cs",
+      "exitCode": 0,
+      "seconds": 5.2
+    },
+    {
+      "service": "Club",
+      "name": "ProtectClubRequestReviews",
+      "file": "src\\Services\\ClubService\\Migrations\\20261026090212_ProtectClubRequestReviews.cs",
+      "exitCode": 0,
+      "seconds": 4.93
+    },
+    {
+      "service": "Report",
+      "name": "ReconcileReportSchemaAndAttachmentDetails",
+      "file": "src\\Services\\ReportService\\Migrations\\20261026090217_ReconcileReportSchemaAndAttachmentDetails.cs",
+      "exitCode": 0,
+      "seconds": 4.84
+    },
+    {
+      "service": "Notification",
+      "name": "AddPersonalNotificationReadReceipts",
+      "file": "src\\Services\\NotificationService\\Migrations\\20261026090221_AddPersonalNotificationReadReceipts.cs",
+      "exitCode": 0,
+      "seconds": 4.59
+    }
+  ],
+  "verification": {
+    "steps": [
+      {
+        "name": "final-build",
+        "exitCode": 0,
+        "seconds": 43.47
+      },
+      {
+        "name": "repair-green",
+        "exitCode": 0,
+        "seconds": 29.91
+      },
+      {
+        "name": "full-suite-final",
+        "exitCode": 0,
+        "seconds": 374.86
+      }
+    ],
+    "runs": [
+      {
+        "file": "ADMIN_LAPTOP-NQKMCUNV_2026-10-27_21_51_50.trx",
+        "total": 123,
+        "executed": 123,
+        "passed": 123,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      {
+        "file": "ADMIN_LAPTOP-NQKMCUNV_2026-10-27_21_52_23.trx",
+        "total": 85,
+        "executed": 85,
+        "passed": 85,
+        "failed": 0,
+        "notExecuted": 0
+      },
+      {
+        "file": "ADMIN_LAPTOP-NQKMCUNV_2026-10-27_21_53_01.trx",
+        "total": 775,
+        "executed": 775,
+        "passed": 775,
+        "failed": 0,
+        "notExecuted": 0
+      }
+    ],
+    "totals": {
+      "total": 983,
+      "executed": 983,
+      "passed": 983,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    "coverageFiles": 3,
+    "sqlMigrationTestsEnabled": [
+      "Admin",
+      "Finance"
+    ],
+    "sourceHashesUnchanged": 75,
+    "ci": {
+      "formatChangedCSharp": "PASS",
+      "formatTwoUpdatedFixtures": "PASS",
+      "modelPendingChanges": {
+        "Auth": "NONE",
+        "Club": "NONE",
+        "Activity": "NONE",
+        "Admin": "NONE",
+        "Report": "NONE",
+        "Finance": "NONE",
+        "Export": "NONE",
+        "Notification": "NONE"
+      },
+      "freshMigrationColumnCoverage": "8/8 PASS",
+      "sdkEnvironmentRepair": "Restored assets after SDK10.0.113 was replaced by10.0.114; no target framework or package version changes."
+    }
+  },
+  "newRegressionCases": 37,
+  "newSqlCases": 36,
+  "newInMemoryCases": 1,
+  "freshSchemaColumnChecks": [
+    {
+      "service": "Auth",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Club",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Activity",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Admin",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Report",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Finance",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Export",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Notification",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    }
+  ],
+  "graph": {
+    "summary": {
+      "changed_count": 140,
+      "affected_count": 101,
+      "changed_files": 49,
+      "risk_level": "critical"
+    },
+    "partialReported": false,
+    "truncatedReported": false,
+    "unresolvedChangedSymbols": 0,
+    "untrackedCSharpIndexed": 27,
+    "untrackedCSharpFiles": [
+      "src/Services/ActivityService/Migrations/20261026090202_EnforceAttendanceSessionActivity.Designer.cs",
+      "src/Services/ActivityService/Migrations/20261026090202_EnforceAttendanceSessionActivity.cs",
+      "src/Services/AdminService/Data/Migrations/20261026090207_EnforceContributionRevisionLineage.Designer.cs",
+      "src/Services/AdminService/Data/Migrations/20261026090207_EnforceContributionRevisionLineage.cs",
+      "src/Services/AuthService/Migrations/20261026090152_IndexRefreshTokenFamilies.Designer.cs",
+      "src/Services/AuthService/Migrations/20261026090152_IndexRefreshTokenFamilies.cs",
+      "src/Services/ClubService/Migrations/20261026090212_ProtectClubRequestReviews.Designer.cs",
+      "src/Services/ClubService/Migrations/20261026090212_ProtectClubRequestReviews.cs",
+      "src/Services/ExportService/Migrations/20261026090157_IndexExportsByRequester.Designer.cs",
+      "src/Services/ExportService/Migrations/20261026090157_IndexExportsByRequester.cs",
+      "src/Services/NotificationService/Migrations/20261026090221_AddPersonalNotificationReadReceipts.Designer.cs",
+      "src/Services/NotificationService/Migrations/20261026090221_AddPersonalNotificationReadReceipts.cs",
+      "src/Services/NotificationService/Models/NotificationReadReceipt.cs",
+      "src/Services/ReportService/Migrations/20261026090217_ReconcileReportSchemaAndAttachmentDetails.Designer.cs",
+      "src/Services/ReportService/Migrations/20261026090217_ReconcileReportSchemaAndAttachmentDetails.cs",
+      "src/Shared/ClubReportHub.Shared/Data/Pagination.cs",
+      "tests/Backend.StabilizationTests/ActivityPaginationRegressionTests.cs",
+      "tests/Backend.StabilizationTests/ActivityReadOptimizationTests.cs",
+      "tests/Backend.StabilizationTests/AuthSessionContractTests.cs",
+      "tests/Backend.StabilizationTests/ClubWorkflowDatabaseIntegrityTests.cs",
+      "tests/Backend.StabilizationTests/CrossServiceWorkflowAuthorizationTests.OwnerRequestAtomicity.cs",
+      "tests/Backend.StabilizationTests/CrossServiceWorkflowAuthorizationTests.ReadEfficiency.cs",
+      "tests/Backend.StabilizationTests/DatabaseRelationalSafetyTests.cs",
+      "tests/Backend.StabilizationTests/NotificationPersonalReadReceiptTests.cs",
+      "tests/Backend.StabilizationTests/NotificationReadContractTests.cs",
+      "tests/Backend.StabilizationTests/ReportReadOptimizationTests.cs",
+      "tests/Backend.StabilizationTests/ReportSchemaIntegrityTests.cs"
+    ],
+    "sourceIndexStatusBeforeDocUpdate": "up-to-date",
+    "runnerIdentityStatus": "current",
+    "schemaVersion": 4,
+    "incompleteReasons": [],
+    "limitations": [
+      "Process extraction capped:369 candidate entrypoints and654callees omitted; missing flows are not proof of absence",
+      "C# dynamic dispatch/receiver inference remains incomplete; source and full suite complement graph",
+      "Two large documentationJSON files skipped, no C#files skipped",
+      "detect_changes lists tracked differences; all27untrackedC#fileschecked separately"
+    ]
+  },
+  "sourceManifest": [
+    {
+      "file": "src/Services/ActivityService/Data/ActivityDbContext.cs",
+      "sha256": "99ea17c225ed5eb698f27179f70543c21265a2681547fa3dc1fdd0e161b7c52f"
+    },
+    {
+      "file": "src/Services/ActivityService/Endpoints/ActivityActionHelpers.cs",
+      "sha256": "2ab5b11117dfe167c31b1dd4f46575a490bb3cc3065bf8b7e5669789bc265737"
+    },
+    {
+      "file": "src/Services/ActivityService/Endpoints/ActivityApplicationEndpoints.cs",
+      "sha256": "45d191c35cb81b8f704c53cb30a7e93008d475e265c4ccfa8d4bf7f7b85718eb"
+    },
+    {
+      "file": "src/Services/ActivityService/Endpoints/ActivityStaffingEndpoints.cs",
+      "sha256": "c02f372564fb0ac91d75703552ddabe3af33ca582e7ff8c88ae9ac33bf2ffc79"
+    },
+    {
+      "file": "src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs",
+      "sha256": "15ce98e49fecb98ea84f643e4e1d2cebdacd0bb2b56f4c3b10d851bf3f237c70"
+    },
+    {
+      "file": "src/Services/ActivityService/Migrations/20261026090202_EnforceAttendanceSessionActivity.Designer.cs",
+      "sha256": "0912a064ac2a34bcdca8010910fee3f66e5bb854438247a1574de567b6c53d5c"
+    },
+    {
+      "file": "src/Services/ActivityService/Migrations/20261026090202_EnforceAttendanceSessionActivity.cs",
+      "sha256": "86656e1f6c45308029e37e13820e1fc1bae5877bbe6ab0404c0bcd3fb2126dc8"
+    },
+    {
+      "file": "src/Services/ActivityService/Migrations/ActivityDbContextModelSnapshot.cs",
+      "sha256": "6b0d34616610a44663b1483b68d7d1f980fb781c7e97a128f8468bcf45925dd7"
+    },
+    {
+      "file": "src/Services/ActivityService/Services/MemberActivityStatisticsService.cs",
+      "sha256": "80339e592729bae76fdd6486e496798bd70b4af99ea34b04bd5e39658045b470"
+    },
+    {
+      "file": "src/Services/AdminService/Data/Migrations/20261026090207_EnforceContributionRevisionLineage.Designer.cs",
+      "sha256": "9f9c6761ba5ba26b6405f26ee5b367e9f6e276e29360565874bd36468e4ee009"
+    },
+    {
+      "file": "src/Services/AdminService/Data/Migrations/20261026090207_EnforceContributionRevisionLineage.cs",
+      "sha256": "e817091ae4ba93fa016111f3ec9199d96375e32e7bad7583d679ebeff8b9a5cc"
+    },
+    {
+      "file": "src/Services/AdminService/Data/Migrations/AdminDbContextModelSnapshot.cs",
+      "sha256": "f41fc957c3debc9b65ea706177146b0a1740c368ea5722d7ca071a827f7e356a"
+    },
+    {
+      "file": "src/Services/AdminService/Data/VerifiedExperienceModel.cs",
+      "sha256": "bfbdde276dcc3b0a37fb9f1589aa82b39f44cb6856026469b41a1d9bca8c3928"
+    },
+    {
+      "file": "src/Services/AdminService/Endpoints/PrivateEvidenceEndpoints.cs",
+      "sha256": "f98714ed0b598d5261487b43cb3e93ef97467a9597df25517cab0e3bf442ab98"
+    },
+    {
+      "file": "src/Services/AdminService/Endpoints/VerifiedContributionEndpoints.cs",
+      "sha256": "67c564f1647d9579bdae942e802272719f456a5126fb0f5d327de1d75e1857b5"
+    },
+    {
+      "file": "src/Services/AuthService/Data/AuthDbContext.cs",
+      "sha256": "9ef07fb5ff2963d004db4d8c528ca9863fbb71cc040d1fa6e697c8d31acc5d23"
+    },
+    {
+      "file": "src/Services/AuthService/Endpoints/AuthEndpoints.cs",
+      "sha256": "e5c340989762898b6c383438855edd81287bb44d569442889d41039c04391fb1"
+    },
+    {
+      "file": "src/Services/AuthService/Endpoints/StudyScheduleEndpoints.cs",
+      "sha256": "af18dfd94e6fc192371421fa4209b625ea925b3e05e47d82a90531b148651dcd"
+    },
+    {
+      "file": "src/Services/AuthService/Migrations/20261026090152_IndexRefreshTokenFamilies.Designer.cs",
+      "sha256": "0e1a2cb2a1f72c3a496dd53d43fefdc57d9e48095ef83bfd80f02c2c0ce077ea"
+    },
+    {
+      "file": "src/Services/AuthService/Migrations/20261026090152_IndexRefreshTokenFamilies.cs",
+      "sha256": "d5b3613139ca4e59ad261f868e6c109c0c1b15942c3fd2e47b86e232fbe81ec7"
+    },
+    {
+      "file": "src/Services/AuthService/Migrations/AuthDbContextModelSnapshot.cs",
+      "sha256": "fcf6367f520a3d6cc8a37d59b1f0e9c609b00aff8ed08553f197cd56ba472e4a"
+    },
+    {
+      "file": "src/Services/AuthService/Services/AuthDbContextSecurityStampValidator.cs",
+      "sha256": "7b3fd623e241d9feb2505325948fc122468adb29671d0a8d36592f58353a0d5d"
+    },
+    {
+      "file": "src/Services/AuthService/Services/RefreshTokenService.cs",
+      "sha256": "c6523ab557a204ffabf462aea46dd8f36ace0314297a9c0ccac1a1672b5c61e6"
+    },
+    {
+      "file": "src/Services/ClubService/Data/ClubDbContext.cs",
+      "sha256": "a9e7698c8f516293066e4b94a647d5747c34ddf2d1f04fc58c6ccde35f3306b4"
+    },
+    {
+      "file": "src/Services/ClubService/Endpoints/ApplicationEndpoints.cs",
+      "sha256": "8460229a86aa284ed82a69fd4f0f7c9dbd08d2c915421791bd7337014dd16fe4"
+    },
+    {
+      "file": "src/Services/ClubService/Endpoints/ClubEndpoints.cs",
+      "sha256": "a3d32f1427a737e3cb6cd2b4987e95954f614ea4df083925d603ba7cc543b293"
+    },
+    {
+      "file": "src/Services/ClubService/Endpoints/DisbandEndpoints.cs",
+      "sha256": "edc4f53ece6f816fd9d72af345030f302ebce85ce396e0f6f782b349281fea9b"
+    },
+    {
+      "file": "src/Services/ClubService/Endpoints/MemberManagementEndpoints.cs",
+      "sha256": "af4cbac1bf5a23603878983a73faa245beb8341c4c259b72894668d9dc169eb3"
+    },
+    {
+      "file": "src/Services/ClubService/Endpoints/TransferEndpoints.cs",
+      "sha256": "701e9eed0b6bd23dfb4957d5a2f2c9fc3470f9ff891ad3954a31eda08003cfbf"
+    },
+    {
+      "file": "src/Services/ClubService/Mappers/ClubMappers.cs",
+      "sha256": "5add88a37a0246af4b71d5b7f996c3b698c6d614966c479f879a925b98440941"
+    },
+    {
+      "file": "src/Services/ClubService/Migrations/20261026090212_ProtectClubRequestReviews.Designer.cs",
+      "sha256": "ceb40bcc3dd4c93a101fdaa30e91cd51c8c4704287481b7f2648854772fc30fb"
+    },
+    {
+      "file": "src/Services/ClubService/Migrations/20261026090212_ProtectClubRequestReviews.cs",
+      "sha256": "48981a7b2640345f369befedccbadb1d9e50f2dad1eb5a291fd781f9c5fda872"
+    },
+    {
+      "file": "src/Services/ClubService/Migrations/ClubDbContextModelSnapshot.cs",
+      "sha256": "eb9de8d439dfba616769db746d26b14b34747c6665909f78df0a736f8ea324e9"
+    },
+    {
+      "file": "src/Services/ClubService/Models/ClubCreationApplication.cs",
+      "sha256": "3a1e5c2eb671e1c93241b8d9dd3ecddaaa6e537f18d985b22ed8bc55234e9a22"
+    },
+    {
+      "file": "src/Services/ClubService/Models/ClubDisbandRequest.cs",
+      "sha256": "6de19483c930155d1860050460cbb1d4e3c3875f059f110d1be38d2bd9a15c40"
+    },
+    {
+      "file": "src/Services/ClubService/Models/ClubOwnershipTransfer.cs",
+      "sha256": "39676ccf4ed07ac5f607b3cecc2cf0d23560cfa8c4a380e40c3d4a3eddb5c3e4"
+    },
+    {
+      "file": "src/Services/ExportService/Data/ExportDbContext.cs",
+      "sha256": "34f3bdde380fe1525407d4a355aa46a022fae217b63c1e11b3ca9bb291a2aad6"
+    },
+    {
+      "file": "src/Services/ExportService/Endpoints/ClubExperienceReportEndpoints.cs",
+      "sha256": "f8d2d34b1b1e18f6b4b03484399df3675d67a28b653a0c41fa81166af613e6e0"
+    },
+    {
+      "file": "src/Services/ExportService/Endpoints/ExportEndpoints.cs",
+      "sha256": "084c9205725f46997d215f13dd8ece9e951349c3d4b7b7a342b779f7343e6c8e"
+    },
+    {
+      "file": "src/Services/ExportService/Migrations/20261026090157_IndexExportsByRequester.Designer.cs",
+      "sha256": "38079d05e747ab58ebc06676f320ad110112e3bfecf7ea2555673b8cacdc9804"
+    },
+    {
+      "file": "src/Services/ExportService/Migrations/20261026090157_IndexExportsByRequester.cs",
+      "sha256": "8efcc6338d3e068912fa2ea3b0411b7b3528e3f9fa4ef4fde1be71617eb1f983"
+    },
+    {
+      "file": "src/Services/ExportService/Migrations/ExportDbContextModelSnapshot.cs",
+      "sha256": "8c107a4b0f3bde65dd7629f83c1476bff131e0e56544c4c51e497a6fdc89aaad"
+    },
+    {
+      "file": "src/Services/NotificationService/Data/NotificationDbContext.cs",
+      "sha256": "0b848fc31d324dca615067ea0cb32d7fe9a1d4d2e40f5495866a205f5e9a91df"
+    },
+    {
+      "file": "src/Services/NotificationService/Endpoints/NotificationEndpoints.cs",
+      "sha256": "4a806895d62d8c8e31e562426dc2b7136f6856e2dc9a06d262a50b15a8435f79"
+    },
+    {
+      "file": "src/Services/NotificationService/Extensions/NotificationExtensions.cs",
+      "sha256": "5999bc7bf4733d7a8b1f0ad4696a6f9ffaf58086bfbafdaeda32030badaec1c2"
+    },
+    {
+      "file": "src/Services/NotificationService/Migrations/20261026090221_AddPersonalNotificationReadReceipts.Designer.cs",
+      "sha256": "2dec0ae75e5b7cace8118d46d8d3c51b88a3e87d55b73ecafd71d14dd86d8b05"
+    },
+    {
+      "file": "src/Services/NotificationService/Migrations/20261026090221_AddPersonalNotificationReadReceipts.cs",
+      "sha256": "70c1589eeca4fe985e47220434fd21509c6332bd9be97330cbbed4350feffff4"
+    },
+    {
+      "file": "src/Services/NotificationService/Migrations/NotificationDbContextModelSnapshot.cs",
+      "sha256": "c195a8b7a8746850099913a9ccdb4136af7e99dfef28b395abe7e05f1c204499"
+    },
+    {
+      "file": "src/Services/NotificationService/Models/NotificationReadReceipt.cs",
+      "sha256": "ab4e079dc165bc8c7869e8e9182c0b4914d95f46d92979a7d9a89fea0a220b4c"
+    },
+    {
+      "file": "src/Services/ReportService/Data/ReportDbContext.cs",
+      "sha256": "eb7239bf47932aa4aca6342b9526349500a4424a7cc9c227197908d2f0ffb519"
+    },
+    {
+      "file": "src/Services/ReportService/Endpoints/ReportCrudEndpoints.cs",
+      "sha256": "b97e4738ee2a95e54231d7373018b7db1182df572a53fd6fc6714ffe7c90365a"
+    },
+    {
+      "file": "src/Services/ReportService/Endpoints/ReportFileEndpoints.cs",
+      "sha256": "8c2b61e107b04991697cd79940361488f0b8b8995132b3f229c9b6a5d2b021fa"
+    },
+    {
+      "file": "src/Services/ReportService/Endpoints/ReportQueryEndpoints.cs",
+      "sha256": "4f0a3c147a04d087c9ccaf1c3d77aed6c95543ac802fdae96c00aa181df69fac"
+    },
+    {
+      "file": "src/Services/ReportService/Extensions/Mappers.cs",
+      "sha256": "9d3fc568b94db3cf3c0bb953c7ed0ce9539dd34feb0d384709997605caa21cab"
+    },
+    {
+      "file": "src/Services/ReportService/Extensions/ReportExtensions.cs",
+      "sha256": "5152cf021c2b508f5a5d095283b14c6fdb2e16ef961a39d8f4c07b09b5ccf377"
+    },
+    {
+      "file": "src/Services/ReportService/Migrations/20261026090217_ReconcileReportSchemaAndAttachmentDetails.Designer.cs",
+      "sha256": "86f53d3e36f5087335ffd27f706fdc4e5c5138ce91fa05586ae28c1cc55278f7"
+    },
+    {
+      "file": "src/Services/ReportService/Migrations/20261026090217_ReconcileReportSchemaAndAttachmentDetails.cs",
+      "sha256": "6dcb79dcc199d2111d172cd2bc09deca13547102a1aac38b90c3948d50c43a7d"
+    },
+    {
+      "file": "src/Services/ReportService/Migrations/ReportDbContextModelSnapshot.cs",
+      "sha256": "8f317cccb04e66be11ab6979c98863cc4122f4da51c14e90e896bd13b33019bc"
+    },
+    {
+      "file": "src/Shared/ClubReportHub.Shared/Data/DatabaseStartupExtensions.cs",
+      "sha256": "d7c41e7b5739984b962402cc7b6ef040b1f0729bc927f723c96f0552788b7ca2"
+    },
+    {
+      "file": "src/Shared/ClubReportHub.Shared/Data/Pagination.cs",
+      "sha256": "67f8c0b70c9ca682661e9021c4bb34b69090f8b289d21174bb8f11ba2bef4472"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ActivityActionContractTests.cs",
+      "sha256": "88f9d7a5fe058bf33156d53b594f594f3c01045c528a9c8b10c37ccca3e40c8d"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ActivityPaginationRegressionTests.cs",
+      "sha256": "82d8530c6320b2a3376bdb58d788203ee71b02c6e46cf76da88cc768745cbdd9"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ActivityReadOptimizationTests.cs",
+      "sha256": "1e07464914d32d34949514fd85880e4dbc8630b240fd5fa7313854e812f02d90"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/AuthSessionContractTests.cs",
+      "sha256": "05c84e4e36d4dd703cd4f45c31373691c9299581bb14c2ee2742407048b0dcdf"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ClubDataIntegrityConcurrencyTests.cs",
+      "sha256": "d6be6275fc107c184ddeac45827650085ea401b634f0b41cb96cbe655c5f1e10"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ClubManagerExperienceTests.cs",
+      "sha256": "9170612d2db9bf1c3f919d8579f5ec0b5ce94ab00921a21fb2ddb3be4c747191"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ClubWorkflowDatabaseIntegrityTests.cs",
+      "sha256": "f2ef075a103b9a235d864bd1b933c15e791b8277122c6cfee57a05b1b418cf76"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/CrossServiceWorkflowAuthorizationTests.OwnerRequestAtomicity.cs",
+      "sha256": "d2e469c5ee71f0e6ca5e5dd2c4982ca6bdf74679f4ba3fd8168f9c2026cbae75"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/CrossServiceWorkflowAuthorizationTests.ReadEfficiency.cs",
+      "sha256": "1d1ee504ff1eb33b65f269f228683c44aa5a167cdd437fdf5c7faafb94b876c4"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/DatabaseRelationalSafetyTests.cs",
+      "sha256": "d5a56fb9ae5eba908fee130383deea50bfd490c70bc109b81fac4193260ca211"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/MembershipWithdrawalTests.cs",
+      "sha256": "a759c11f97b45621aef718d60fabe976207971499ab1270229a124543d2b006b"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/NotificationPersonalReadReceiptTests.cs",
+      "sha256": "fa4efdb75ce38ef640bb5fc311d544fe6d5006afe63ca30e89a5365efddc4e6d"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/NotificationReadContractTests.cs",
+      "sha256": "54296e6413c0bf8ab728c7b42853fb4f69d0bea27d942fc42420bdf8aff4f76f"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ReportReadOptimizationTests.cs",
+      "sha256": "a0ffa7861d1d25d1ac10b33a8746cc30021face26d0fd11521d0d7dab961e4eb"
+    },
+    {
+      "file": "tests/Backend.StabilizationTests/ReportSchemaIntegrityTests.cs",
+      "sha256": "c2ef98f7c28f028004d3f04b275d01f5e4bccf87d9d647c94cd6a1a2fcfb629f"
+    }
+  ],
+  "sourceHashesUnchangedAfterTests": true
+}

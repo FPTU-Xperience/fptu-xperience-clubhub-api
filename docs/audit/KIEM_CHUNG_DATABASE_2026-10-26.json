@@ -1,0 +1,126 @@
+{
+  "date": "2026-10-26",
+  "scope": "Source/EF design-time model/migrations and disposable SQL Server databases only; production not accessed",
+  "modelCounts": {
+    "TableCount": 91,
+    "ForeignKeyCount": 57,
+    "IndexCount": 164,
+    "UniqueIndexCount": 65,
+    "CheckCount": 1,
+    "MigrationCount": 63
+  },
+  "freshSchemaColumnChecks": [
+    {
+      "service": "Auth",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Club",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Activity",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Admin",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Report",
+      "missingAfterMigrations": [
+        "dbo.Reports.BudgetApprovedAmount",
+        "dbo.Reports.BudgetDescription",
+        "dbo.Reports.BudgetProposalId",
+        "dbo.Reports.BudgetRequestedAmount",
+        "dbo.Reports.FinanceSubmittedAtUtc",
+        "dbo.Reports.PublishedActivityId",
+        "dbo.ReportUploadedFiles.PreviewContentType",
+        "dbo.ReportUploadedFiles.PreviewErrorMessage",
+        "dbo.ReportUploadedFiles.PreviewFileName",
+        "dbo.ReportUploadedFiles.PreviewGeneratedAtUtc",
+        "dbo.ReportUploadedFiles.PreviewStatus",
+        "dbo.ReportUploadedFiles.PreviewStoragePath"
+      ],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Finance",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Export",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    },
+    {
+      "service": "Notification",
+      "missingAfterMigrations": [],
+      "missingAfterProductionUpgrader": [],
+      "pendingModelChanges": false
+    }
+  ],
+  "sqlReproductions": {
+    "date": "2026-10-26",
+    "scope": "Four isolated SQL Server persistence/startup counterexamples; no HTTP or production database execution",
+    "results": [
+      {
+        "id": "REPORT-DETAIL-ORPHAN",
+        "outcome": "DEFECT_REPRODUCED",
+        "evidence": {
+          "orphan": true,
+          "attachmentPreserved": true,
+          "originalDetailRemoved": true
+        }
+      },
+      {
+        "id": "CLUB-APPLICATION-PENDING-UNIQUE",
+        "outcome": "DEFECT_REPRODUCED",
+        "evidence": {
+          "pendingForSameRequester": 2,
+          "duplicateAllowedBySql": true
+        }
+      },
+      {
+        "id": "CLUB-REVIEW-STALE-WRITE",
+        "outcome": "DEFECT_REPRODUCED",
+        "evidence": {
+          "requestStatus": "Rejected",
+          "clubIsActive": false,
+          "bothSavesSucceeded": true
+        }
+      },
+      {
+        "id": "DATABASE-STARTUP-FALSE-SUCCESS",
+        "outcome": "DEFECT_REPRODUCED",
+        "evidence": {
+          "initializerReturnedNormally": true,
+          "usersTableExists": false,
+          "pendingMigrations": 9
+        }
+      }
+    ]
+  },
+  "productionSourceModified": false,
+  "priorRefactorSourceHashesMatched": 32,
+  "limitations": [
+    "The four counterexamples use SQL persistence/startup helper, not end-to-end HTTP",
+    "Column coverage does not assert full SQL type/index/constraint parity",
+    "No production row counts, query execution plans, IO/latency/load measurements or production restore test",
+    "EF inventory excludes __EFMigrationsHistory, Hangfire internal tables and objects outside these eight models"
+  ],
+  "phase": "BASELINE_BEFORE_IMPLEMENTATION",
+  "supersededBy": "TRIEN_KHAI_ERD_DATABASE_2026-10-27.json"
+}

@@ -67,6 +67,24 @@ namespace NotificationService.Migrations
                     b.ToTable("Notifications");
                 });
 
+            modelBuilder.Entity("NotificationService.Models.NotificationReadReceipt", b =>
+                {
+                    b.Property<int>("NotificationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("ReadAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("NotificationId", "UserId");
+
+                    b.HasIndex("UserId", "NotificationId");
+
+                    b.ToTable("NotificationReadReceipts", (string)null);
+                });
+
             modelBuilder.Entity("NotificationService.Models.ProcessedEvent", b =>
                 {
                     b.Property<Guid>("EventId")
@@ -86,6 +104,15 @@ namespace NotificationService.Migrations
                     b.HasIndex("ProcessedAtUtc");
 
                     b.ToTable("ProcessedEvents");
+                });
+
+            modelBuilder.Entity("NotificationService.Models.NotificationReadReceipt", b =>
+                {
+                    b.HasOne("NotificationService.Models.Notification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

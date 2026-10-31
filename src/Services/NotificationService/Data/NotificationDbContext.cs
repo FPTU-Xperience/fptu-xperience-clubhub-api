@@ -7,6 +7,7 @@ public sealed class NotificationDbContext(DbContextOptions<NotificationDbContext
 {
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
+    public DbSet<NotificationReadReceipt> ReadReceipts => Set<NotificationReadReceipt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,6 +26,15 @@ public sealed class NotificationDbContext(DbContextOptions<NotificationDbContext
             entity.HasKey(x => x.EventId);
             entity.Property(x => x.RoutingKey).HasMaxLength(100);
             entity.HasIndex(x => x.ProcessedAtUtc);
+        });
+
+        modelBuilder.Entity<NotificationReadReceipt>(entity =>
+        {
+            entity.ToTable("NotificationReadReceipts");
+            entity.HasKey(x => new { x.NotificationId, x.UserId });
+            entity.HasOne<Notification>().WithMany().HasForeignKey(x => x.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.UserId, x.NotificationId });
         });
     }
 }

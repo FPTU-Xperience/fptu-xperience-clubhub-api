@@ -59,7 +59,7 @@ public static class ExportEndpoints
         var total = await query.CountAsync(cancellationToken);
         var rows = await query
             .OrderByDescending(x => x.CreatedAtUtc)
-            .Skip((page - 1) * pageSize)
+            .Skip(Pagination.Offset(page, pageSize))
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 

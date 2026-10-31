@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 using ReportService.Clients;
 using ReportService.Contracts;
@@ -84,7 +85,7 @@ public static class ReportQueryEndpoints
         var total = await baseQuery.CountAsync(cancellationToken);
         var rows = await baseQuery
             .OrderByDescending(x => x.UpdatedAtUtc)
-            .Skip((page - 1) * pageSize)
+            .Skip(Pagination.Offset(page, pageSize))
             .Take(pageSize)
             .Include(x => x.UploadedFile)
             .Include(x => x.Details)

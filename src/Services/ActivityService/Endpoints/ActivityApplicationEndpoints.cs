@@ -61,8 +61,14 @@ public static class ActivityApplicationEndpoints
         var query = db.Set<ActivityApplication>().AsNoTracking().Where(x => x.ClubId == clubId);
         if (status is not null) query = query.Where(x => x.Status == status);
         var total = await query.CountAsync(ct);
-        var rows = await query.OrderByDescending(x => x.Id).Skip((index - 1) * size).Take(size).ToArrayAsync(ct);
-        var items = new List<object>(); foreach (var row in rows) items.Add(await ApplicationResponse(db, row, scope, ct));
+        var rows = await query.OrderByDescending(x => x.Id).Skip(Pagination.Offset(index, size)).Take(size).ToArrayAsync(ct);
+        var ids = rows.Select(x => x.Id).ToArray();
+        var executions = ids.Length == 0 ? new Dictionary<int, int>()
+            : await db.Set<ActivityExecution>().AsNoTracking().Where(x => ids.Contains(x.ApplicationId))
+                .Select(x => new { x.ApplicationId, x.ActivityId }).ToDictionaryAsync(x => x.ApplicationId, x => x.ActivityId, ct);
+        var items = rows.Select(row => ProjectApplication(row,
+            JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)!, scope,
+            executions.TryGetValue(row.Id, out var activityId) ? activityId : (int?)null)).ToArray();
         return Results.Ok(new { items, page = index, pageSize = size, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)size) });
     }
     private static async Task<IResult> Update(int id, HttpContext http, ActivityDbContext db, CancellationToken ct)

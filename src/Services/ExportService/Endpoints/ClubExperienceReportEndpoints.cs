@@ -89,7 +89,19 @@ public static class ClubExperienceReportEndpoints
     }
     private static async Task<IResult> GetAsync(Guid id, ExportDbContext db, ClubAccessClient access, HttpContext http, CancellationToken ct)
     {
-        var row = await db.ClubExperienceReports.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+        var row = await db.ClubExperienceReports.AsNoTracking()
+            .Select(x => new ClubExperienceReport
+            {
+                Id = x.Id,
+                ClubId = x.ClubId,
+                SemesterId = x.SemesterId,
+                Status = x.Status,
+                CreatedAtUtc = x.CreatedAtUtc,
+                SnapshotJson = x.SnapshotJson,
+                SnapshotHash = x.SnapshotHash,
+                FailureCode = x.FailureCode
+            })
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
         if (row is null) return Results.NotFound();
         if (!await AllowedAsync(row.ClubId, access, http, ct)) return Results.Forbid();
         return Results.Ok(Response(row));

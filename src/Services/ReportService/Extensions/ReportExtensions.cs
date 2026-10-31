@@ -148,8 +148,7 @@ public static class ReportExtensions
 
     public static string NormalizeUploadedReportTag(string? tag, string? reportType)
     {
-        var value = string.IsNullOrWhiteSpace(tag) ? reportType : tag;
-        return string.IsNullOrWhiteSpace(value) ? "Activity report" : value.Trim();
+        return NormalizeReportTag(tag, reportType);
     }
 
     public static (bool IsValid, string ErrorMessage, string ContentType) ValidateUploadedReportFile(IFormFile file)

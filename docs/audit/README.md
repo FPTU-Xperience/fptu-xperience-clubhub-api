@@ -1,5 +1,11 @@
 # Tài liệu tiến độ BE
 
+- [Triển khai sửa ERD/database — hoàn tất 27/10](TRIEN_KHAI_ERD_DATABASE_2026-10-27.md): 7 migration mới, 37 test mới, 983 test đạt; kèm ERD cập nhật và preflight nâng cấp dữ liệu cũ.
+
+- [Đánh giá ERD/database — 26/10](DANH_GIA_ERD_DATABASE_2026-10-26.md): 8 model, 91 bảng, kiểm tra schema SQL mới và 4 phản ví dụ đã tái hiện; kèm [ERD từng database](ERD_EF_DATABASE_2026-10-26.md), danh sách lỗi/ràng buộc và thứ tự tối ưu.
+
+- [Rà soát chất lượng và tối ưu API Sinh viên, Quản lý CLB — 25/10](CHAT_LUONG_CODE_API_SINH_VIEN_QUAN_LY_CLB_2026-10-25.md): 180 operation đã rà source; thay đổi dùng chung mapper, truy vấn, phân trang, xác thực và transaction; kết quả kiểm thử và các vấn đề còn lại. [Chi tiết từng API dạng JSON](CHAT_LUONG_CODE_API_SINH_VIEN_QUAN_LY_CLB_2026-10-25.json).
+
 - [Thư viện liên kết hoạt động — 23/10](TAI_NGUYEN_HOAT_DONG_BE_2026-10-23.md): 5 operation đã triển khai cho EMBED; upload DOCUMENT/MEDIA, private download và public transport vẫn chưa hoàn thành.
 
 - [Hồ sơ cá nhân mở rộng](HO_SO_CA_NHAN_BE_2026-10-22.md): headline/ngày sinh/địa chỉ self-only, mã sinh viên từ roster chỉ đọc; nguồn ngành/năm học và media vẫn có trạng thái riêng.

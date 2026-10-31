@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Backend.StabilizationTests;
 
-public sealed class ActivityActionContractTests
+public sealed partial class ActivityActionContractTests
 {
     private const string SigningKey = "ActivityActionTests-Only-Long-Signing-Key-2026-Not-Production";
     private static readonly DateTimeOffset Instant = new(2026, 10, 22, 8, 0, 0, TimeSpan.Zero);

@@ -195,6 +195,10 @@ internal static class ActivityActionHelpers
     {
         var content = JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)!;
         var activityId = await db.Set<ActivityExecution>().Where(x => x.ApplicationId == row.Id).Select(x => (int?)x.ActivityId).SingleOrDefaultAsync(ct);
+        return ProjectApplication(row, content, scope, activityId);
+    }
+    internal static object ProjectApplication(ActivityApplication row, ActivityApplicationInput content, Scope scope, int? activityId)
+    {
         return new
         {
             row.Id,

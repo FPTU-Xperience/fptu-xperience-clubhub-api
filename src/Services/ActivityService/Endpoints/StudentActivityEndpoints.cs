@@ -111,18 +111,21 @@ public static class StudentActivityEndpoints
             .Select(x => x.ActivityId).ToListAsync(ct);
         var checkedIn = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId
             && x.VerificationStatus == "VERIFIED" && ids.Contains(x.ActivityId)).Select(x => x.SessionId).ToListAsync(ct);
+        var firstSessions = sessions.GroupBy(x => x.ActivityId).ToDictionary(x => x.Key, x => x.First());
+        var registeredIds = registered.ToHashSet();
+        var checkedInIds = checkedIn.ToHashSet();
         var metadata = authority.Clubs.ToDictionary(x => x.ClubId);
         var items = rows.Select(a =>
         {
-            var session = sessions.FirstOrDefault(s => s.ActivityId == a.Id);
+            var session = firstSessions.GetValueOrDefault(a.Id);
             var club = metadata[a.ClubId];
             var eligible = a.Eligibility == "CAMPUS_PUBLIC" ? club.CampusCode == user.CampusCode
                 : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;
-            var canRegister = eligible && !registered.Contains(a.Id) && a.PublicationStatus == "PUBLISHED"
+            var canRegister = eligible && !registeredIds.Contains(a.Id) && a.PublicationStatus == "PUBLISHED"
                 && a.RegistrationOpensAt <= now && a.RegistrationClosesAt > now && (a.Capacity == null || a.RegisteredCount < a.Capacity);
             var start = session?.StartTimeUtc ?? a.StartTimeUtc; var end = session?.EndTimeUtc ?? a.EndTimeUtc;
-            var action = canRegister ? "REGISTER" : eligible && registered.Contains(a.Id) && session is not null
-                && session.OpensAt <= now && session.ClosesAt >= now && !checkedIn.Contains(session.Id) ? "CHECK_IN" : "VIEW";
+            var action = canRegister ? "REGISTER" : eligible && registeredIds.Contains(a.Id) && session is not null
+                && session.OpensAt <= now && session.ClosesAt >= now && !checkedInIds.Contains(session.Id) ? "CHECK_IN" : "VIEW";
             return new StudentActivityItem(a.Id, a.ClubId, club.ClubCode, club.ClubName, a.Title, a.Description,
                 a.CoverImageUrl, start, end, session?.Location ?? a.Location,
                 a.Status == ActivityStatuses.Cancelled ? "CANCELLED" : end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE",

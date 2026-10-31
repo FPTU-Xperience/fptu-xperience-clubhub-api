@@ -147,7 +147,6 @@ public static class TransferEndpoints
 
         try
         {
-            await db.SaveChangesAsync(ct);
             db.ClubOwnershipTransfers.Add(transferRequest);
             await db.SaveChangesAsync(ct);
         }
@@ -284,6 +283,10 @@ public static class TransferEndpoints
         {
             await db.SaveChangesAsync(ct);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "The transfer request was already reviewed." });
+        }
         catch (DbUpdateException)
         {
             return Results.Conflict(new { message = "Club manager assignment conflict: each club can only have one active manager and each manager can only manage one club." });
@@ -329,7 +332,14 @@ public static class TransferEndpoints
         transferRequest.ReviewedByUserId = reviewerUserId;
         transferRequest.ReviewedAtUtc = DateTimeOffset.UtcNow;
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "The transfer request was already reviewed." });
+        }
 
         logger.LogInformation(
             "Club {ClubId} transfer request rejected by admin {AdminId}",

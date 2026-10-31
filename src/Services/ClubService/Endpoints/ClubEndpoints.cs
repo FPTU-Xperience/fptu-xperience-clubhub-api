@@ -104,7 +104,6 @@ public static class ClubEndpoints
         var query = db.Clubs
             .AsNoTracking()
             .Include(x => x.ManagerAssignments)
-            .Include(x => x.Memberships)
             .AsSplitQuery()
             .AsQueryable();
 
@@ -145,9 +144,15 @@ public static class ClubEndpoints
             query = query.Where(x => x.IsRecruiting == recruiting);
         }
 
-        var result = await query.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var result = await query.OrderBy(x => x.Name)
+            .Select(club => new
+            {
+                Club = club,
+                ApprovedMemberCount = club.Memberships.Count(x => x.Status == ClubMembershipStatuses.Approved)
+            })
+            .ToListAsync(cancellationToken);
 
-        return Results.Ok(result.Select(ClubMappers.ToDirectoryResponse));
+        return Results.Ok(result.Select(x => ClubMappers.ToDirectoryResponse(x.Club, x.ApprovedMemberCount)));
     }
 
     private static async Task<IResult> GetManagedClubs(

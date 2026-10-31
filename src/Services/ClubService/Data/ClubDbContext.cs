@@ -19,23 +19,42 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
     public DbSet<ClubPlanRevision> PlanRevisions => Set<ClubPlanRevision>();
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        ValidateMembershipAudit();
-        foreach (var entry in ChangeTracker.Entries<ClubMembership>().Where(x => x.State == EntityState.Modified))
-            entry.Entity.ConcurrencyToken = Guid.NewGuid();
-        return base.SaveChangesAsync(cancellationToken);
-    }
+        => SaveChangesAsync(true, cancellationToken);
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ValidateMembershipAudit();
+        RotateConcurrencyTokens();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateMembershipAudit();
+        RotateConcurrencyTokens();
         return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private void RotateConcurrencyTokens()
+    {
+        foreach (var entry in ChangeTracker.Entries().Where(x => x.State == EntityState.Modified))
+        {
+            switch (entry.Entity)
+            {
+                case ClubMembership membership:
+                    membership.ConcurrencyToken = Guid.NewGuid();
+                    break;
+                case ClubCreationApplication application:
+                    application.ConcurrencyToken = Guid.NewGuid();
+                    break;
+                case ClubDisbandRequest disband:
+                    disband.ConcurrencyToken = Guid.NewGuid();
+                    break;
+                case ClubOwnershipTransfer transfer:
+                    transfer.ConcurrencyToken = Guid.NewGuid();
+                    break;
+            }
+        }
     }
 
     private void ValidateMembershipAudit()
@@ -133,7 +152,9 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
         modelBuilder.Entity<ClubCreationApplication>(entity =>
         {
+            entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken().HasDefaultValueSql("NEWID()");
             entity.HasIndex(x => new { x.RequesterUserId, x.Status });
+            entity.HasIndex(x => x.RequesterUserId).IsUnique().HasFilter("[Status] = 'Submitted'");
             entity.HasIndex(x => new { x.Code, x.Status });
             entity.HasIndex(x => x.CampusCode);
             entity.Property(x => x.RequesterName).HasMaxLength(200);
@@ -165,6 +186,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
         modelBuilder.Entity<ClubDisbandRequest>(entity =>
         {
+            entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken().HasDefaultValueSql("NEWID()");
             // DATA-F06: At most one pending disband request per club
             entity.HasIndex(x => x.ClubId)
                 .IsUnique()
@@ -175,6 +197,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
         modelBuilder.Entity<ClubOwnershipTransfer>(entity =>
         {
+            entity.Property(x => x.ConcurrencyToken).IsConcurrencyToken().HasDefaultValueSql("NEWID()");
             // DATA-F06: At most one pending ownership transfer request per club
             entity.HasIndex(x => x.ClubId)
                 .IsUnique()

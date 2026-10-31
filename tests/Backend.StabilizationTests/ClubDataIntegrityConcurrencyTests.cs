@@ -341,7 +341,9 @@ public sealed class ClubDataIntegrityConcurrencyTests
     [Fact]
     public async Task SubmitDisbandRequest_ConcurrentRequests_OnlyOneSucceedsSecondReturnsConflict409()
     {
-        await using var app = await CreateTestAppAsync();
+        // Concurrency rollback and filtered unique indexes require the relational provider.
+        await using var database = await ManagerSqlDatabase.CreateAsync();
+        await using var app = await CreateTestAppAsync(options => options.UseSqlServer(database.ConnectionString));
         var (clubId, ownerId, _, _, _) = await SeedClubWithMembersAsync(app);
 
         using var clientA = app.GetTestClient();
@@ -392,7 +394,9 @@ public sealed class ClubDataIntegrityConcurrencyTests
     [Fact]
     public async Task SubmitTransferRequest_ConcurrentRequests_OnlyOneSucceedsSecondReturnsConflict409()
     {
-        await using var app = await CreateTestAppAsync();
+        // Concurrency rollback and filtered unique indexes require the relational provider.
+        await using var database = await ManagerSqlDatabase.CreateAsync();
+        await using var app = await CreateTestAppAsync(options => options.UseSqlServer(database.ConnectionString));
         var (clubId, ownerId, member1Id, member2Id, _) = await SeedClubWithMembersAsync(app);
 
         using var clientA = app.GetTestClient();

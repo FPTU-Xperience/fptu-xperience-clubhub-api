@@ -184,6 +184,8 @@ namespace AuthService.Migrations
                     b.HasIndex("Token")
                         .IsUnique();
 
+                    b.HasIndex("FamilyId", "RevokedAtUtc");
+
                     b.HasIndex("UserId", "ExpiresAtUtc", "RevokedAtUtc");
 
                     b.ToTable("RefreshTokens");

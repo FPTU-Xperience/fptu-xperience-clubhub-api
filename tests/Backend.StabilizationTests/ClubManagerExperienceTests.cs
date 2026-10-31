@@ -310,10 +310,20 @@ public sealed partial class ClubManagerSqlIntegrityTests
         await Assert.ThrowsAsync<DbUpdateException>(() => second.SaveChangesAsync());
         second.ChangeTracker.Clear(); Assert.Equal(1, await second.Contributions.CountAsync());
         var contribution = await second.Contributions.SingleAsync();
+        var revision = new ContributionRevision
+        {
+            ContributionId = contribution.Id,
+            Ordinal = 1,
+            Status = contribution.Status,
+            AttributesJson = contribution.ProposedAttributesJson,
+            ActorId = 104,
+            CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+        second.ContributionRevisions.Add(revision);
         var effect = new ExperienceLedgerEffect
         {
             ContributionId = contribution.Id,
-            RevisionId = Guid.NewGuid(),
+            RevisionId = revision.Id,
             UserId = 104,
             SemesterId = "FALL2026",
             EffectType = "AWARD",

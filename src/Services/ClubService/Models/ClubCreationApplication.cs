@@ -3,6 +3,7 @@ namespace ClubService.Models;
 public sealed class ClubCreationApplication
 {
     public int Id { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
     public int RequesterUserId { get; set; }
     public string RequesterName { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;

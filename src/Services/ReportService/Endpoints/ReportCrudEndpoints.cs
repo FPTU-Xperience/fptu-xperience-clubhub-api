@@ -252,12 +252,21 @@ public static class ReportCrudEndpoints
         report.NextPeriodPlan = request.NextPeriodPlan?.Trim();
         report.UpdatedAtUtc = DateTimeOffset.UtcNow;
         report.Version++;
+        // Details are replaced with new IDs; retain files as report-level evidence.
+        foreach (var attachment in report.Attachments)
+        {
+            attachment.ReportDetailId = null;
+        }
         db.ReportDetails.RemoveRange(report.Details);
         report.Details = request.Details.Select(detail => ReportExtensions.ToDetail(detail, includeBudget: !isFutureEvent)).ToList();
         AuditHelper.AddAudit(db, report.Id, "Update", user.GetUserId(), "Report draft updated.");
         try
         {
             await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Report changed while it was being updated." });
         }
         catch (DbUpdateException)
         {

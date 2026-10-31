@@ -301,6 +301,12 @@ namespace ClubService.Migrations
                     b.Property<bool>("CommittedToRules")
                         .HasColumnType("bit");
 
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWID()");
+
                     b.Property<string>("ContactEmail")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -431,6 +437,10 @@ namespace ClubService.Migrations
 
                     b.HasIndex("CampusCode");
 
+                    b.HasIndex("RequesterUserId")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Submitted'");
+
                     b.HasIndex("Code", "Status");
 
                     b.HasIndex("RequesterUserId", "Status");
@@ -452,6 +462,12 @@ namespace ClubService.Migrations
 
                     b.Property<int>("ClubId")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWID()");
 
                     b.Property<DateTimeOffset?>("ExecutedAtUtc")
                         .HasColumnType("datetimeoffset");
@@ -797,6 +813,12 @@ namespace ClubService.Migrations
 
                     b.Property<int>("ClubId")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWID()");
 
                     b.Property<string>("CurrentOwnerName")
                         .IsRequired()

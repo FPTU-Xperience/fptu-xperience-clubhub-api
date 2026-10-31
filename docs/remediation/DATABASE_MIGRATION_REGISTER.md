@@ -1,6 +1,24 @@
 # SỔ ĐĂNG KÝ DATABASE MIGRATIONS (DATABASE MIGRATION REGISTER)
 
-> Tài liệu này quản lý vòng đời cơ sở dữ liệu, các bản migration, chiến lược an toàn dữ liệu và kế hoạch rollback cho toàn bộ 7 database dịch vụ của ClubReportHub.
+> Tài liệu này quản lý vòng đời cơ sở dữ liệu, các bản migration, chiến lược an toàn dữ liệu và kế hoạch rollback cho toàn bộ 8 database dịch vụ của ClubReportHub.
+
+---
+
+## Cập nhật triển khai 27/10/2026
+
+7 migration mới dưới đây đã kiểm chứng; các bảng Phase00–14 phía dưới giữ mốc lịch sử. [Bàn giao và kiểm thử](../audit/TRIEN_KHAI_ERD_DATABASE_2026-10-27.md).
+
+| Service | Migration |
+|---|---|
+| Auth | `20261026090152_IndexRefreshTokenFamilies.cs` |
+| Export | `20261026090157_IndexExportsByRequester.cs` |
+| Activity | `20261026090202_EnforceAttendanceSessionActivity.cs` |
+| Admin | `20261026090207_EnforceContributionRevisionLineage.cs` |
+| Club | `20261026090212_ProtectClubRequestReviews.cs` |
+| Report | `20261026090217_ReconcileReportSchemaAndAttachmentDetails.cs` |
+| Notification | `20261026090221_AddPersonalNotificationReadReceipts.cs` |
+
+Preflight trên DB hiện có: [SQL chỉ đọc](SQL_PREFLIGHT_ERD_2026-10-27.sql). Không tự chọn bản ghi để xóa khi có trùng hoặc provenance sai.
 
 ---
 

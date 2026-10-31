@@ -43,9 +43,11 @@ public static class StudyScheduleEndpoints
     private static async Task<StudyCellResponse[]> Cells(AuthDbContext db, StudyScheduleBlock? row, CancellationToken ct)
     {
         var cells = row is null ? [] : await db.Set<StudyScheduleCell>().Where(x => x.BlockId == row.Id).ToArrayAsync(ct);
-        return cells.OrderBy(x => x.Week).ThenBy(x => Array.IndexOf(Days, x.Day)).ThenBy(x => x.SlotNumber)
-            .Select(x => new StudyCellResponse(x.Week, x.Day, "slot-" + x.SlotNumber, x.Subject, x.Room)).ToArray();
+        return ProjectCells(cells);
     }
+    private static StudyCellResponse[] ProjectCells(IEnumerable<StudyScheduleCell> cells) =>
+        cells.OrderBy(x => x.Week).ThenBy(x => Array.IndexOf(Days, x.Day)).ThenBy(x => x.SlotNumber)
+            .Select(x => new StudyCellResponse(x.Week, x.Day, "slot-" + x.SlotNumber, x.Subject, x.Room)).ToArray();
     private static async Task<IResult> Get(int year, string term, string block, HttpContext http, AuthDbContext db, AcademicCalendarClient calendars, CancellationToken ct)
     {
         var user = await Actor(http, db, ct); var calendar = await Source(year, term, block, http, calendars, ct);
@@ -152,8 +154,7 @@ public static class StudyScheduleEndpoints
                     cell.Subject = item.Subject; cell.Room = item.Room; cell.UpdatedAtUtc = now;
                 }
             if (imported + replaced != 0) Touch(row, source, http);
-            var entries = cells.Values.OrderBy(x => x.Week).ThenBy(x => Array.IndexOf(Days, x.Day)).ThenBy(x => x.SlotNumber)
-                .Select(x => new StudyCellResponse(x.Week, x.Day, "slot-" + x.SlotNumber, x.Subject, x.Room)).ToArray();
+            var entries = ProjectCells(cells.Values);
             return Results.Ok(new { imported, skipped, replaced, entries, version = row.Version, calendarVersion = source.Version });
         }, ct);
     }

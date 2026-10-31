@@ -8,6 +8,7 @@ using ClubService.Data;
 using ClubService.Extensions;
 using ClubService.Mappers;
 using ClubService.Models;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -172,7 +173,14 @@ public static class ApplicationEndpoints
         ClubMappers.ApplyClubApplicationRequest(application, request, code);
 
         db.ClubCreationApplications.Add(application);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            return Results.Conflict(new { message = "You already have a pending club creation application." });
+        }
 
         return Results.Created($"/api/clubs/applications/{application.Id}", ClubMappers.ToApplicationResponse(application));
     }
@@ -215,6 +223,12 @@ public static class ApplicationEndpoints
             return Results.Conflict(new { message = "The club code already exists." });
         }
 
+        if (await db.ClubCreationApplications.AnyAsync(x => x.RequesterUserId == application.RequesterUserId
+            && x.Id != applicationId && x.Status == ClubApplicationStatuses.Submitted, cancellationToken))
+        {
+            return Results.Conflict(new { message = "You already have a pending club creation application." });
+        }
+
         ClubMappers.ApplyClubApplicationRequest(application, request, code);
         application.Status = ClubApplicationStatuses.Submitted;
         application.ReviewNote = null;
@@ -224,7 +238,18 @@ public static class ApplicationEndpoints
         application.ReviewedByUserId = null;
         application.SubmittedAtUtc = DateTimeOffset.UtcNow;
 
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "The application changed while it was being resubmitted. Reload and try again." });
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            return Results.Conflict(new { message = "You already have a pending club creation application." });
+        }
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 
@@ -300,42 +325,41 @@ public static class ApplicationEndpoints
             ReviewedByUserId = user.GetUserId()
         });
 
-        IDbContextTransaction? transaction = null;
-        if (db.Database.IsRelational())
-        {
-            transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        }
-
-        db.Clubs.Add(club);
+        await using IDbContextTransaction? transaction = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(cancellationToken)
+            : null;
         try
         {
+            db.Clubs.Add(club);
             await db.SaveChangesAsync(cancellationToken);
+
+            application.Status = ClubApplicationStatuses.Approved;
+            application.ReviewNote = request.Note?.Trim();
+            application.ReviewConditions = request.Conditions?.Trim();
+            application.ReviewerSignature = request.ReviewerSignature?.Trim();
+            application.CreatedClubId = club.Id;
+            application.ReviewedAtUtc = DateTimeOffset.UtcNow;
+            application.ReviewedByUserId = user.GetUserId();
+
+            db.AddOutboxMessage(new ClubCreatedEvent(
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                club.Id,
+                club.Code,
+                club.Name), EventRoutingKeys.ClubCreated);
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Application was already reviewed." });
         }
         catch (DbUpdateException)
         {
             return Results.Conflict(new { message = "Club creation conflict: club code or active manager assignment already exists." });
-        }
-
-        application.Status = ClubApplicationStatuses.Approved;
-        application.ReviewNote = request.Note?.Trim();
-        application.ReviewConditions = request.Conditions?.Trim();
-        application.ReviewerSignature = request.ReviewerSignature?.Trim();
-        application.CreatedClubId = club.Id;
-        application.ReviewedAtUtc = DateTimeOffset.UtcNow;
-        application.ReviewedByUserId = user.GetUserId();
-
-        db.AddOutboxMessage(new ClubCreatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            club.Id,
-            club.Code,
-            club.Name), EventRoutingKeys.ClubCreated);
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        if (transaction != null)
-        {
-            await transaction.CommitAsync(cancellationToken);
         }
 
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
@@ -378,7 +402,14 @@ public static class ApplicationEndpoints
         application.ReviewedAtUtc = DateTimeOffset.UtcNow;
         application.ReviewedByUserId = user.GetUserId();
 
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "This application has already been processed." });
+        }
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 
@@ -419,7 +450,14 @@ public static class ApplicationEndpoints
         application.ReviewedAtUtc = DateTimeOffset.UtcNow;
         application.ReviewedByUserId = user.GetUserId();
 
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Results.Conflict(new { message = "Application was already reviewed." });
+        }
         return Results.Ok(ClubMappers.ToApplicationResponse(application));
     }
 }

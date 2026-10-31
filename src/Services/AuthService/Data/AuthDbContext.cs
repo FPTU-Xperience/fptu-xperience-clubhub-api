@@ -71,6 +71,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Ignore(x => x.RawToken);
             entity.HasIndex(x => x.Token).IsUnique();
             entity.HasIndex(x => new { x.UserId, x.ExpiresAtUtc, x.RevokedAtUtc });
+            entity.HasIndex(x => new { x.FamilyId, x.RevokedAtUtc });
             entity.Property(x => x.Token).HasMaxLength(500);
             entity.Property(x => x.FamilyId).HasMaxLength(100);
             entity.Property(x => x.RevokedByIp).HasMaxLength(50);
