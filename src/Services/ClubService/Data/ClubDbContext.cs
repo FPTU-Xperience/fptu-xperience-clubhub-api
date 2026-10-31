@@ -59,6 +59,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
     private void ValidateMembershipAudit()
     {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
         if (ChangeTracker.Entries<ClubMembershipAction>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Membership action audit records are append-only.");
     }

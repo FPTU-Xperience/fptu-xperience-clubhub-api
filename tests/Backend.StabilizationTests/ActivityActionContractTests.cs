@@ -68,7 +68,7 @@ public sealed partial class ActivityActionContractTests
             Assert.Null(row.PolicyVersion); Assert.Null(row.ScoringSnapshotJson);
             Assert.Equal(1, await db.Set<ActivityExecution>().CountAsync());
             Assert.Equal(1, await db.Set<ActivityActionRule>().CountAsync());
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -168,7 +168,7 @@ public sealed partial class ActivityActionContractTests
         {
             Assert.Equal(2, await db.Set<ActivityStaffAssignment>().CountAsync());
             Assert.Equal(1, await db.Set<ActivityStaffAssignment>().CountAsync(x => x.Status != "REMOVED"));
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -225,7 +225,7 @@ public sealed partial class ActivityActionContractTests
         {
             var row = await db.Set<ActivityActionCompletion>().SingleAsync(); Assert.Equal("VERIFIED", row.Status); Assert.Equal(300, row.VerifiedBy);
             Assert.Single(await db.Set<ActivityExecutionAudit>().Where(x => x.Action == "COMPLETION_VERIFIED_WITHOUT_POINTS").ToArrayAsync());
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -266,7 +266,7 @@ public sealed partial class ActivityActionContractTests
         await f.WithDb(async db =>
         {
             Assert.Equal("VERIFIED", (await db.Set<ActivityActionCompletion>().SingleAsync()).Status);
-            Assert.Empty(await db.ActivityAttendances.ToArrayAsync()); Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.ActivityAttendances.ToArrayAsync()); Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
 
@@ -443,20 +443,18 @@ public sealed partial class ActivityActionContractTests
                     if (upgrade)
                     {
                         await db.GetService<IMigrator>().MigrateAsync("20261013142006_StudentActivityDiscovery");
-                        db.Add(new ClubActivity
-                        {
-                            ClubId = 1,
-                            ClubName = "Legacy",
-                            Title = "Legacy row",
-                            Description = "Preserved",
-                            Location = "Hall",
-                            StartTimeUtc = Instant.AddDays(-2),
-                            EndTimeUtc = Instant.AddDays(-1),
-                            CreatedByUserId = 200
-                        });
-                        await db.SaveChangesAsync();
+                        // Seed only columns that existed at the historical migration boundary.
+                        await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            INSERT INTO Activities
+                                (ClubId, ClubName, Title, Description, Location, StartTimeUtc, EndTimeUtc,
+                                 MeetingDaysCsv, Status, CreatedByUserId, CreatedAtUtc, UpdatedAtUtc)
+                            VALUES (1, N'Legacy', N'Legacy row', N'Preserved', N'Hall',
+                                {Instant.AddDays(-2)}, {Instant.AddDays(-1)}, N'', {ActivityStatuses.Scheduled},
+                                200, {Instant}, {Instant})
+                            """);
                     }
                     await db.Database.MigrateAsync();
+                    if (upgrade) Assert.True((await db.Activities.SingleAsync()).IsInternal);
                 });
             }
             catch { await f.DisposeAsync(); throw; }

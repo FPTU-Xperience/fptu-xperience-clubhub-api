@@ -18,7 +18,14 @@ public sealed class CanonicalAcademicReadFilter : IEndpointFilter
             || !userId.TryGetInt32(out var id) || id != http.User.GetUserId()) return result;
         var client = http.RequestServices.GetService<CanonicalAcademicClient>();
         var academic = client is null ? new AcademicStudentProfile("UNCONFIGURED") : await client.Read(http, http.RequestAborted);
-        var output = json.EnumerateObject().ToDictionary(x => x.Name, x => (object?)x.Value.Clone()); output["academic"] = academic;
+        var output = json.EnumerateObject().ToDictionary(x => x.Name, x => (object?)x.Value.Clone());
+        var academicFields = JsonSerializer.SerializeToElement(academic, Options).EnumerateObject()
+            .ToDictionary(x => x.Name, x => (object?)x.Value.Clone());
+        if (json.TryGetProperty("academic", out var declared) && declared.ValueKind == JsonValueKind.Object
+            && declared.TryGetProperty("major", out var major) && major.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(major.GetString()))
+            foreach (var field in declared.EnumerateObject()) academicFields[field.Name] = field.Value.Clone();
+        output["academic"] = academicFields;
         http.Response.Headers.CacheControl = "no-store";
         return Results.Json(output, statusCode: (result as IStatusCodeHttpResult)?.StatusCode ?? 200);
     }

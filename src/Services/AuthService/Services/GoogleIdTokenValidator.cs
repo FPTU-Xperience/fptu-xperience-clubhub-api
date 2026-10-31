@@ -135,7 +135,11 @@ public sealed class GoogleIdTokenValidator : IGoogleIdTokenValidator
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(_options.AllowedHostedDomain) &&
+        // Personal Gmail accounts have no Workspace `hd` claim. An explicitly
+        // allowed Gmail domain must not be rejected by the school Workspace check.
+        var allowedConsumerAccount = allowedEmailDomains.Any(x => string.Equals(x, "gmail.com", StringComparison.OrdinalIgnoreCase))
+            && string.Equals(emailDomain, "gmail.com", StringComparison.OrdinalIgnoreCase);
+        if (!allowedConsumerAccount && !string.IsNullOrWhiteSpace(_options.AllowedHostedDomain) &&
             !string.Equals(
                 hostedDomain,
                 _options.AllowedHostedDomain.Trim(),

@@ -68,6 +68,7 @@ internal static class ActivityEndpointHelpers
                 .ToArray())
         {
             Version = activity.Version,
+            IsInternal = activity.IsInternal,
             PublicationStatus = activity.PublicationStatus,
             DiscoveryVisibility = activity.DiscoveryVisibility,
             SemesterId = activity.SemesterId,

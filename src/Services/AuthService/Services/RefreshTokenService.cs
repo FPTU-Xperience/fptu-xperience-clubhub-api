@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Data;
 using AuthService.Contracts;
 using AuthService.Data;
 using AuthService.Models;
@@ -273,27 +274,42 @@ public sealed class RefreshTokenService
 
     public async Task RevokeFamilyAsync(string familyId, string? clientIp)
     {
-        var tokens = await _db.RefreshTokens
-            .Where(x => x.FamilyId == familyId && x.RevokedAtUtc == null)
-            .ToListAsync();
+        await using var transaction = _db.Database.IsRelational() && _db.Database.CurrentTransaction is null
+            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        var tokens = await FamilyForUpdate(_db, familyId).ToListAsync();
 
-        foreach (var token in tokens)
+        foreach (var token in tokens) _cache.Remove($"rotated_refresh:{token.Token}");
+        if (_db.Database.IsRelational())
         {
-            token.RevokedAtUtc = DateTimeOffset.UtcNow;
-            token.RevokedByIp = clientIp;
+            var revokedAt = DateTimeOffset.UtcNow;
+            await _db.RefreshTokens.Where(x => x.FamilyId == familyId && x.RevokedAtUtc == null)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedAtUtc, revokedAt)
+                    .SetProperty(x => x.RevokedByIp, clientIp));
+        }
+        else
+        {
+            foreach (var token in tokens)
+            {
+                if (token.IsRevoked) continue;
+                token.RevokedAtUtc = DateTimeOffset.UtcNow;
+                token.RevokedByIp = clientIp;
+            }
         }
 
-        await _db.SaveChangesAsync();
+        if (!_db.Database.IsRelational()) await _db.SaveChangesAsync();
+        if (transaction is not null) await transaction.CommitAsync();
     }
 
     public async Task RevokeForUserAsync(int userId, string? clientIp = null)
     {
         var tokens = await _db.RefreshTokens
-            .Where(x => x.UserId == userId && x.RevokedAtUtc == null)
+            .Where(x => x.UserId == userId)
             .ToListAsync();
 
         foreach (var token in tokens)
         {
+            _cache.Remove($"rotated_refresh:{token.Token}");
+            if (token.IsRevoked) continue;
             token.RevokedAtUtc = DateTimeOffset.UtcNow;
             token.RevokedByIp = clientIp;
         }
@@ -349,6 +365,13 @@ public sealed class RefreshTokenService
         rng.GetBytes(randomBytes);
         return Convert.ToBase64String(randomBytes);
     }
+
+    // Call inside a serializable transaction. Update locks serialize grant creation/revocation
+    // without the shared-range-lock upgrade deadlocks caused by two simultaneous redemptions.
+    internal static IQueryable<RefreshToken> FamilyForUpdate(AuthDbContext db, string familyId) =>
+        db.Database.IsSqlServer()
+            ? db.RefreshTokens.FromSqlInterpolated($"SELECT * FROM [RefreshTokens] WITH (UPDLOCK, HOLDLOCK) WHERE [FamilyId] = {familyId}")
+            : db.RefreshTokens.Where(x => x.FamilyId == familyId);
 
     private static bool IsSha256HashFormat(string value) =>
         value.Length == 64 && value.All(char.IsAsciiHexDigit);

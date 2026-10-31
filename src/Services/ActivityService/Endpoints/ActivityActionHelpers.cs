@@ -214,6 +214,7 @@ internal static class ActivityActionHelpers
             content.StartTimeUtc,
             content.EndTimeUtc,
             content.Scale,
+            content.IsInternal,
             content.IndependentActionsConfirmed,
             content.Actions,
             content.Recruitment,

@@ -276,9 +276,30 @@ public sealed class ActivityResourceContractTests
             {
                 await f.Db(async db =>
                 {
-                    if (sql) await db.GetService<IMigrator>().MigrateAsync("20261022090451_ActivityActionWorkflowWithoutScoring"); else await db.Database.EnsureCreatedAsync();
-                    db.Activities.AddRange(Enumerable.Range(1, 2).Select(id => new ClubActivity { Id = sql ? 0 : id, ClubId = 1, ClubName = "Club One", Title = "Preserved activity", PublicationStatus = "PUBLISHED", DiscoveryVisibility = "CAMPUS_PUBLIC", StartTimeUtc = DateTimeOffset.UtcNow.AddDays(1), EndTimeUtc = DateTimeOffset.UtcNow.AddDays(2), CreatedByUserId = 200 }));
-                    await db.SaveChangesAsync(); if (sql) await db.Database.MigrateAsync();
+                    if (sql)
+                    {
+                        await db.GetService<IMigrator>().MigrateAsync("20261022090451_ActivityActionWorkflowWithoutScoring");
+                        // Seed the historical schema without using columns from the current EF model.
+                        for (var id = 1; id <= 2; id++)
+                            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                                INSERT INTO Activities
+                                    (ClubId, ClubName, Title, Description, StartTimeUtc, EndTimeUtc,
+                                     MeetingDaysCsv, Location, Status, CreatedByUserId, CreatedAtUtc, UpdatedAtUtc,
+                                     PublicationStatus, DiscoveryVisibility)
+                                VALUES (1, N'Club One', N'Preserved activity', N'',
+                                    {DateTimeOffset.UtcNow.AddDays(1)}, {DateTimeOffset.UtcNow.AddDays(2)},
+                                    N'', N'', {ActivityStatuses.Scheduled}, 200, {DateTimeOffset.UtcNow},
+                                    {DateTimeOffset.UtcNow}, N'PUBLISHED', N'CAMPUS_PUBLIC')
+                                """);
+                        await db.Database.MigrateAsync();
+                        Assert.All(await db.Activities.ToArrayAsync(), activity => Assert.False(activity.IsInternal));
+                    }
+                    else
+                    {
+                        await db.Database.EnsureCreatedAsync();
+                        db.Activities.AddRange(Enumerable.Range(1, 2).Select(id => new ClubActivity { Id = id, ClubId = 1, ClubName = "Club One", Title = "Preserved activity", PublicationStatus = "PUBLISHED", DiscoveryVisibility = "CAMPUS_PUBLIC", StartTimeUtc = DateTimeOffset.UtcNow.AddDays(1), EndTimeUtc = DateTimeOffset.UtcNow.AddDays(2), CreatedByUserId = 200 }));
+                        await db.SaveChangesAsync();
+                    }
                 });
                 await app.StartAsync(); return f;
             }

@@ -21,9 +21,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace Backend.StabilizationTests;
 
-public sealed class RefreshTokenSecurityTests
+public sealed partial class RefreshTokenSecurityTests
 {
     private const string SigningKey = "test-only-signing-key-at-least-32-characters";
+    private const string EmailPassword = "test-only-email-password-2026";
 
     [Fact]
     public async Task RefreshToken_StoredInDatabaseAsSha256Hash_NotPlaintext()
@@ -259,7 +260,7 @@ public sealed class RefreshTokenSecurityTests
 
         public HttpClient CreateClient() => App.GetTestClient();
 
-        public static async Task<RefreshTestFixture> CreateAsync()
+        public static async Task<RefreshTestFixture> CreateAsync(string environmentName = "Development")
         {
             var dbName = $"refresh_test_{Guid.NewGuid():N}";
             var connStr = $"Data Source=file:{dbName}?mode=memory&cache=shared";
@@ -268,7 +269,7 @@ public sealed class RefreshTokenSecurityTests
 
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
-                EnvironmentName = Environments.Development
+                EnvironmentName = environmentName
             });
             builder.WebHost.UseTestServer();
 
@@ -283,6 +284,8 @@ public sealed class RefreshTokenSecurityTests
             });
 
             builder.Services.AddAuthServices(builder.Configuration, builder.Environment);
+            // Match production: ClubAccessClient configures the shared cache with SizeLimit.
+            builder.Services.AddClubAccessClient(builder.Configuration);
             var descriptor = builder.Services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AuthDbContext>));
             if (descriptor != null)
             {
@@ -319,6 +322,7 @@ public sealed class RefreshTokenSecurityTests
                 SecurityVersion = 1
             };
             db.Users.Add(user);
+            user.PasswordHash = new Microsoft.AspNetCore.Identity.PasswordHasher<User>().HashPassword(user, EmailPassword);
             await db.SaveChangesAsync();
 
             db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id });

@@ -20,6 +20,8 @@ public sealed record ActivityResponse(
     IReadOnlyCollection<ActivityAttendanceResponse> Attendances)
 {
     public Guid Version { get; init; }
+    public bool IsInternal { get; init; } = true;
+    public ActivityTimeline? Timeline { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? PublicationStatus { get; init; } = "LEGACY";
     public bool? IsPublished { get; init; }
@@ -46,6 +48,11 @@ public sealed record ActivityResponse(
 }
 
 public sealed record ActivityPublicationCapabilities(bool CanManage);
+
+// Time phase is separate from workflow status (Scheduled remains editable according
+// to the existing lifecycle rules). Session dates take precedence over parent dates.
+public sealed record ActivityTimeline(string Status, DateTimeOffset StartTimeUtc,
+    DateTimeOffset EndTimeUtc, DateTimeOffset AsOf);
 
 public sealed record ActivityParticipantResponse(
     int Id,
@@ -86,7 +93,7 @@ public sealed record CreateActivityRequest(
     DateTimeOffset? EndAt = null, string? SemesterId = null, string? EffortTier = null, string? Scale = null,
     IReadOnlyList<PillarWeight>? PillarWeights = null, Guid? PolicyVersion = null, int? Capacity = null,
     DateTimeOffset? RegistrationOpensAt = null, DateTimeOffset? RegistrationClosesAt = null,
-    string? Eligibility = null, string? EvidenceRequirements = null, string DiscoveryVisibility = "CLUB_ONLY");
+    string? Eligibility = null, string? EvidenceRequirements = null, string DiscoveryVisibility = "CLUB_ONLY", bool? IsInternal = null);
 
 public sealed record CreateActivityFromApprovedReportRequest(
     int ReportId,
@@ -122,7 +129,10 @@ public sealed record UpdateActivityDetailsRequest(
     string? EffortTier = null, string? Scale = null, IReadOnlyList<PillarWeight>? PillarWeights = null,
     Guid? PolicyVersion = null, int? Capacity = null, DateTimeOffset? RegistrationOpensAt = null,
     DateTimeOffset? RegistrationClosesAt = null, string? Eligibility = null, string? EvidenceRequirements = null,
-    string? DiscoveryVisibility = null);
+    string? DiscoveryVisibility = null, bool? IsInternal = null);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ActivityVisibilityInput([property: JsonRequired] bool IsInternal, Guid ExpectedVersion, string Reason);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RegisterActivityParticipantRequest(int? UserId, string? FullName);

@@ -50,7 +50,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         Assert.Equal(HttpStatusCode.Conflict, (await manager.DeleteAsync("/api/clubs/memberships/11")).StatusCode);
         await using var verify = app.Services.CreateAsyncScope();
         var actual = verify.ServiceProvider.GetRequiredService<ClubService.Data.ClubDbContext>();
-        Assert.Equal(1, await actual.OutboxMessages.CountAsync()); Assert.Equal(1, await actual.Set<ClubReportHub.Shared.Data.ApiOperationReceipt>().CountAsync());
+        Assert.Equal(1, await actual.OutboxMessages.CountAsync(x => x.EventType != "recommendation.source.changed")); Assert.Equal(1, await actual.Set<ClubReportHub.Shared.Data.ApiOperationReceipt>().CountAsync());
         (await actual.ClubManagerAssignments.SingleAsync(x => x.ManagerUserId == 100)).IsActive = false; await actual.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.DeleteAsync(path)).StatusCode);
     }

@@ -90,7 +90,7 @@ public static class AcademicCalendarEndpoints
         var row = await (tracked ? query : query.AsNoTracking()).SingleOrDefaultAsync(ct);
         return new(semester, row, Project(year, term, campus, semester, row));
     }
-    private static AcademicCalendarReference Project(int year, string term, string campus, Semester semester, AcademicCalendarConfiguration? row)
+    internal static AcademicCalendarReference Project(int year, string term, string campus, Semester semester, AcademicCalendarConfiguration? row)
     {
         var configured = row is not null; var valid = configured && Valid(row!.TermStartDate, row.Block10StartDate, row.Block3StartDate, semester);
         var bounds = semester.StartDate.HasValue && semester.EndDate >= semester.StartDate;

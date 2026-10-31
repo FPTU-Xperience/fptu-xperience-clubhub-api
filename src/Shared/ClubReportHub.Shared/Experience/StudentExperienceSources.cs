@@ -5,7 +5,10 @@ namespace ClubReportHub.Shared.Experience;
 
 public sealed record StudentClubScopeRequest(int UserId, string CampusCode);
 public sealed record StudentClubMetadata(int ClubId, string ClubCode, string ClubName, string Category, string CampusCode,
-    bool IsApprovedMember, bool CanViewPrivate, DateTimeOffset? JoinedAt, Guid Version, Guid? MembershipVersion);
+    bool IsApprovedMember, bool CanViewPrivate, DateTimeOffset? JoinedAt, Guid Version, Guid? MembershipVersion)
+{
+    public bool IsRecruiting { get; init; }
+}
 public sealed record StudentClubScope(IReadOnlyList<StudentClubMetadata> Clubs, DateTimeOffset AsOf, string Version);
 public sealed record StudentCandidateQuery(int UserId, int Page = 1, int PageSize = 100,
     string? SemesterId = null, IReadOnlyList<int>? ActivityIds = null, bool IncludeRegistered = false,
@@ -17,7 +20,11 @@ public sealed record StudentActivityItem(int Id, int ClubId, string ClubCode, st
     string Title, string Description, string? CoverImageUrl, DateTimeOffset StartTime, DateTimeOffset EndTime,
     string Location, string Status, string NextAction, bool CanRegister, bool IsEligible,
     string? SemesterId, int? NextSessionId, Guid Version, Guid? SessionVersion, Guid? PolicyVersion,
-    IReadOnlyList<PillarWeight> PillarWeights);
+    IReadOnlyList<PillarWeight> PillarWeights)
+{
+    public RecommendationActivitySource? RecommendationSource { get; init; }
+    public bool IsInternal { get; init; } = true;
+}
 public sealed record StudentActivityPage(IReadOnlyList<StudentActivityItem> Items, int Page, int PageSize,
     int TotalItems, int TotalPages, DateTimeOffset AsOf, string ScopeVersion);
 public sealed record StudentCounterQuery(int UserId, string Scope, string? SemesterId, DateTimeOffset? AsOf = null);

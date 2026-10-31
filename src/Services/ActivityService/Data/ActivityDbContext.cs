@@ -34,6 +34,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
 
     private void ValidateActionHistory()
     {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
         if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule or ActivityResourceAudit
             && x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Application history, approved rules and execution audit are append-only.");
@@ -48,6 +49,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
             entity.Property(x => x.Version).IsConcurrencyToken();
             entity.Property(x => x.PublicationStatus).HasMaxLength(20).HasDefaultValue("LEGACY");
             entity.Property(x => x.DiscoveryVisibility).HasMaxLength(20).HasDefaultValue("CLUB_ONLY");
+            entity.Property(x => x.IsInternal).HasDefaultValue(true);
             entity.HasIndex(x => new { x.DiscoveryVisibility, x.PublicationStatus, x.ClubId });
             entity.Property(x => x.SemesterId).HasMaxLength(40);
             entity.Property(x => x.EffortTier).HasMaxLength(10).HasDefaultValue("T1");

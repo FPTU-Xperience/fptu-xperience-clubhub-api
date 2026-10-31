@@ -45,6 +45,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     }
     private void ValidateAppendOnlyRecords()
     {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
         ChangeTracker.DetectChanges();
         if (ChangeTracker.Entries<ExperienceLedgerEffect>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
             || ChangeTracker.Entries<ExperienceLedgerAllocation>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)

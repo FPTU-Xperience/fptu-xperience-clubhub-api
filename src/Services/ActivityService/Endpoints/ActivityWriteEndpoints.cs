@@ -122,6 +122,10 @@ internal static class ActivityWriteEndpoints
                 .SetProperty(x => x.StartTimeUtc, start)
                 .SetProperty(x => x.EndTimeUtc, end)
                 .SetProperty(x => x.MeetingDaysCsv, meetingDays)
+                .SetProperty(x => x.IsInternal, request.IsInternal ?? (request.DiscoveryVisibility != null
+                    ? request.DiscoveryVisibility != "CAMPUS_PUBLIC" : activity.IsInternal))
+                .SetProperty(x => x.DiscoveryVisibility, (request.IsInternal ?? (request.DiscoveryVisibility != null
+                    ? request.DiscoveryVisibility != "CAMPUS_PUBLIC" : activity.IsInternal)) ? "CLUB_ONLY" : "CAMPUS_PUBLIC")
                 .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
         if (changed == 0) return Results.Conflict(new { message = "Activity changed while it was being edited." });
 

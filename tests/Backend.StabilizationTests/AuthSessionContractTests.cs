@@ -98,12 +98,13 @@ public sealed class AuthSessionContractTests
 
         var response = await client.PostAsJsonAsync("/api/auth/logout", new RefreshTokenRequest(bob.RefreshToken!));
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Null(Assert.Single(await fixture.Tokens(bob.User.Id)).RevokedAtUtc);
+        Assert.Null(Assert.Single(await fixture.Tokens(alice.User.Id)).RevokedAtUtc);
         await using (var scope = fixture.App.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            Assert.Equal(2, (await db.Users.SingleAsync(x => x.Id == alice.User.Id)).SecurityVersion);
+            Assert.Equal(1, (await db.Users.SingleAsync(x => x.Id == alice.User.Id)).SecurityVersion);
             Assert.Equal(1, (await db.Users.SingleAsync(x => x.Id == bob.User.Id)).SecurityVersion);
         }
         client.DefaultRequestHeaders.Authorization = null;

@@ -63,9 +63,16 @@ public static class StudentActivityEndpoints
         { return ApiOperations.Error(503, "DISCOVERY_AUTHORITY_UNAVAILABLE", "Account or club visibility authority is unavailable."); }
         var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
         var campusIds = authority.Clubs.Where(x => x.CampusCode == user.CampusCode).Select(x => x.ClubId).ToArray();
-        var privateIds = authority.Clubs.Where(x => x.CanViewPrivate).Select(x => x.ClubId).ToArray();
-        var query = db.Activities.AsNoTracking().Where(x => (x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED")
-            && (privateIds.Contains(x.ClubId) || x.DiscoveryVisibility == "CAMPUS_PUBLIC" && campusIds.Contains(x.ClubId)));
+        var memberIds = authority.Clubs.Where(x => x.IsApprovedMember).Select(x => x.ClubId).ToArray();
+        // Application executions own their publication flag. Older records have
+        // no execution: preserve published discovery and member-only legacy reads.
+        // Legacy reads do not make those records registration/XP candidates.
+        var query = db.Activities.AsNoTracking().Where(x =>
+            (db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id && e.IsPublished)
+                || !db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id)
+                    && (x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED"
+                        || !candidates && x.PublicationStatus == "LEGACY"))
+            && (x.IsInternal && memberIds.Contains(x.ClubId) || !x.IsInternal && campusIds.Contains(x.ClubId)));
         if (detailId.HasValue) query = query.Where(x => x.Id == detailId);
         else query = query.Where(x => x.Status != ActivityStatuses.Cancelled && x.Status != ActivityStatuses.Completed
             && (db.Sessions.Any(s => s.ActivityId == x.Id && s.Status == "SCHEDULED" && s.EndTimeUtc > now)
@@ -130,7 +137,17 @@ public static class StudentActivityEndpoints
                 a.CoverImageUrl, start, end, session?.Location ?? a.Location,
                 a.Status == ActivityStatuses.Cancelled ? "CANCELLED" : end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE",
                 action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,
-                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? []);
+                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])
+            {
+                IsInternal = a.IsInternal,
+                // No required/optional flag exists yet. Treat every published session as
+                // required conservatively; never invent an attendable aggregate interval.
+                RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,
+                    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{a.Version}:" +
+                        string.Join("|", sessions.Where(s => s.ActivityId == a.Id).Select(s => $"{s.Id}:{s.Version}"))))),
+                    sessions.Where(s => s.ActivityId == a.Id).Select(s => new RecommendationSession(s.Id,
+                        s.StartTimeUtc, s.EndTimeUtc, true)).ToArray()) : null
+            };
         }).ToArray();
         if (detailId.HasValue) return items.Length == 0 ? Results.NotFound() : Results.Ok(items[0]);
         return Results.Ok(new StudentActivityPage(items, page, size, total, (int)Math.Ceiling((decimal)total / size), now, authority.Version));

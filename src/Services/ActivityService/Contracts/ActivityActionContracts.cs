@@ -6,7 +6,7 @@ namespace ActivityService.Contracts;
 public sealed record ActivityApplicationInput(int ClubId, string? Period, string? Title, string? Description,
     string? Objective, string? Location, DateTimeOffset? StartTimeUtc, DateTimeOffset? EndTimeUtc,
     string? Scale, bool IndependentActionsConfirmed, IReadOnlyList<ActivityActionInput>? Actions,
-    ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null);
+    ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null, bool IsInternal = true);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ActivityActionInput(string ClientId, string? Name, decimal BasePoints,

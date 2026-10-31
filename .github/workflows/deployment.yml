@@ -2,6 +2,19 @@ name: Deploy to Ubuntu VPC
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_rcm:
+        description: Deploy and enable the recommendation service on the API Docker network
+        type: boolean
+        default: true
+      rcm_ref:
+        description: Recommendation engine revision to validate and deploy
+        type: string
+        default: main
+      reuse_built_images:
+        description: Reuse images from a completed build when recovering an interrupted rollout
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,11 +27,46 @@ jobs:
   validate:
     uses: ./.github/workflows/backend-validate.yml
 
+  validate-rcm:
+    if: inputs.deploy_rcm
+    # MongoDB 8.0 rejects the newer kernel on ubuntu-latest (SERVER-121912).
+    # The Ubuntu 22.04 runner uses the compatible 6.8 kernel family.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    services:
+      mongo:
+        image: mongo:8.0
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: FPTU-Xperience/recommendation-engine
+          ref: ${{ inputs.rcm_ref }}
+          persist-credentials: false
+      - id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-service.txt
+      - run: python -m unittest discover -s tests -v
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      - run: docker build -t recommendation:validated .
+
   deploy:
-    needs: validate
-    if: github.ref == 'refs/heads/main'
+    needs: [validate, validate-rcm]
+    if: >-
+      always() && needs.validate.result == 'success' &&
+      (needs.validate-rcm.result == 'success' || needs.validate-rcm.result == 'skipped') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cuongnk/implement-api-contract')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     # Required-reviewer protection can be configured for this environment in repository settings.
     environment: production
     env:
@@ -27,6 +75,58 @@ jobs:
     steps:
       - name: Checkout validated revision
         uses: actions/checkout@v4
+
+      - name: Checkout validated recommendation revision
+        if: inputs.deploy_rcm
+        uses: actions/checkout@v4
+        with:
+          repository: FPTU-Xperience/recommendation-engine
+          ref: ${{ needs.validate-rcm.outputs.sha }}
+          path: rcm-source
+          persist-credentials: false
+
+      - name: Copy recommendation immutable release
+        if: inputs.deploy_rcm
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          source: rcm-source
+          strip_components: 1
+          target: /${{ secrets.VPC_USERNAME }}/fptux/recommendation/releases/${{ needs.validate-rcm.outputs.sha }}
+          rm: false
+
+      - name: Provision and deploy recommendation stack
+        if: inputs.deploy_rcm
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/recommendation
+          RELEASE_SHA: ${{ needs.validate-rcm.outputs.sha }}
+          RECOMMENDATION_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 20m
+          envs: DEPLOY_ROOT,RELEASE_SHA,RECOMMENDATION_TOKEN
+          script: |
+            set -Eeuo pipefail
+            umask 077
+            # Match the real API Compose project, including preserved legacy volumes.
+            api_project="$(docker inspect clubreporthub-admin --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
+            test -n "${api_project}"
+            export API_NETWORK="${api_project}_internal-net"
+            docker network inspect "${API_NETWORK}" >/dev/null
+            if [ ! -s "${DEPLOY_ROOT}/mongo.password" ]; then
+              openssl rand -hex 32 > "${DEPLOY_ROOT}/mongo.password"
+            fi
+            export MONGODB_PASSWORD="$(cat "${DEPLOY_ROOT}/mongo.password")"
+            bash "${DEPLOY_ROOT}/releases/${RELEASE_SHA}/ops/deploy.sh"
 
       - name: Copy source into versioned release directory
         uses: appleboy/scp-action@v0.1.7
@@ -50,7 +150,10 @@ jobs:
           SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
           INTERNAL_WORKFLOW_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+          RECOMMENDATION_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+          RECOMMENDATION_ENABLED: ${{ inputs.deploy_rcm && 'true' || vars.RECOMMENDATION_ENABLED || 'false' }}
           ATTENDANCE_SIGNING_KEY: ${{ secrets.ATTENDANCE_SIGNING_KEY }}
+          LOCAL_SSO_ENABLED: ${{ vars.LOCAL_SSO_ENABLED }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -60,19 +163,36 @@ jobs:
           CORS_ADDITIONAL_ORIGINS: "${{ vars.CORS_ADDITIONAL_ORIGINS }},https://fptux-clubhub-ui.pages.dev,https://*.fptux-clubhub-ui.pages.dev,https://fptux-legacy-ui.pages.dev,https://*.fptux-legacy-ui.pages.dev,http://localhost:*,http://127.0.0.1:*,http://localhost:5173,http://localhost:3000,http://localhost:5174,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:3000"
           GOOGLE_CLIENT_ID: ${{ secrets.CLUBHUB_GOOGLE_CLIENT_ID }}
           GOOGLE_ALLOWED_HOSTED_DOMAIN: ${{ secrets.GOOGLE_ALLOWED_HOSTED_DOMAIN }}
-          GOOGLE_ALLOWED_EMAIL_DOMAINS: ${{ secrets.GOOGLE_ALLOWED_EMAIL_DOMAINS }}
+          GOOGLE_ALLOWED_EMAIL_DOMAINS: "fpt.edu.vn,gmail.com"
+          REUSE_BUILT_IMAGES: ${{ inputs.reuse_built_images }}
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           key: ${{ secrets.VPC_SSH_KEY }}
           passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
           password: ${{ secrets.VPC_PASSWORD }}
-          command_timeout: 25m
-          envs: TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,INTERNAL_WORKFLOW_TOKEN,ATTENDANCE_SIGNING_KEY,R2_ENDPOINT,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,R2_PUBLIC_ORIGIN,FRONTEND_ORIGIN,CORS_ADDITIONAL_ORIGINS,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS
+          command_timeout: 50m
+          envs: LOCAL_SSO_ENABLED,TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,INTERNAL_WORKFLOW_TOKEN,RECOMMENDATION_TOKEN,RECOMMENDATION_ENABLED,ATTENDANCE_SIGNING_KEY,R2_ENDPOINT,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,R2_PUBLIC_ORIGIN,FRONTEND_ORIGIN,CORS_ADDITIONAL_ORIGINS,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS,REUSE_BUILT_IMAGES
           script: |
             set -Eeuo pipefail
 
-            export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-4}"
+            export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
+
+            wait_for_database() {
+              for attempt in $(seq 1 24); do
+                if docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                  -S localhost -U sa -P "${SQL_PASSWORD}" -C -b -l 5 -t 5 -Q "SELECT 1" >/dev/null 2>&1; then
+                  return 0
+                fi
+                echo "Waiting for SQL Server query readiness (${attempt}/24)..."
+                sleep 5
+              done
+              docker inspect clubreporthub-sqlserver --format '{{json .State}}' >&2 || true
+              docker logs --tail 80 clubreporthub-sqlserver >&2 || true
+              docker stats --no-stream >&2 || true
+              echo "SQL Server query readiness failed; refusing to change application containers." >&2
+              return 1
+            }
 
             if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
               existing_project="$(
@@ -97,11 +217,7 @@ jobs:
                 exit 1
               fi
 
-              if ! docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-                -S localhost -U sa -P "${SQL_PASSWORD}" -C -b -Q "SELECT 1" >/dev/null 2>&1; then
-                echo "SQL Server authentication with SQL_PASSWORD failed; deployment aborted without changing containers or volumes." >&2
-                exit 1
-              fi
+              wait_for_database
 
               echo "Creating and verifying database backups before deployment..."
               backup_timestamp="$(date +%Y%m%d_%H%M%S)"
@@ -128,7 +244,35 @@ jobs:
               echo "No existing SQL Server container; first deployment has no databases to back up."
             fi
 
-            docker compose -p "${COMPOSE_PROJECT_NAME}" build
+            if [ "${REUSE_BUILT_IMAGES:-false}" = "true" ]; then
+              echo "Recovery requested: verifying all previously built images exist locally."
+              while IFS= read -r image; do
+                docker image inspect "${image}" >/dev/null
+              done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --images)
+            else
+              # Keep live SQL Server responsive on a small VPC; BuildKit can otherwise build every service at once.
+              while IFS= read -r service; do
+                docker compose -p "${COMPOSE_PROJECT_NAME}" build "${service}"
+              done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services)
+            fi
+
+            # Builds can leave the SQL healthcheck temporarily unhealthy from resource contention.
+            # Verify an actual authenticated query before starting apps, while preserving existing infrastructure.
+            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-recreate sqlserver redis
+            wait_for_database
+            redis_ready=false
+            for attempt in $(seq 1 24); do
+              if [ "$(docker exec clubreporthub-redis redis-cli ping 2>/dev/null)" = "PONG" ]; then
+                redis_ready=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "${redis_ready}" != "true" ]; then
+              echo "Redis is not ready; refusing to change application containers." >&2
+              exit 1
+            fi
+            mapfile -t application_services < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services | grep -Ev '^(sqlserver|redis)$')
 
             previous_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
             rollback() {
@@ -136,14 +280,14 @@ jobs:
               if [ -n "${previous_release}" ] && [ -f "${previous_release}/docker-compose.yml" ]; then
                 echo "Deployment failed; rolling back to ${previous_release}." >&2
                 cd "${previous_release}"
-                docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --build --remove-orphans
+                docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --no-deps "${application_services[@]}"
               else
                 echo "Deployment failed; no previous versioned release is available for rollback." >&2
               fi
             }
             trap rollback ERR
 
-            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --remove-orphans
+            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --no-deps "${application_services[@]}"
 
             gateway_port="${GATEWAY_PORT:-7000}"
             network_name="${COMPOSE_PROJECT_NAME}_internal-net"

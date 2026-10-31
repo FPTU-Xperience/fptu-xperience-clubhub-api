@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Experience;
 using ClubService.Contracts;
 using ClubService.Data;
 using ClubService.Endpoints;
@@ -136,7 +137,7 @@ public sealed class ClubWorkflowDatabaseIntegrityTests
             Assert.Equal(approveWins ? 1 : 0, await db.ClubManagerAssignments.CountAsync(x => x.ManagerUserId == 301 && x.IsActive));
             Assert.Equal(approveWins ? 1 : 0, await db.ClubMemberships.CountAsync(x => x.UserId == 301));
             Assert.Equal(approveWins, application.CreatedClubId.HasValue);
-            Assert.Equal(approveWins ? 1 : 0, await db.OutboxMessages.CountAsync());
+            Assert.Equal(approveWins ? 1 : 0, await db.OutboxMessages.CountAsync(x => x.EventType != RecommendationChangeCapture.Route));
         }
         else if (workflow == "disband")
         {
@@ -147,7 +148,7 @@ public sealed class ClubWorkflowDatabaseIntegrityTests
             Assert.Equal(!approveWins, club.IsActive);
             Assert.Equal(approveWins, club.DeletedAtUtc.HasValue);
             Assert.Equal(approveWins, request.ExecutedAtUtc.HasValue);
-            Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != RecommendationChangeCapture.Route).ToArrayAsync());
         }
         else
         {
@@ -157,8 +158,11 @@ public sealed class ClubWorkflowDatabaseIntegrityTests
             var owner = await db.ClubManagerAssignments.AsNoTracking().SingleAsync(x => x.ClubId == fixture.ClubId && x.IsActive);
             Assert.Equal(approveWins ? 202 : 100, owner.ManagerUserId);
             Assert.Equal(approveWins, request.ExecutedAtUtc.HasValue);
-            Assert.Equal(approveWins ? 1 : 0, await db.OutboxMessages.CountAsync());
+            Assert.Equal(approveWins ? 1 : 0, await db.OutboxMessages.CountAsync(x => x.EventType != RecommendationChangeCapture.Route));
         }
+        // One catalog invalidation comes from fixture setup. Only an approved
+        // winning transition adds one more; the stale reviewer must add none.
+        Assert.Equal(approveWins ? 2 : 1, await db.OutboxMessages.CountAsync(x => x.EventType == RecommendationChangeCapture.Route));
     }
 
     [Fact]
@@ -188,7 +192,8 @@ public sealed class ClubWorkflowDatabaseIntegrityTests
             .Where(x => x.RequesterUserId == 401 && x.Status == ClubApplicationStatuses.Submitted).ToArrayAsync();
         Assert.Single(pending);
         Assert.Empty(await db.Clubs.Where(x => x.Code == "SUBMIT-A" || x.Code == "SUBMIT-B").ToArrayAsync());
-        Assert.Empty(await db.OutboxMessages.ToArrayAsync());
+        Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != RecommendationChangeCapture.Route).ToArrayAsync());
+        Assert.Single(await db.OutboxMessages.Where(x => x.EventType == RecommendationChangeCapture.Route).ToArrayAsync());
     }
 
     [Fact]

@@ -6,7 +6,81 @@ on:
 permissions:
   contents: read
 
+env:
+  CI: "true"
+  SQL_PASSWORD: "Backend_Validation_CI_Only_2026!"
+  JWT_SIGNING_KEY: "ci-only-signing-key-with-at-least-32-characters"
+  INTERNAL_WORKFLOW_TOKEN: "ci-only-workflow-secret-at-least-32-characters"
+  ATTENDANCE_SIGNING_KEY: "ci-only-attendance-secret-at-least-32-characters"
+  FRONTEND_ORIGIN: "https://ci.example.invalid"
+  ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
+  FINANCE_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
+
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-v1-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/Directory.Packages.props', '**/NuGet.Config', '**/nuget.config', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-v1-
+
+      - name: Restore
+        run: dotnet restore ClubReportHub.sln
+
+      - name: Verify formatting
+        run: |
+          # Load the solution once; retain the existing stabilized-file scope.
+          dotnet format ClubReportHub.sln --no-restore --verify-no-changes \
+            --include \
+              src/Services/AdminService \
+              src/Services/AuthService \
+              src/Services/ClubService \
+              tests/AdminService.IntegrationTests \
+              tests/Backend.StabilizationTests \
+              src/Shared/ClubReportHub.Shared/Auth/JwtServiceCollectionExtensions.cs \
+              src/Shared/ClubReportHub.Shared/Tracing/CorrelationIdMiddleware.cs
+
+      - name: Scan for vulnerable dependencies (SEC-F12)
+        run: |
+          # Hard gate: any vulnerable package (direct or transitive) fails the build.
+          # The solution is currently clean; regressions must be fixed by pinning the
+          # offending package, not by relaxing this check.
+          set -o pipefail
+          if ! dotnet list ClubReportHub.sln package --vulnerable --include-transitive | tee vulnerable.txt; then
+            echo "::error::Dependency vulnerability scan failed to run — treat as a gate failure."
+            exit 1
+          fi
+
+          # A missing scan result must never read as a clean scan.
+          if ! grep -q "vulnerable packages" vulnerable.txt; then
+            echo "::error::Scan produced no per-project verdict — refusing to pass silently."
+            exit 1
+          fi
+
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable packages detected — pin the offending package before merging."
+            exit 1
+          fi
+
+      - name: Validate Compose
+        run: |
+          docker compose config --quiet
+          docker compose config --format json |
+            jq -e '.services["api-gateway"].environment["Cors__AllowedOrigins__15"] == "https://fptux-admin-ui.pages.dev"'
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -26,16 +100,6 @@ jobs:
           --health-retries 15
           --health-start-period 20s
 
-    env:
-      CI: "true"
-      SQL_PASSWORD: "Backend_Validation_CI_Only_2026!"
-      JWT_SIGNING_KEY: "ci-only-signing-key-with-at-least-32-characters"
-      INTERNAL_WORKFLOW_TOKEN: "ci-only-workflow-secret-at-least-32-characters"
-      ATTENDANCE_SIGNING_KEY: "ci-only-attendance-secret-at-least-32-characters"
-      FRONTEND_ORIGIN: "https://ci.example.invalid"
-      ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
-      FINANCE_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,23 +109,16 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-v1-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/Directory.Packages.props', '**/NuGet.Config', '**/nuget.config', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-v1-
+
       - name: Restore
         run: dotnet restore ClubReportHub.sln
-
-      - name: Verify formatting
-        run: |
-          # Keep formatting scoped to the stabilized services/tests to avoid a repository-wide rewrite.
-          dotnet format src/Services/AdminService/AdminService.csproj --no-restore --verify-no-changes
-          dotnet format src/Services/AuthService/AuthService.csproj --no-restore --verify-no-changes
-          dotnet format src/Services/ClubService/ClubService.csproj --no-restore --verify-no-changes
-          dotnet format tests/AdminService.IntegrationTests/AdminService.IntegrationTests.csproj --no-restore --verify-no-changes
-          dotnet format tests/Backend.StabilizationTests/Backend.StabilizationTests.csproj --no-restore --verify-no-changes
-          dotnet format src/Shared/ClubReportHub.Shared/ClubReportHub.Shared.csproj \
-            --no-restore \
-            --verify-no-changes \
-            --include \
-              src/Shared/ClubReportHub.Shared/Auth/JwtServiceCollectionExtensions.cs \
-              src/Shared/ClubReportHub.Shared/Tracing/CorrelationIdMiddleware.cs
 
       - name: Build
         run: dotnet build ClubReportHub.sln --configuration Release --no-restore -warnaserror
@@ -103,34 +160,3 @@ jobs:
               --configuration Release \
               --no-build
           done
-
-      - name: Scan for vulnerable dependencies (SEC-F12)
-        run: |
-          # Hard gate: any vulnerable package (direct or transitive) fails the build.
-          # The solution is currently clean; regressions must be fixed by pinning the
-          # offending package, not by relaxing this check.
-          set -o pipefail
-          if ! dotnet list ClubReportHub.sln package --vulnerable --include-transitive | tee vulnerable.txt; then
-            echo "::error::Dependency vulnerability scan failed to run — treat as a gate failure."
-            exit 1
-          fi
-
-          # A missing scan result must never read as a clean scan.
-          if ! grep -q "vulnerable packages" vulnerable.txt; then
-            echo "::error::Scan produced no per-project verdict — refusing to pass silently."
-            exit 1
-          fi
-
-          if grep -q "has the following vulnerable packages" vulnerable.txt; then
-            echo "::error::Vulnerable packages detected — pin the offending package before merging."
-            exit 1
-          fi
-
-      - name: Validate Compose
-        run: |
-          docker compose config --quiet
-          docker compose config --format json |
-            jq -e '.services["api-gateway"].environment["Cors__AllowedOrigins__15"] == "https://fptux-admin-ui.pages.dev"'
-
-      - name: Build AdminService production image
-        run: docker build --file src/Services/AdminService/Dockerfile --tag clubreporthub-admin:ci .

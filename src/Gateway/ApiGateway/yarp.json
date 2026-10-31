@@ -17,13 +17,13 @@
           "Path": "/api/auth/google"
         }
       },
-      "auth-dev-login": {
+      "auth-email-login": {
         "Order": 1,
         "ClusterId": "auth-service",
         "AuthorizationPolicy": "Anonymous",
         "RateLimiterPolicy": "auth-login",
         "Match": {
-          "Path": "/api/auth/dev-login"
+          "Path": "/api/auth/email-login"
         }
       },
       "auth-refresh": {
@@ -703,6 +703,15 @@
         "RateLimiterPolicy": "general-api",
         "Match": {
           "Path": "/api/v2/recommendations/activities"
+        }
+      },
+      "student-club-recommendations": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/recommendations/clubs"
         }
       },
       "student-experience-summary": {

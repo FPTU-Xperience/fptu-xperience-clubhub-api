@@ -6,6 +6,7 @@ public sealed class ClubActivity
     public Guid Version { get; set; } = Guid.NewGuid();
     public string PublicationStatus { get; set; } = "LEGACY";
     public string DiscoveryVisibility { get; set; } = "CLUB_ONLY";
+    public bool IsInternal { get; set; } = true;
     public string? SemesterId { get; set; }
     public string EffortTier { get; set; } = "T1";
     public string Scale { get; set; } = "Club";

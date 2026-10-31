@@ -37,21 +37,8 @@ public static class InternalAccountEndpoints
             try { await db.SaveChangesAsync(ct); } catch (DbUpdateException) { return ApiOperations.Error(409, "ACCOUNT_EXISTS", "An account already exists."); }
             return Results.Created("/api/users/me", new { userId = user.Id, identityProvenance = "PROJECT_ACCOUNT" });
         }).AllowAnonymous().RequireRateLimiting("googleSignInLimit");
-        app.MapPost("/api/auth/internal/login", async (InternalLoginRequest input, AuthDbContext db, RefreshTokenService tokens, CancellationToken ct) =>
-        {
-            if (string.IsNullOrWhiteSpace(input.Email) || input.Email.Length > 200 || input.Password is null || input.Password.Length > 128) return Results.Unauthorized();
-            var email = input.Email.Trim().ToLowerInvariant();
-            var user = await db.Users.Include(x => x.UserRoles).ThenInclude(x => x.Role).SingleOrDefaultAsync(x => x.Email == email, ct);
-            var hasher = new PasswordHasher<User>();
-            if (user?.PasswordHash is null)
-            {
-                // Still perform a password hash to avoid the trivial empty-user path.
-                _ = hasher.HashPassword(new User(), input.Password); return Results.Unauthorized();
-            }
-            var verified = hasher.VerifyHashedPassword(user, user.PasswordHash, input.Password);
-            if (verified == PasswordVerificationResult.Failed || !user.IsActive || user.IsLocked || !ActorAccountPolicy.HasValidActorConfiguration(user)) return Results.Unauthorized();
-            if (verified == PasswordVerificationResult.SuccessRehashNeeded) { user.PasswordHash = hasher.HashPassword(user, input.Password); await db.SaveChangesAsync(ct); }
-            var refresh = await tokens.CreateRefreshTokenAsync(user.Id); return Results.Ok(tokens.CreateAuthResponse(user, refresh));
-        }).AllowAnonymous().RequireRateLimiting("googleSignInLimit");
+        // Compatibility alias uses the same password verification and session creation.
+        app.MapPost("/api/auth/internal/login", EmailLoginEndpoints.Login)
+            .AllowAnonymous().RequireRateLimiting("emailSignInLimit");
     }
 }

@@ -49,6 +49,19 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddClubReportTracing();
 builder.Services.AddScoped<StudentExperienceSourceClient>();
+builder.Services.AddSingleton<RecommendationWakeSignal>();
+builder.Services.AddHttpClient<RecommendationClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Recommendation:BaseUrl"] ?? "http://recommendation-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient("RecommendationAuth", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+if (!builder.Environment.IsEnvironment("Test") && !builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<RecommendationFeedWorker>();
 builder.Services.AddHttpClient<SchoolAccountClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/");
@@ -76,6 +89,8 @@ if (!builder.Environment.IsEnvironment("Test") && !builder.Environment.IsEnviron
     builder.Services.AddTransactionalOutbox<AdminDbContext>();
     builder.Services.AddScoped<AdminExperienceEventHandler>();
     builder.Services.AddHostedService<ExperienceStreamConsumer<AdminExperienceEventHandler>>();
+    builder.Services.AddScoped<RecommendationInvalidationHandler>();
+    builder.Services.AddHostedService<ExperienceStreamConsumer<RecommendationInvalidationHandler>>();
 }
 builder.Services.AddScoped<ICurrentActor, HttpCurrentActor>();
 builder.Services.AddScoped<ICorrelationContext, HttpCorrelationContext>();
@@ -144,6 +159,7 @@ app.MapManualAttendanceEndpoints();
 app.MapPrivateEvidenceEndpoints();
 app.MapClubExperienceStatisticsEndpoints();
 app.MapStudentExperienceEndpoints();
+app.MapProcessedRecommendationEndpoints();
 
 if (app.Environment.IsEnvironment("Test"))
 {

@@ -1,3 +1,5 @@
+> Current FE integration — 2026-10-26: [Reconciliation and remaining contracts](UI_INTEGRATION_RECONCILIATION_2026-10-26.md), applied on `cuongnk/implement-api-contract`. Earlier statements that FE was unchanged/browser-only describe the original BE-only delivery. Live acceptance remains pending.
+
 # Tài liệu tiến độ BE
 
 - [Triển khai sửa ERD/database — hoàn tất 27/10](TRIEN_KHAI_ERD_DATABASE_2026-10-27.md): 7 migration mới, 37 test mới, 983 test đạt; kèm ERD cập nhật và preflight nâng cấp dữ liệu cũ.
