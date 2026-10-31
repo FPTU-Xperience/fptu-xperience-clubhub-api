@@ -30,7 +30,13 @@ public sealed class RecommendationClient(HttpClient client, IConfiguration confi
         if (string.IsNullOrWhiteSpace(token) || token.Length < 32) throw new HttpRequestException("Recommendation authority is unconfigured.");
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Add("X-Recommendation-Token", token);
-        if (body is not null) request.Content = JsonContent.Create(body);
+        if (body is not null)
+        {
+            request.Content = JsonContent.Create(body);
+            // The recommendation service reads Content-Length rather than
+            // chunked bodies. Buffer the same JSON bytes before sending.
+            await request.Content.LoadIntoBufferAsync();
+        }
         var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode) { response.Dispose(); throw new HttpRequestException("Recommendation request failed."); }
         return response;
