@@ -209,6 +209,9 @@ jobs:
             fi
 
             cd "${RELEASE_DIR}"
+            if [ -f "${TARGET_ROOT}/shared/academic-aliases.env" ]; then
+              cp "${TARGET_ROOT}/shared/academic-aliases.env" ./deployment/academic-aliases.env
+            fi
             docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
 
             if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then

@@ -49,5 +49,6 @@
     <ProjectReference Include="..\..\src\Gateway\ApiGateway\ApiGateway.csproj" />
     <ProjectReference Include="..\..\src\Shared\ClubReportHub.Shared\ClubReportHub.Shared.csproj" />
     <ProjectReference Include="..\..\src\Tools\DemoDataSeeder\DemoDataSeeder.csproj" />
+    <ProjectReference Include="..\..\src\Tools\FullDemoDataSeeder\FullDemoDataSeeder.csproj" />
   </ItemGroup>
 </Project>

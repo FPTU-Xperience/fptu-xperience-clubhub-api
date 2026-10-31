@@ -22,7 +22,9 @@ public sealed class ClubExperienceAuthorityClient(HttpClient client, IConfigurat
     {
         var secret = configuration["Security:InternalWorkflowToken"];
         if (string.IsNullOrWhiteSpace(secret)) throw new HttpRequestException("Club authority is unconfigured.");
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"api/internal/experience/clubs/{clubId}?userId={userId}");
+        var path = $"api/internal/experience/clubs/{clubId}";
+        if (userId.HasValue) path += $"?userId={userId.Value}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Add("X-Internal-Workflow-Token", secret); using var response = await client.SendAsync(request, ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode(); return await response.Content.ReadFromJsonAsync<ClubExperienceAuthority>(ct);

@@ -375,6 +375,8 @@ services:
       dockerfile: src/Services/AdminService/Dockerfile
     container_name: clubreporthub-admin
     restart: unless-stopped
+    env_file:
+      - ./deployment/academic-aliases.env
     depends_on:
       sqlserver:
         condition: service_healthy
