@@ -137,7 +137,7 @@ public sealed partial class FullDemoSeeder
                 var reviewedAt = options.At(kind == 0 ? -36 : -3);
                 var historicalActivity = kind == 0 ? await activities.Activities.AsNoTracking().SingleAsync(a => a.ClubId == club.Id && a.Title == ActivityKey(club, 0)) : null;
                 var row = new Report { SeedKey = key, ClubId = club.Id, ClubName = club.Name, Period = semester.SemesterCode,
-                    ReportType = kind != 2 ? "FUTURE_EVENT" : financial ? "FINANCIAL_REPORT" : "ACTIVITY_REPORT",
+                    ReportType = kind != 2 ? "FUTURE_EVENT" : financial ? "MONTHLY" : "CLUB_ACTIVITY",
                     Tag = kind != 2 ? "Future event" : financial ? "Financial report" : "Activity report", Status = status, CreatedByUserId = author.Id,
                     DueDate = options.ReferenceDate.AddDays(kind == 1 ? 14 : -2), CreatedAtUtc = createdAt, UpdatedAtUtc = reviewed ? reviewedAt : options.At(-2),
                     SubmittedAtUtc = status != "Draft" ? options.At(kind == 0 ? -38 : kind == 1 ? -10 : -5) : null,

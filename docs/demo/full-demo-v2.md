@@ -4,7 +4,7 @@ This is a synthetic showcase dataset for the existing ClubHub deployment. It add
 
 ## Run
 
-Build `src/Tools/FullDemoDataSeeder/FullDemoDataSeeder.csproj` with .NET 8. Supply the eight `ConnectionStrings__Auth`, `Club`, `Activity`, `Admin`, `Report`, `Finance`, `Notification`, and `Export` variables through a private environment file. Do not commit credentials or the journal.
+Build `src/Tools/FullDemoDataSeeder/FullDemoDataSeeder.csproj` with .NET 8. When publishing the console tool, use `dotnet publish -c Release -p:ErrorOnDuplicatePublishOutputFiles=false` to accommodate the referenced services' shared appsettings filenames. Supply the eight `ConnectionStrings__Auth`, `Club`, `Activity`, `Admin`, `Report`, `Finance`, `Notification`, and `Export` variables through a private environment file. Do not commit credentials or the journal.
 
 Required operator settings:
 
@@ -28,6 +28,8 @@ dotnet FullDemoDataSeeder.dll verify
 Before `seed`, back up all eight databases with COPY_ONLY and CHECKSUM, verify the backup files, and rehearse their restoration under separate database names. Deploy compatible service assemblies and apply reviewed migrations first. Preserve the existing Docker volumes and integration stream.
 
 Configure explicit `Workspace__SemesterAliases__<semester-guid>__Year` and `__Term` entries for the authoritative semester IDs (for example `2026` and `FA`). Keep the server configuration in the deployment's `shared/academic-aliases.env`; the workflow copies it into the Admin service env file on each release. Academic calendars are then created through the normal versioned API and timetable blocks retain its projected version.
+
+For editable club workspaces, also configure `__ReportPeriod` (for example `FALL2026`), `__EditableFromUtc` and `__EditableUntilUtc`. Bound the edit window by the authoritative semester start/end; Year/Term alone does not enable workspace editing.
 
 ## Assets and files
 
