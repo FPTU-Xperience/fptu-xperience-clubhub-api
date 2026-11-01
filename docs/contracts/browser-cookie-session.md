@@ -1,9 +1,10 @@
-# Browser cookie session: ClubHub is the sign-in entry point
+# Browser cookie session: ClubHub and Admin
 
 ClubHub and Admin independently call Auth to inspect the same browser cookie.
 Neither UI navigates to the other UI to probe local storage. An anonymous ClubHub
-visitor stays on ClubHub. Admin redirects to ClubHub only after Auth confirms no
-session exists; an Auth outage shows a retry screen instead of a redirect.
+visitor stays on ClubHub. An anonymous Admin visitor stays on Admin and sees its
+own login. Session expiry and logout also preserve the current Admin route.
+An Auth outage shows a retry screen instead of a redirect.
 
 ## Auth contract
 
@@ -33,7 +34,7 @@ session exists; an Auth outage shows a retry screen instead of a redirect.
 ## Deployment and domains
 
 Deploy Auth first, then **both** frontend revisions together. Existing browser
-sessions without the new cookie must sign in once again through ClubHub. Existing
+sessions without the new cookie must sign in once again in either UI. Existing
 token login/refresh endpoints and legacy PKCE endpoints remain compatible; neither
 new frontend imports the old redirect-based discovery implementation.
 
@@ -43,8 +44,8 @@ host-only on `api.example.edu`; both UIs send it directly to that host.
 
 Set `CLUBHUB_ORIGIN` and `ADMIN_ORIGIN` in the API deployment environment, and add
 both exact origins to `FRONTEND_ORIGIN` / `CORS_ADDITIONAL_ORIGINS` for Gateway and
-Auth. Set each frontend's `VITE_API_BASE_URL` to the same HTTPS API and Admin's
-`VITE_CLUBHUB_APP_URL` to the ClubHub `/v2` URL. `BROWSER_SESSION_SAME_SITE=Lax` is
+Auth. Set each frontend's `VITE_API_BASE_URL` to the same HTTPS API.
+`BROWSER_SESSION_SAME_SITE=Lax` is
 appropriate when all three hosts are same-site. Default `None` supports cross-site
 requests where the browser permits third-party cookies, always with Secure.
 
