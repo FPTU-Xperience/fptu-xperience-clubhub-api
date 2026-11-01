@@ -120,6 +120,9 @@ services:
       GoogleAuthentication__AllowedHostedDomain: "${GOOGLE_ALLOWED_HOSTED_DOMAIN:-}"
       GoogleAuthentication__AllowedEmailDomains: "${GOOGLE_ALLOWED_EMAIL_DOMAINS:-fpt.edu.vn, gmail.com}"
       Sso__AllowLocalOrigins: "${LOCAL_SSO_ENABLED:-true}"
+      Sso__ClubHubOrigin: "${CLUBHUB_ORIGIN:-https://fptux-clubhub-ui.pages.dev}"
+      Sso__AdminOrigin: "${ADMIN_ORIGIN:-https://fptux-admin-ui.pages.dev}"
+      BrowserSession__SameSite: "${BROWSER_SESSION_SAME_SITE:-None}"
     deploy:
       resources:
         limits:
