@@ -17,6 +17,7 @@ public static class AuthEndpoints
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapStaffSsoEndpoints();
+        app.MapBrowserSessionEndpoints();
         app.MapEmailLoginEndpoints();
         var auth = app.MapGroup("/api/auth").WithTags("Authentication");
 
@@ -41,6 +42,7 @@ public static class AuthEndpoints
     private static async Task<IResult> HandleGoogleSignIn(
         GoogleLoginRequest request,
         GoogleSignInService googleSignInService,
+        RefreshTokenService refreshTokenService,
         HttpContext httpContext,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
@@ -60,6 +62,7 @@ public static class AuthEndpoints
         var result = await googleSignInService.SignInAsync(request.Credential, cancellationToken);
         if (result.Status == GoogleSignInStatus.Authenticated && result.Response is not null)
         {
+            await BrowserSessionEndpoints.WriteLoginCookie(httpContext, result.Response, refreshTokenService);
             logger.LogInformation("GoogleSignIn succeeded for User: {Email}, Id: {UserId}, ClientIp: {ClientIp}, CorrelationId: {CorrelationId}",
                 result.Response.User.Email, result.Response.User.Id, clientIp, correlationId);
             return Results.Ok(result.Response);
@@ -165,6 +168,7 @@ public static class AuthEndpoints
             }
         }
 
+        BrowserSessionEndpoints.ClearForUser(httpContext, userId);
         logger.LogInformation("Logout processed for User: {UserId}, CorrelationId: {CorrelationId}",
             userId, correlationId);
 

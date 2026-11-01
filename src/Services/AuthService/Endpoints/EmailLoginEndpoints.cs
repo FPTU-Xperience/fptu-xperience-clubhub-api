@@ -54,7 +54,9 @@ public static class EmailLoginEndpoints
             await db.SaveChangesAsync(ct);
         }
         var refresh = await tokens.CreateRefreshTokenAsync(user.Id);
-        return Results.Ok(tokens.CreateAuthResponse(user, refresh));
+        var response = tokens.CreateAuthResponse(user, refresh);
+        await BrowserSessionEndpoints.WriteLoginCookie(context, response, tokens);
+        return Results.Ok(response);
     }
 
     private static IResult Rejected() => Results.Json(new { code = "invalid_credentials", message = "Email hoặc mật khẩu không đúng, hoặc tài khoản không được phép đăng nhập." }, statusCode: 401);
