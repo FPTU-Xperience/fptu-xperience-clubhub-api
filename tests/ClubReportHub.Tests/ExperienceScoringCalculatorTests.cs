@@ -5,6 +5,39 @@ namespace ClubReportHub.Tests;
 
 public sealed class ExperienceScoringCalculatorTests
 {
+    // Acceptance examples from FPTU_Xperience_De_xuat_he_thong.pdf, page 3.
+    // The document rounds the display column; the ledger retains exact points.
+    [Theory]
+    [InlineData("T1", "Participant", "Club", "None", 10.0, 10)]
+    [InlineData("T2", "Contributor", "Campus", "None", 52.0, 52)]
+    [InlineData("T3", "Product", "Campus", "None", 171.6, 172)]
+    [InlineData("T3", "Leader", "Campus", "None", 312.0, 312)]
+    [InlineData("T3", "Contributor", "Campus", "None", 124.8, 125)]
+    [InlineData("T4", "Contributor", "National", "Finalist", 686.4, 686)]
+    [InlineData("T5", "Contributor", "International", "None", 1920.0, 1920)]
+    [InlineData("T5", "Product", "National", "None", 1936.0, 1936)]
+    [InlineData("T5", "Leader", "International", "RealWorldOutput", 6400.0, 6400)]
+    public void ProposalExamples_PreserveExactPointsAndMatchDisplayedTable(
+        string tier, string role, string scale, string result, decimal exact, decimal displayed)
+    {
+        var points = ExperienceScoringCalculator.CalculateRawPoints(tier, role, scale, result);
+        Assert.Equal(exact, points);
+        Assert.Equal(displayed, Math.Round(points, 0, MidpointRounding.AwayFromZero));
+    }
+
+    [Fact]
+    public void ProposalSingleAxisExample_DoesNotRewardGrindingOtherEmptyAxes()
+    {
+        var raw = new Dictionary<string, decimal> { [ExperienceCategories.CultureSports] = 1000000m };
+        var tau = RadarPillars.AllSeven.ToDictionary(pillar => pillar, _ => 1000m);
+        var radar = ExperienceIndexCalculator.ComputeRadar(raw, tau);
+
+        Assert.Equal(0m, radar.J);
+        Assert.Equal(1m, radar.M);
+        Assert.Equal(8.3333m, radar.ERI); // Proposal page 4 displays 8.3.
+        Assert.Equal(0m, radar.Pillars[ExperienceCategories.Academic].SaturatedScore);
+    }
+
     [Theory]
     [InlineData("T1", 10)]
     [InlineData("T2", 25)]
