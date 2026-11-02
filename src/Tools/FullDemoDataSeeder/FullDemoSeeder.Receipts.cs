@@ -18,7 +18,10 @@ public sealed partial class FullDemoSeeder
     private async Task CaptureReceiptsAsync()
     {
         var userIds = OwnedUserIds().ToArray(); var clubIds = anchors.Select(c => c.Id).ToArray();
-        var activityIds = await activities.Activities.Where(a => clubIds.Contains(a.ClubId) && a.Title.StartsWith("[Demo]")).Select(a => a.Id).ToArrayAsync();
+        var recordedActivityIds = journal.Rows.Where(r => r.Service == "Activity" && r.Table == "Activities")
+            .Select(r => JsonSerializer.Deserialize<JsonElement>(r.KeyJson).GetProperty("Id").GetInt32()).ToArray();
+        var activityIds = await activities.Activities.Where(a => clubIds.Contains(a.ClubId)
+            && (recordedActivityIds.Contains(a.Id) || a.Title.StartsWith("[Demo]"))).Select(a => a.Id).ToArrayAsync();
         var reportIds = await reports.Reports.Where(r => r.SeedKey != null && r.SeedKey.StartsWith("FULLDEMO_V2:")).Select(r => r.Id).ToArrayAsync();
         var contributions = admin.Contributions.Where(c => userIds.Contains(c.UserId) || c.UserId == protectedUser.Id && c.ActivityId != null && activityIds.Contains(c.ActivityId.Value));
         var contributionIds = await contributions.Select(c => c.Id).ToArrayAsync();

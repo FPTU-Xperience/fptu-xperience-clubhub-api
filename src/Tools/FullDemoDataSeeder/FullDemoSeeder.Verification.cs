@@ -83,7 +83,10 @@ public sealed partial class FullDemoSeeder
         await LoadUsersAsync();
         var ids = anchors.Select(c => c.Id).ToArray();
         var demoIds = users.Values.Select(u => u.Id).Append(protectedUser.Id).ToArray();
-        var demoActivities = await activities.Activities.AsNoTracking().Where(a => ids.Contains(a.ClubId) && a.Title.StartsWith("[Demo]")).ToArrayAsync();
+        var recordedActivityIds = journal.Rows.Where(r => r.Service == "Activity" && r.Table == "Activities")
+            .Select(r => JsonSerializer.Deserialize<JsonElement>(r.KeyJson).GetProperty("Id").GetInt32()).ToArray();
+        var demoActivities = await activities.Activities.AsNoTracking().Where(a => ids.Contains(a.ClubId)
+            && (recordedActivityIds.Contains(a.Id) || a.Title.StartsWith("[Demo]"))).ToArrayAsync();
         var activityIds = demoActivities.Select(a => a.Id).ToArray();
         var sessions = await activities.Sessions.AsNoTracking().Where(s => activityIds.Contains(s.ActivityId)).ToArrayAsync();
         var attendance = await activities.ActivityAttendances.AsNoTracking().Where(a => activityIds.Contains(a.ActivityId)).ToArrayAsync();
@@ -110,8 +113,12 @@ public sealed partial class FullDemoSeeder
         if (membership.Length < 231) problems.Add($"Expected at least 231 owned memberships, found {membership.Length}.");
         if (reportRows.Length < 40) problems.Add("Expected at least 40 reports.");
         var participantCount = await activities.ActivityParticipants.CountAsync(p => activityIds.Contains(p.ActivityId));
-        var budgetRows = await finance.BudgetProposals.AsNoTracking().Include(b => b.Settlements).Where(b => ids.Contains(b.ClubId) && b.Title.StartsWith("[Demo]")).ToArrayAsync();
-        var questRows = await admin.Quests.AsNoTracking().Where(q => q.Title.StartsWith("[Demo]")).ToArrayAsync();
+        var recordedBudgetIds = journal.Rows.Where(r => r.Service == "Finance" && r.Table == "BudgetProposals")
+            .Select(r => JsonSerializer.Deserialize<JsonElement>(r.KeyJson).GetProperty("Id").GetInt32()).ToArray();
+        var budgetRows = await finance.BudgetProposals.AsNoTracking().Include(b => b.Settlements).Where(b => ids.Contains(b.ClubId)
+            && (recordedBudgetIds.Contains(b.Id) || b.Title.StartsWith("[Demo]"))).ToArrayAsync();
+        var recordedQuestIds = anchors.Select(c => FullDemoOptions.StableId("quest:" + c.Code)).ToArray();
+        var questRows = await admin.Quests.AsNoTracking().Where(q => recordedQuestIds.Contains(q.Id)).ToArrayAsync();
         var questIds = questRows.Select(q => q.Id).ToArray();
         var questParticipants = await admin.QuestParticipants.AsNoTracking().Where(p => questIds.Contains(p.QuestId)).ToArrayAsync();
         var questParticipantIds = questParticipants.Select(p => p.Id).ToArray();
