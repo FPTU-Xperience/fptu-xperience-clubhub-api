@@ -1,0 +1,31 @@
+name: Read-only release diagnostics
+on:
+  push:
+    branches: [fix/activity-audience-production-20261103]
+    paths: [.github/workflows/activity-release-diagnostics.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Read container and build process status
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 2m
+          script: |
+            set -eu
+            docker ps --format '{{.Names}} | {{.Status}}'
+            docker stats --no-stream --format '{{.Name}} | CPU {{.CPUPerc}} | Memory {{.MemUsage}}'
+            ps -eo comm,etime | awk 'NR == 1 || $1 ~ /^(dotnet|docker|buildkitd|buildkit-runc|MSBuild)$/'
+            free -m
+            df -h /
+            docker inspect clubreporthub-admin --format '{{range .Config.Env}}{{println .}}{{end}}' | awk '/^RECOMMENDATION_ENABLED=/ || /^Recommendation__Enabled=/ {print}'
