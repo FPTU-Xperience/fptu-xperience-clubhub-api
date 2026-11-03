@@ -1,9 +1,6 @@
 name: Deploy to Ubuntu VPC
 
 on:
-  push:
-    branches: [cuongnk/implement-api-contract]
-    paths: [.github/workflows/deployment.yml]
   workflow_dispatch:
     inputs:
       deploy_rcm:
