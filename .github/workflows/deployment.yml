@@ -1,92 +1,73 @@
 name: Deploy to Ubuntu VPC
-
 on:
+  push:
+    branches: [cuongnk/implement-api-contract]
+    paths: [.github/workflows/deployment.yml]
   workflow_dispatch:
-    inputs:
-      deploy_rcm:
-        description: Deploy and enable the recommendation service on the API Docker network
-        type: boolean
-        default: true
-      rcm_ref:
-        description: Recommendation engine revision to validate and deploy
-        type: string
-        default: main
-      reuse_built_images:
-        description: Reuse images from a completed build when recovering an interrupted rollout
-        type: boolean
-        default: false
-
 permissions:
   contents: read
-
+  actions: read
 concurrency:
   group: production-deployment
   cancel-in-progress: false
-
 jobs:
-  validate:
-    uses: ./.github/workflows/backend-validate.yml
-
-  validate-rcm:
-    if: inputs.deploy_rcm
-    # MongoDB 8.0 rejects the newer kernel on ubuntu-latest (SERVER-121912).
-    # The Ubuntu 22.04 runner uses the compatible 6.8 kernel family.
-    runs-on: ubuntu-22.04
+  build-activity:
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      sha: ${{ steps.revision.outputs.sha }}
-    services:
-      mongo:
-        image: mongo:8.0
-        ports: ["27017:27017"]
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
-          --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: FPTU-Xperience/recommendation-engine
-          ref: ${{ inputs.rcm_ref }}
-          persist-credentials: false
-      - id: revision
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-python@v5
+          ref: a25f6ef42e2fb6557fed5fd54157530ece6b58d5
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.13'
-      - run: pip install -r requirements-service.txt
-      - run: python -m unittest discover -s tests -v
-        env:
-          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
-      - run: docker build -t recommendation:validated .
+          node-version: '20'
+      - name: Build validated release and pre-change rollback image on CI
+        run: |
+          git checkout --detach 0d3d9d3957160b68bbc6dc1be184f885153ef71e
+          docker build --file src/Services/ActivityService/Dockerfile --tag clubreporthub-activity:rollback-0d3d9d3957160b68bbc6dc1be184f885153ef71e .
+          git checkout --detach a25f6ef42e2fb6557fed5fd54157530ece6b58d5
+          docker build --file src/Services/ActivityService/Dockerfile --tag clubreporthub-activity:a25f6ef42e2fb6557fed5fd54157530ece6b58d5 .
+          mkdir -p activity-image
+          docker save clubreporthub-activity:rollback-0d3d9d3957160b68bbc6dc1be184f885153ef71e clubreporthub-activity:a25f6ef42e2fb6557fed5fd54157530ece6b58d5 | gzip > activity-image/images.tar.gz
+          sha256sum activity-image/images.tar.gz > activity-image/images.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-activity-release
+          path: activity-image
+          retention-days: 3
 
   deploy:
-    needs: [validate, validate-rcm]
-    if: >-
-      always() && needs.validate.result == 'success' &&
-      (needs.validate-rcm.result == 'success' || needs.validate-rcm.result == 'skipped') &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cuongnk/implement-api-contract')
+    needs: build-activity
+    if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    # Required-reviewer protection can be configured for this environment in repository settings.
+    timeout-minutes: 20
     environment: production
-    env:
-      TARGET_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api
-      RELEASE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}
     steps:
-      - name: Checkout validated revision
-        uses: actions/checkout@v4
-
-      - name: Checkout validated recommendation revision
-        if: inputs.deploy_rcm
-        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          repository: FPTU-Xperience/recommendation-engine
-          ref: ${{ needs.validate-rcm.outputs.sha }}
-          path: rcm-source
-          persist-credentials: false
-
-      - name: Copy recommendation immutable release
-        if: inputs.deploy_rcm
+          name: validated-activity-release
+          path: activity-image
+      - name: Verify source validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          let run;
+          for (let attempt=0; attempt<90; attempt++) {
+          const response = await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41671908565',
+            { headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN } });
+          assert.equal(response.status, 200);
+          run = await response.json();
+          if (run.status === 'completed') break;
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          }
+          assert.equal(run.status, 'completed');
+          assert.equal(run.head_sha, 'a25f6ef42e2fb6557fed5fd54157530ece6b58d5');
+          assert.equal(run.conclusion, 'success');
+          NODE
+      - name: Transfer images
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPC_HOST }}
@@ -94,307 +75,131 @@ jobs:
           key: ${{ secrets.VPC_SSH_KEY }}
           passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
           password: ${{ secrets.VPC_PASSWORD }}
-          source: rcm-source
-          strip_components: 1
-          target: /${{ secrets.VPC_USERNAME }}/fptux/recommendation/releases/${{ needs.validate-rcm.outputs.sha }}
+          source: activity-image
+          target: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/a25f6ef42e2fb6557fed5fd54157530ece6b58d5/prebuilt-final
           rm: false
-
-      - name: Provision and deploy recommendation stack
-        if: inputs.deploy_rcm
+      - name: Rollout validated ActivityService with existing runtime config
         uses: appleboy/ssh-action@v1.0.3
         env:
-          DEPLOY_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/recommendation
-          RELEASE_SHA: ${{ needs.validate-rcm.outputs.sha }}
-          RECOMMENDATION_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+          IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/a25f6ef42e2fb6557fed5fd54157530ece6b58d5/prebuilt-final
+          IMAGE_TAG: clubreporthub-activity:a25f6ef42e2fb6557fed5fd54157530ece6b58d5
+          ROLLBACK_TAG: clubreporthub-activity:rollback-0d3d9d3957160b68bbc6dc1be184f885153ef71e
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           key: ${{ secrets.VPC_SSH_KEY }}
           passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
           password: ${{ secrets.VPC_PASSWORD }}
-          command_timeout: 20m
-          envs: DEPLOY_ROOT,RELEASE_SHA,RECOMMENDATION_TOKEN
+          envs: IMAGE_DIR,IMAGE_TAG,ROLLBACK_TAG
+          command_timeout: 15m
           script: |
             set -Eeuo pipefail
             umask 077
-            # Match the real API Compose project, including preserved legacy volumes.
-            api_project="$(docker inspect clubreporthub-admin --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
-            test -n "${api_project}"
-            export API_NETWORK="${api_project}_internal-net"
-            docker network inspect "${API_NETWORK}" >/dev/null
-            if [ ! -s "${DEPLOY_ROOT}/mongo.password" ]; then
-              openssl rand -hex 32 > "${DEPLOY_ROOT}/mongo.password"
-            fi
-            export MONGODB_PASSWORD="$(cat "${DEPLOY_ROOT}/mongo.password")"
-            bash "${DEPLOY_ROOT}/releases/${RELEASE_SHA}/ops/deploy.sh"
-
-      - name: Copy source into versioned release directory
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPC_HOST }}
-          username: ${{ secrets.VPC_USERNAME }}
-          key: ${{ secrets.VPC_SSH_KEY }}
-          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
-          password: ${{ secrets.VPC_PASSWORD }}
-          source: "."
-          target: ${{ env.RELEASE_DIR }}
-          # A rerun can target the active release; never delete it before validation.
-          rm: false
-
-      - name: Build, start, and verify production stack
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          TARGET_ROOT: ${{ env.TARGET_ROOT }}
-          RELEASE_DIR: ${{ env.RELEASE_DIR }}
-          COMPOSE_PROJECT_NAME: fptux-clubhub-api
-          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
-          INTERNAL_WORKFLOW_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
-          RECOMMENDATION_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
-          RECOMMENDATION_ENABLED: ${{ inputs.deploy_rcm && 'true' || vars.RECOMMENDATION_ENABLED || 'false' }}
-          ATTENDANCE_SIGNING_KEY: ${{ secrets.ATTENDANCE_SIGNING_KEY }}
-          LOCAL_SSO_ENABLED: ${{ vars.LOCAL_SSO_ENABLED }}
-          CLUBHUB_ORIGIN: ${{ vars.CLUBHUB_ORIGIN || 'https://fptux-clubhub-ui.pages.dev' }}
-          ADMIN_ORIGIN: ${{ vars.ADMIN_ORIGIN || 'https://fptux-admin-ui.pages.dev' }}
-          BROWSER_SESSION_SAME_SITE: ${{ vars.BROWSER_SESSION_SAME_SITE || 'None' }}
-          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ vars.R2_BUCKET }}
-          R2_PUBLIC_ORIGIN: ${{ vars.R2_PUBLIC_ORIGIN }}
-          FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
-          CORS_ADDITIONAL_ORIGINS: "${{ vars.CORS_ADDITIONAL_ORIGINS }},https://fptux-clubhub-ui.pages.dev,https://*.fptux-clubhub-ui.pages.dev,https://fptux-legacy-ui.pages.dev,https://*.fptux-legacy-ui.pages.dev,http://localhost:*,http://127.0.0.1:*,http://localhost:5173,http://localhost:3000,http://localhost:5174,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:3000"
-          GOOGLE_CLIENT_ID: ${{ secrets.CLUBHUB_GOOGLE_CLIENT_ID }}
-          GOOGLE_ALLOWED_HOSTED_DOMAIN: ${{ secrets.GOOGLE_ALLOWED_HOSTED_DOMAIN }}
-          GOOGLE_ALLOWED_EMAIL_DOMAINS: "fpt.edu.vn,gmail.com"
-          REUSE_BUILT_IMAGES: ${{ inputs.reuse_built_images }}
-        with:
-          host: ${{ secrets.VPC_HOST }}
-          username: ${{ secrets.VPC_USERNAME }}
-          key: ${{ secrets.VPC_SSH_KEY }}
-          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
-          password: ${{ secrets.VPC_PASSWORD }}
-          command_timeout: 50m
-          envs: CLUBHUB_ORIGIN,ADMIN_ORIGIN,BROWSER_SESSION_SAME_SITE,LOCAL_SSO_ENABLED,TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,INTERNAL_WORKFLOW_TOKEN,RECOMMENDATION_TOKEN,RECOMMENDATION_ENABLED,ATTENDANCE_SIGNING_KEY,R2_ENDPOINT,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,R2_PUBLIC_ORIGIN,FRONTEND_ORIGIN,CORS_ADDITIONAL_ORIGINS,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS,REUSE_BUILT_IMAGES
-          script: |
-            set -Eeuo pipefail
-
-            export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
-
-            wait_for_database() {
-              for attempt in $(seq 1 24); do
-                if docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-                  -S localhost -U sa -P "${SQL_PASSWORD}" -C -b -l 5 -t 5 -Q "SELECT 1" >/dev/null 2>&1; then
-                  return 0
+            cd "${IMAGE_DIR}"
+            sha256sum --check activity-image/images.sha256
+            project="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
+            workdir="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+            configs="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+            service="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.service" }}')"
+            test "${service}" = activity-service
+            test -n "${project}"
+            test -d "${workdir}"
+            network="$(docker inspect clubreporthub-activity --format '{{range $name, $details := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' | head -n 1)"
+            docker load --input activity-image/images.tar.gz
+            new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
+            docker image inspect "${ROLLBACK_TAG}" --format '{{.Id}}'
+            override="${IMAGE_DIR}/activity.override.yml"
+            printf 'services:\n  activity-service:\n    image: %s\n' "${IMAGE_TAG}" > "${override}"
+            args=()
+            IFS=',' read -ra files <<< "${configs}"
+            for file in "${files[@]}"; do test -f "${file}"; args+=(-f "${file}"); done
+            cd "${workdir}"
+            runtime_exports="$(python3 - <<'PY'
+            import json, re, shlex, subprocess
+            values = {}
+            for name in ('clubreporthub-activity', 'clubreporthub-gateway'):
+                data = json.loads(subprocess.check_output(['docker', 'inspect', '--format', '{{json .Config.Env}}', name], text=True))
+                current = dict(item.split('=', 1) for item in data)
+                if name == 'clubreporthub-activity':
+                    mapping = {
+                        'JWT_SIGNING_KEY': 'Jwt__SigningKey',
+                        'INTERNAL_WORKFLOW_TOKEN': 'Security__InternalWorkflowToken',
+                        'ATTENDANCE_SIGNING_KEY': 'Attendance__SigningKey',
+                        'REDIS_STREAM_NAME': 'Redis__StreamName'
+                    }
+                    for variable, key in mapping.items():
+                        if current.get(key):
+                            values[variable] = current[key]
+                    connection = current.get('ConnectionStrings__DefaultConnection', '')
+                    pattern = r'''(?:^|;)\s*(?:Password|Pwd)\s*=\s*("(?:""|[^"])*"|'(?:''|[^'])*'|[^;]*)'''
+                    match = re.search(pattern, connection, re.IGNORECASE)
+                    if not match:
+                        raise RuntimeError('Current ActivityService database password could not be preserved')
+                    values['SQL_PASSWORD'] = match.group(1).strip()
+                else:
+                    values['FRONTEND_ORIGIN'] = current.get('Cors__AllowedOrigins__0', '')
+            for variable in ('SQL_PASSWORD', 'JWT_SIGNING_KEY', 'INTERNAL_WORKFLOW_TOKEN', 'ATTENDANCE_SIGNING_KEY', 'FRONTEND_ORIGIN'):
+                if not values.get(variable):
+                    raise RuntimeError('Missing current runtime setting: ' + variable)
+            for variable, value in values.items():
+                print('export ' + variable + '=' + shlex.quote(value))
+            PY
+            )"
+            eval "${runtime_exports}"
+            unset runtime_exports
+            successful=false
+            if docker compose -p "${project}" "${args[@]}" -f "${override}" up -d --no-build --no-deps activity-service; then
+              for attempt in $(seq 1 30); do
+                if [ "$(docker inspect clubreporthub-activity --format '{{.Image}}')" = "${new_image}" ] &&
+                  docker run --rm --network "${network}" curlimages/curl:8.10.1 --fail --silent --show-error --connect-timeout 3 --max-time 5 http://activity-service:8080/health; then
+                  successful=true
+                  break
                 fi
-                echo "Waiting for SQL Server query readiness (${attempt}/24)..."
-                sleep 5
+                sleep 2
               done
-              docker inspect clubreporthub-sqlserver --format '{{json .State}}' >&2 || true
-              docker logs --tail 80 clubreporthub-sqlserver >&2 || true
-              docker stats --no-stream >&2 || true
-              echo "SQL Server query readiness failed; refusing to change application containers." >&2
-              return 1
-            }
-
-            if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
-              existing_project="$(
-                docker inspect clubreporthub-sqlserver \
-                  --format '{{ index .Config.Labels "com.docker.compose.project" }}'
-              )"
-              if [ -n "${existing_project}" ]; then
-                echo "Preserving existing Compose project: '${existing_project}' to protect volume attachment."
-                COMPOSE_PROJECT_NAME="${existing_project}"
-              else
-                echo "Existing SQL Server container has no Compose project label; refusing to guess its volume ownership." >&2
-                exit 1
-              fi
             fi
-
-            cd "${RELEASE_DIR}"
-            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
-
-            if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
-              if ! docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
-                echo "SQL Server container exists but is not running; deployment aborted without changing it." >&2
-                exit 1
-              fi
-
-              wait_for_database
-
-              echo "Creating and verifying database backups before deployment..."
-              backup_timestamp="$(date +%Y%m%d_%H%M%S)"
-              docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-                -S localhost -U sa -P "${SQL_PASSWORD}" -C -b \
-                -Q "
-                  DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
-                  DECLARE db_cursor CURSOR FOR
-                    SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
-                  OPEN db_cursor;
-                  FETCH NEXT FROM db_cursor INTO @name;
-                  WHILE @@FETCH_STATUS = 0
-                  BEGIN
-                    SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT, CHECKSUM;';
-                    EXEC sp_executesql @sql;
-                    SET @sql = 'RESTORE VERIFYONLY FROM DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH CHECKSUM;';
-                    EXEC sp_executesql @sql;
-                    FETCH NEXT FROM db_cursor INTO @name;
-                  END
-                  CLOSE db_cursor;
-                  DEALLOCATE db_cursor;
-                "
-            else
-              echo "No existing SQL Server container; first deployment has no databases to back up."
-            fi
-
-            if [ "${REUSE_BUILT_IMAGES:-false}" = "true" ]; then
-              echo "Recovery requested: verifying all previously built images exist locally."
-              while IFS= read -r image; do
-                docker image inspect "${image}" >/dev/null
-              done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --images)
-            else
-              # Keep live SQL Server responsive on a small VPC; BuildKit can otherwise build every service at once.
-              while IFS= read -r service; do
-                docker compose -p "${COMPOSE_PROJECT_NAME}" build "${service}"
-              done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services)
-            fi
-
-            # Builds can leave the SQL healthcheck temporarily unhealthy from resource contention.
-            # Verify an actual authenticated query before starting apps, while preserving existing infrastructure.
-            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-recreate sqlserver redis
-            wait_for_database
-            redis_ready=false
-            for attempt in $(seq 1 24); do
-              if [ "$(docker exec clubreporthub-redis redis-cli ping 2>/dev/null)" = "PONG" ]; then
-                redis_ready=true
-                break
-              fi
-              sleep 5
-            done
-            if [ "${redis_ready}" != "true" ]; then
-              echo "Redis is not ready; refusing to change application containers." >&2
+            if [ "${successful}" != true ]; then
+              printf 'services:\n  activity-service:\n    image: %s\n' "${ROLLBACK_TAG}" > "${override}"
+              docker compose -p "${project}" "${args[@]}" -f "${override}" up -d --no-build --no-deps activity-service
+              echo 'Activity rollout failed; restored image built from pre-change source.' >&2
               exit 1
             fi
-            mapfile -t application_services < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services | grep -Ev '^(sqlserver|redis)$')
+            printf 'ACTIVITY_IMAGE_DEPLOYED a25f6ef42e2fb6557fed5fd54157530ece6b58d5 %s\n' "${new_image}"
+            docker inspect clubreporthub-admin --format '{{range .Config.Env}}{{println .}}{{end}}' | awk '/^RECOMMENDATION_ENABLED=/ || /^Recommendation__Enabled=/ {print}'
+      - name: Verify online health and authorization
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const base = 'https://clubreporthub.duckdns.org';
+          for (const path of ['/health', '/api/health', '/api/auth/health']) {
+            const response = await fetch(base + path, { signal: AbortSignal.timeout(20000) });
+            assert.equal(response.status, 200, path);
+            console.log('ONLINE_HEALTH_OK ' + path + ' 200');
+          }
+          for (const path of ['/api/v2/activities/feed', '/api/v2/activities/1/sessions']) {
+            const response = await fetch(base + path, { signal: AbortSignal.timeout(20000) });
+            assert.equal(response.status, 401, path);
+            console.log('ONLINE_AUTH_BOUNDARY_OK ' + path + ' 401');
+          }
+          console.log('ONLINE_ACTIVITY_RELEASE_OK a25f6ef42e2fb6557fed5fd54157530ece6b58d5');
+          NODE
 
-            previous_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
-            rollback() {
-              trap - ERR
-              if [ -n "${previous_release}" ] && [ -f "${previous_release}/docker-compose.yml" ]; then
-                echo "Deployment failed; rolling back to ${previous_release}." >&2
-                cd "${previous_release}"
-                docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --no-deps "${application_services[@]}"
-              else
-                echo "Deployment failed; no previous versioned release is available for rollback." >&2
-              fi
-            }
-            trap rollback ERR
-
-            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --no-deps "${application_services[@]}"
-
-            gateway_port="${GATEWAY_PORT:-7000}"
-            network_name="${COMPOSE_PROJECT_NAME}_internal-net"
-
-            wait_for_gateway() {
-              gateway_url="http://127.0.0.1:${gateway_port}/health"
-              echo "Checking Gateway readiness at ${gateway_url}."
-
-              for attempt in $(seq 1 30); do
-                if gateway_probe_error="$(curl \
-                  --fail \
-                  --silent \
-                  --show-error \
-                  --connect-timeout 3 \
-                  --max-time 5 \
-                  "${gateway_url}" 2>&1)"; then
-                  echo "Gateway is healthy (attempt ${attempt}/30)."
-                  return 0
-                fi
-
-                if [ "${attempt}" -eq 30 ]; then
-                  echo "Gateway failed to become healthy after ${attempt} attempts." >&2
-                  echo "Last Gateway probe error: ${gateway_probe_error}" >&2
-                  docker ps >&2 || true
-                  docker logs --tail 200 clubreporthub-gateway >&2 || true
-                  return 1
-                fi
-
-                echo "Waiting for Gateway readiness (${attempt}/30)..."
-                sleep 3
-              done
-            }
-
-            wait_for_internal_service() {
-              service_name="$1"
-              container_name="$2"
-              health_path="$3"
-              service_url="http://${service_name}:8080${health_path}"
-              echo "Checking ${service_name} readiness at ${service_url}."
-
-              for attempt in $(seq 1 30); do
-                if service_probe_error="$(docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
-                  --fail \
-                  --silent \
-                  --show-error \
-                  --connect-timeout 3 \
-                  --max-time 5 \
-                  "${service_url}" 2>&1)"; then
-                  echo "${service_name} is healthy (attempt ${attempt}/30)."
-                  return 0
-                fi
-
-                if [ "${attempt}" -eq 30 ]; then
-                  echo "${service_name} failed to become healthy after ${attempt} attempts." >&2
-                  echo "Last ${service_name} probe error: ${service_probe_error}" >&2
-                  docker ps >&2 || true
-                  docker logs --tail 200 "${container_name}" >&2 || true
-                  return 1
-                fi
-
-                echo "Waiting for ${service_name} readiness (${attempt}/30)..."
-                sleep 3
-              done
-            }
-
-            wait_for_gateway
-            wait_for_internal_service auth-service clubreporthub-auth /health
-            wait_for_internal_service club-service clubreporthub-club /health
-            wait_for_internal_service activity-service clubreporthub-activity /health
-            wait_for_internal_service report-service clubreporthub-report /health
-            wait_for_internal_service finance-service clubreporthub-finance /health
-            wait_for_internal_service notification-service clubreporthub-notification /health
-            wait_for_internal_service export-service clubreporthub-export /health
-            wait_for_internal_service admin-service clubreporthub-admin /health/ready
-
-            ln -sfn "${RELEASE_DIR}" "${TARGET_ROOT}/current"
-            trap - ERR
-            docker image prune -f
-
-            # Retain the 5 newest releases and always preserve active/rollback targets (OPS-F03).
-            if [ -d "${TARGET_ROOT}/releases" ]; then
-              target_root_real="$(readlink -f "${TARGET_ROOT}")"
-              releases_root="$(readlink -f "${TARGET_ROOT}/releases")"
-              if [ "${target_root_real}" = "/" ] ||
-                 [ "${releases_root}" != "${target_root_real}/releases" ]; then
-                echo "Refusing to prune releases through an unexpected directory or symlink." >&2
-                exit 1
-              fi
-              current_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
-              echo "Pruning old releases in ${releases_root}, keeping the newest 5 and rollback targets..."
-              find "${releases_root}" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' |
-                sort -z -nr |
-                tail -z -n +6 |
-                while IFS= read -r -d '' candidate; do
-                  old_release="${candidate#* }"
-                  resolved_release="$(readlink -f "${old_release}")"
-                  case "${resolved_release}" in
-                    "${releases_root}/"*) ;;
-                    *) echo "Refusing to prune a path outside the release directory." >&2; exit 1 ;;
-                  esac
-                  if [ "${resolved_release}" = "${current_release}" ] ||
-                     [ "${resolved_release}" = "${previous_release}" ]; then
-                    continue
-                  fi
-                  rm -rf -- "${resolved_release}"
-                done
-            fi
+  verify-actions-sidebar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify public Actions navigation no longer lists temporary workflows
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const response = await fetch('https://github.com/FPTU-Xperience/fptu-xperience-clubhub-api/actions');
+          assert.equal(response.status, 200);
+          const html = await response.text();
+          for (const name of ['Backend CI', 'Backend validation', 'Deploy to Ubuntu VPC']) assert.ok(html.includes(name), 'Original workflow visible: ' + name);
+          for (const name of ['Activity registration graph checks', 'Deploy validated ActivityService image',
+            'Read-only release diagnostics', 'Reclaim unused old build cache',
+            'Stop orphaned release build clients', 'Verify deployed activity audience release']) {
+            assert.ok(!html.includes(name), 'Temporary workflow absent from navigation: ' + name);
+          }
+          console.log('ACTIONS_NAVIGATION_OK: only original workflow names visible');
+          NODE
