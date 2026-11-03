@@ -28,4 +28,6 @@ jobs:
             ps -eo comm,etime | awk 'NR == 1 || $1 ~ /^(dotnet|docker|buildkitd|buildkit-runc|MSBuild)$/'
             free -m
             df -h /
+            df -i /
+            docker system df
             docker inspect clubreporthub-admin --format '{{range .Config.Env}}{{println .}}{{end}}' | awk '/^RECOMMENDATION_ENABLED=/ || /^Recommendation__Enabled=/ {print}'
