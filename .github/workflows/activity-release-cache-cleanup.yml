@@ -1,0 +1,29 @@
+name: Reclaim unused old build cache
+on:
+  push:
+    branches: [fix/activity-audience-production-20261103]
+    paths: [.github/workflows/activity-release-cache-cleanup.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Reclaim only unused build cache older than one day
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            df -h /
+            docker builder prune --all --force --filter until=24h --keep-storage 1GB
+            df -h /
+            docker system df
