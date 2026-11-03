@@ -157,17 +157,47 @@ public sealed class ActivityActionContractTests
         var join = $"/api/activities/{activity}/recruitment/positions/{position}/join";
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(student, HttpMethod.Post, join, new { expectedVersion = 4, userId = 101 }, "forged")).StatusCode);
         var joined = await Send(student, HttpMethod.Post, join, new { expectedVersion = 4 }, "join"); Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
-        var assignment = (await Json(joined)).GetProperty("id").GetGuid();
-        Assert.Equal(assignment, (await Json(await Send(student, HttpMethod.Post, join, new { expectedVersion = 4 }, "join"))).GetProperty("id").GetGuid());
+        var joinedValue = await Json(joined);
+        var application = joinedValue.GetProperty("id").GetGuid();
+        Assert.Equal("PENDING", joinedValue.GetProperty("status").GetString());
+        Assert.False(joinedValue.TryGetProperty("assignmentId", out _));
+        Assert.Equal(application, (await Json(await Send(student, HttpMethod.Post, join, new { expectedVersion = 4 }, "join"))).GetProperty("id").GetGuid());
+        await f.WithDb(async db => Assert.Empty(await db.Set<ActivityStaffAssignment>().ToArrayAsync()));
+        var mine = await Json(await student.GetAsync($"/api/activities/{activity}/staffing"));
+        Assert.Equal("PENDING", mine.GetProperty("recruitment").GetProperty("positions")[0].GetProperty("myApplication").GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(student, HttpMethod.Post, join, new { expectedVersion = 5 }, "duplicate")).StatusCode);
+        var review = $"/api/activities/{activity}/recruitment/applications/{application}/review";
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(student, HttpMethod.Post, review, new { expectedVersion = 5, applicationVersion = 1, decision = "APPROVED" }, "self-review")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(manager, HttpMethod.Post, review, new { expectedVersion = 4, applicationVersion = 1, decision = "APPROVED" }, "stale")).StatusCode);
+        var decision = new { expectedVersion = 5, applicationVersion = 1, decision = "APPROVED" };
+        var accepted = await Send(manager, HttpMethod.Post, review, decision, "approve");
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        var assignment = (await Json(accepted)).GetProperty("assignmentId").GetGuid();
+        Assert.Equal(assignment, (await Json(await Send(manager, HttpMethod.Post, review, decision, "approve"))).GetProperty("assignmentId").GetGuid());
+        f.ManagerEnabled = false;
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(manager, HttpMethod.Post, review, decision, "approve")).StatusCode);
+        f.ManagerEnabled = true;
         using var second = f.Client(101);
-        Assert.Equal(HttpStatusCode.Conflict, (await Send(second, HttpMethod.Post, join, new { expectedVersion = 5 }, "seat")).StatusCode);
+        var outsiderView = await Json(await second.GetAsync($"/api/activities/{activity}/staffing"));
+        Assert.Empty(outsiderView.GetProperty("assignments").EnumerateArray());
+        Assert.Empty(outsiderView.GetProperty("applications").EnumerateArray());
+        Assert.Single(outsiderView.GetProperty("publicAssignments").EnumerateArray());
+        Assert.False(outsiderView.GetProperty("publicAssignments")[0].TryGetProperty("userId", out _));
+        Assert.False(outsiderView.GetProperty("publicAssignments")[0].TryGetProperty("completions", out _));
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(second, HttpMethod.Post, join, new { expectedVersion = 6 }, "seat")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Send(manager, HttpMethod.Patch, $"/api/activities/{activity}/publication", new { isPublished = false, expectedVersion = 2 }, "hide-used")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, $"/api/activities/{activity}/assignments/{assignment}/cancel", new { expectedVersion = 5 }, "cancel")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Send(second, HttpMethod.Post, join, new { expectedVersion = 6 }, "seat-after-cancel")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, $"/api/activities/{activity}/assignments/{assignment}/cancel", new { expectedVersion = 6 }, "cancel")).StatusCode);
+        var next = await Send(second, HttpMethod.Post, join, new { expectedVersion = 7 }, "seat-after-cancel");
+        Assert.Equal(HttpStatusCode.OK, next.StatusCode);
+        var nextId = (await Json(next)).GetProperty("id").GetGuid();
+        var nextReview = $"/api/activities/{activity}/recruitment/applications/{nextId}/review";
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(manager, HttpMethod.Post, nextReview, new { expectedVersion = 8, applicationVersion = 1, decision = "REJECTED" }, "reason-required")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, nextReview, new { expectedVersion = 8, applicationVersion = 1, decision = "REJECTED", reason = "Chọn ứng viên khác" }, "reject")).StatusCode);
         await f.WithDb(async db =>
         {
-            Assert.Equal(2, await db.Set<ActivityStaffAssignment>().CountAsync());
-            Assert.Equal(1, await db.Set<ActivityStaffAssignment>().CountAsync(x => x.Status != "REMOVED"));
+            Assert.Equal(1, await db.Set<ActivityStaffAssignment>().CountAsync());
+            Assert.Equal(0, await db.Set<ActivityStaffAssignment>().CountAsync(x => x.Status != "REMOVED"));
+            Assert.Equal("REJECTED", (await db.Set<ActivityRecruitmentApplication>().SingleAsync(x => x.Id == nextId)).Status);
             Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
     }
@@ -207,9 +237,15 @@ public sealed class ActivityActionContractTests
         Assert.Equal(HttpStatusCode.OK, assigned.StatusCode); var assignment = (await Json(assigned)).GetProperty("id").GetGuid();
         f.Clock.Utc = Instant.AddDays(2);
         using var student = f.Client(100);
+        var resourceId = Guid.NewGuid();
+        await f.WithDb(async db => { db.Add(new ActivityResource { Id = resourceId, ActivityId = activity, Title = "Kết quả", Url = "https://example.test/evidence.pdf", Kind = "DOCUMENT", Visibility = "CLUB", UploadedByUserId = 200, CreatedAtUtc = Instant, UpdatedAtUtc = Instant }); await db.SaveChangesAsync(); });
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(student, HttpMethod.Post, $"/api/activities/{activity}/assignments/{assignment}/completions", new
+        { expectedVersion = 3, occurrenceKey = "output-1", occurrenceLabel = "First output", evidence = "Delivered", resourceIds = new[] { Guid.NewGuid() } }, "invalid-resource")).StatusCode);
         var completed = await Send(student, HttpMethod.Post, $"/api/activities/{activity}/assignments/{assignment}/completions", new
-        { expectedVersion = 3, occurrenceKey = "output-1", occurrenceLabel = "First output", evidence = "Delivered and documented" }, "completion");
+        { expectedVersion = 3, occurrenceKey = "output-1", occurrenceLabel = "First output", evidence = "Delivered and documented", resourceIds = new[] { resourceId } }, "completion");
         Assert.Equal(HttpStatusCode.OK, completed.StatusCode); var completion = (await Json(completed)).GetProperty("id").GetGuid();
+        var own = await Json(await student.GetAsync($"/api/activities/{activity}/staffing"));
+        Assert.Equal(resourceId, own.GetProperty("assignments")[0].GetProperty("completions")[0].GetProperty("resources")[0].GetProperty("id").GetGuid());
         var verify = $"/api/activities/{activity}/action-completions/{completion}/verify";
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(student, HttpMethod.Post, verify, new { expectedVersion = 4, completionVersion = 1 }, "self")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(manager, HttpMethod.Post, verify, new { expectedVersion = 4, completionVersion = 1 }, "manager")).StatusCode);
@@ -351,8 +387,13 @@ public sealed class ActivityActionContractTests
         staffing = await Json(await one.GetAsync($"/api/activities/{activity}/staffing"));
         var position = staffing.GetProperty("recruitment").GetProperty("positions")[0].GetProperty("id").GetGuid();
         var url = $"/api/activities/{activity}/recruitment/positions/{position}/join";
-        var results = await Task.WhenAll(Send(one, HttpMethod.Post, url, new { expectedVersion = 4 }, "one"),
-            Send(two, HttpMethod.Post, url, new { expectedVersion = 4 }, "two"));
+        var first = await Send(one, HttpMethod.Post, url, new { expectedVersion = 4 }, "one");
+        var second = await Send(two, HttpMethod.Post, url, new { expectedVersion = 5 }, "two");
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode); Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var firstId = (await Json(first)).GetProperty("id").GetGuid(); var secondId = (await Json(second)).GetProperty("id").GetGuid();
+        await f.WithDb(async db => Assert.Empty(await db.Set<ActivityStaffAssignment>().ToArrayAsync()));
+        var results = await Task.WhenAll(Send(manager, HttpMethod.Post, $"/api/activities/{activity}/recruitment/applications/{firstId}/review", new { expectedVersion = 6, applicationVersion = 1, decision = "APPROVED" }, "approve-one"),
+            Send(manager, HttpMethod.Post, $"/api/activities/{activity}/recruitment/applications/{secondId}/review", new { expectedVersion = 6, applicationVersion = 1, decision = "APPROVED" }, "approve-two"));
         Assert.Single(results, x => x.StatusCode == HttpStatusCode.OK);
         Assert.Single(results, x => x.StatusCode == HttpStatusCode.Conflict);
         var list = await one.GetAsync("/api/clubs/1/activity-recruitments?from=2026-10-22T00:00:00Z&to=2026-10-30T00:00:00Z");
@@ -361,9 +402,41 @@ public sealed class ActivityActionContractTests
         {
             Assert.Equal(2, await db.Activities.CountAsync()); Assert.Equal("Legacy row", (await db.Activities.SingleAsync(x => x.Title == "Legacy row")).Title);
             Assert.Equal(1, await db.Set<ActivityStaffAssignment>().CountAsync(x => x.ActivityId == activity));
-            Assert.Single(await db.Set<ActivityExecutionAudit>().Where(x => x.Action == "JOIN_POSITION").ToArrayAsync());
+            Assert.Equal(2, await db.Set<ActivityRecruitmentApplication>().CountAsync());
+            Assert.Single(await db.Set<ActivityExecutionAudit>().Where(x => x.Action == "RECRUITMENT_REVIEWED").ToArrayAsync());
             Assert.False(db.Database.HasPendingModelChanges());
         });
+    }
+
+    [Fact]
+    public async Task Recruitment_HostReviewsCurrentEligibleApplicantButStaffAndVerificationGrantCannotReview()
+    {
+        await using var f = await Fixture.Create(); var (_, activity) = await f.Approved();
+        using var manager = f.Client(200); using var host = f.Client(100); using var applicant = f.Client(101); using var verifier = f.Client(300);
+        var staffing = await Json(await manager.GetAsync($"/api/activities/{activity}/staffing"));
+        var rule = staffing.GetProperty("actions")[0].GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Patch, $"/api/activities/{activity}/publication", new { isPublished = true, expectedVersion = 1 }, "publish")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, $"/api/activities/{activity}/recruitment", new
+        { expectedVersion = 2, title = "Staff", visibility = "PUBLIC", eligibility = "SCHOOL_STUDENTS", positions = new[] { new { actionRuleId = rule, capacity = 1, assignmentKind = "STAFF" } } }, "recruit")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Patch, $"/api/activities/{activity}/recruitment/status", new { expectedVersion = 3, status = "OPEN" }, "open")).StatusCode);
+        var assigned = await Send(manager, HttpMethod.Post, $"/api/activities/{activity}/assignments", new { expectedVersion = 4, userId = 100, actionRuleId = rule, assignmentKind = "HOST" }, "host");
+        Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);
+        staffing = await Json(await applicant.GetAsync($"/api/activities/{activity}/staffing"));
+        var position = staffing.GetProperty("recruitment").GetProperty("positions")[0].GetProperty("id").GetGuid();
+        var applied = await Send(applicant, HttpMethod.Post, $"/api/activities/{activity}/recruitment/positions/{position}/join", new { expectedVersion = 5 }, "apply");
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+        var application = (await Json(applied)).GetProperty("id").GetGuid();
+        var review = $"/api/activities/{activity}/recruitment/applications/{application}/review";
+        var decision = new { expectedVersion = 6, applicationVersion = 1, decision = "APPROVED" };
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(verifier, HttpMethod.Post, review, decision, "not-event-reviewer")).StatusCode);
+        f.ApplicantEligible = false;
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(host, HttpMethod.Post, review, decision, "locked-account")).StatusCode);
+        await f.WithDb(async db => Assert.Equal("PENDING", (await db.Set<ActivityRecruitmentApplication>().SingleAsync()).Status));
+        f.ApplicantEligible = true;
+        Assert.Equal(HttpStatusCode.OK, (await Send(host, HttpMethod.Post, review, decision, "host-review")).StatusCode);
+        var hostId = (await Json(assigned)).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, $"/api/activities/{activity}/assignments/{hostId}/cancel", new { expectedVersion = 7 }, "remove-host")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(host, HttpMethod.Post, review, decision, "host-review")).StatusCode);
     }
 
     private sealed class Fixture(SqliteConnection? connection, WebApplication app, string? sqlConnection) : IAsyncDisposable
@@ -373,6 +446,7 @@ public sealed class ActivityActionContractTests
         internal bool AuthorityAvailable { get; set; } = true;
         internal bool SemesterActive { get; set; } = true;
         internal bool AttendanceVerification { get; set; } = true;
+        internal bool ApplicantEligible { get; set; } = true;
         internal TestClock Clock { get; } = new();
         internal static async Task<Fixture> Create(bool sql = false, bool upgrade = false)
         {
@@ -403,7 +477,7 @@ public sealed class ActivityActionContractTests
                 if (path.EndsWith("/user-profiles", StringComparison.Ordinal))
                 {
                     var ids = (await r.Content!.ReadFromJsonAsync<int[]>())!;
-                    result = ids.Select(id => new InternalUserProfile(id, "User " + id, id + "@example.test", id == 203 ? "HCM" : "HN", true, false, null)).ToArray();
+                    result = ids.Select(id => new InternalUserProfile(id, "User " + id, id + "@example.test", id == 203 ? "HCM" : "HN", id != 101 || f.ApplicantEligible, false, null)).ToArray();
                 }
                 else if (path.StartsWith("/api/internal/experience/clubs/", StringComparison.Ordinal))
                 {

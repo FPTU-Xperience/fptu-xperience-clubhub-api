@@ -83,6 +83,28 @@ public sealed class ActivityStaffAssignment
     public DateTimeOffset? CancelledAt { get; set; }
 }
 
+public sealed class ActivityRecruitmentApplication
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public int ActivityId { get; set; }
+    public Guid PositionId { get; set; }
+    public int UserId { get; set; }
+    public string DisplayName { get; set; } = "";
+    public string Status { get; set; } = "PENDING";
+    public int Version { get; set; } = 1;
+    public DateTimeOffset SubmittedAt { get; set; }
+    public int? ReviewedBy { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
+    public string? Reason { get; set; }
+    public Guid? AssignmentId { get; set; }
+}
+
+public sealed class ActivityCompletionResource
+{
+    public Guid CompletionId { get; set; }
+    public Guid ResourceId { get; set; }
+}
+
 public sealed class ActivityActionCompletion
 {
     public Guid Id { get; set; } = Guid.NewGuid();
