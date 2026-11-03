@@ -31,3 +31,5 @@ jobs:
             df -i /
             docker system df
             docker inspect clubreporthub-admin --format '{{range .Config.Env}}{{println .}}{{end}}' | awk '/^RECOMMENDATION_ENABLED=/ || /^Recommendation__Enabled=/ {print}'
+
+# Inspect rollout and recommendation config after reclaiming build cache.
