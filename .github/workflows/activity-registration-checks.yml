@@ -42,4 +42,8 @@ jobs:
           gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.Eligibility#2' --direction upstream --repo .
           gitnexus impact 'Method:src/Services/ActivityService/Endpoints/ActivityEndpointHelpers.cs:ActivityEndpointHelpers.ToResponse#2' --direction upstream --repo .
           git grep -n -E 'Eligibility|RegisterParticipant|ActivityEligibility.ResolveAsync|MapStudentActivityEndpoints' src/Services/ActivityService tests/Backend.StabilizationTests
+          gitnexus context StudentSessionSourceEndpoints --repo .
+          gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentSessionSourceEndpoints.cs:StudentSessionSourceEndpoints.ReadAsync#9' --direction upstream --repo .
+          gitnexus impact 'Method:src/Services/ActivityService/Endpoints/SessionAttendanceEndpoints.cs:SessionAttendanceEndpoints.CheckInAsync#7' --direction upstream --repo .
+          git grep -n -E 'StudentActivityItem|MapStudentSessionSourceEndpoints|SessionAttendanceEndpoints.CheckInAsync' -- src tests
           gitnexus detect-changes --scope all --repo .
