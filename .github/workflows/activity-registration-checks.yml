@@ -1,0 +1,33 @@
+name: Activity registration graph checks
+on:
+  push:
+    branches: [fix/activity-internal-registration-20261103]
+    paths: [.github/workflows/activity-registration-checks.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install GitNexus
+        run: npm install --global gitnexus
+      - name: Index and inspect graph
+        run: |
+          gitnexus analyze --index-only
+          gitnexus status
+          gitnexus query "activity eligibility internal public participant registration" --repo .
+          gitnexus context RegisterParticipant --repo .
+          gitnexus impact RegisterParticipant --direction upstream --repo .
+          gitnexus context ActivityEligibility --repo .
+          gitnexus impact ActivityEligibility --direction upstream --repo .
+          gitnexus context StudentActivityEndpoints --repo .
+          gitnexus impact StudentActivityEndpoints --direction upstream --repo .
+          gitnexus detect-changes --scope all --repo .
