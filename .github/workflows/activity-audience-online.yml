@@ -21,13 +21,13 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
-          const url = 'https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41605909513';
+          const url = 'https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41611046178';
           let deployed = false;
           for (let attempt = 0; attempt < 120; attempt++) {
             const response = await fetch(url, { headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN, Accept: 'application/vnd.github+json' } });
             assert.equal(response.status, 200);
             const run = await response.json();
-            assert.equal(run.head_sha, '0d38e9ed1af75455ce4bf26bdff75bef047756a0');
+            assert.equal(run.head_sha, '989449380030b5e8010ee7d34fd7d808395074f5');
             if (run.status === 'completed') {
               assert.equal(run.conclusion, 'success', 'Expected release deployed successfully');
               deployed = true;
