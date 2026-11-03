@@ -141,6 +141,7 @@ public static class StudentActivityEndpoints
                 JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])
             {
                 IsInternal = a.IsInternal,
+                IsRegistered = registered.Contains(a.Id),
                 // No required/optional flag exists yet. Treat every published session as
                 // required conservatively; never invent an attendable aggregate interval.
                 RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,
