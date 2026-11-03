@@ -159,7 +159,7 @@ internal static class ActivityWriteEndpoints
         DateTimeOffset joinedAt;
         try
         {
-            if (activity.PublicationStatus != "LEGACY" && activity.Eligibility == "CAMPUS_PUBLIC")
+            if (!activity.IsInternal)
             {
                 if (targetUserId != actorId) return Results.Forbid();
                 var account = await ActivityEligibility.ResolveAsync(activity, actorId, activity.StartTimeUtc,

@@ -188,6 +188,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>();
             if (connection is not null) await db.Database.MigrateAsync();
             var activity = StudentActivity("Published source"); activity.DiscoveryVisibility = visibility;
+            activity.IsInternal = visibility == "CLUB_ONLY" || eligibility == "CLUB_MEMBER";
             activity.Eligibility = eligibility; activity.PublicationStatus = publication; activity.SemesterId = "FALL2026";
             db.Activities.Add(activity); await db.SaveChangesAsync();
             if (registered) db.ActivityParticipants.Add(new ActivityParticipant { ActivityId = 1, UserId = 104, FullName = "Student" });

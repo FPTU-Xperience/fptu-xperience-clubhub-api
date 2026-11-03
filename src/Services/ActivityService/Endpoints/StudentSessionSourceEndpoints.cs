@@ -33,13 +33,13 @@ public static class StudentSessionSourceEndpoints
         var activity = await db.Activities.AsNoTracking().SingleOrDefaultAsync(x => x.Id == activityId, ct);
         if (activity is null || activity.PublicationStatus is not ("PUBLISHED" or "CLOSED" or "CANCELLED")) return Results.NotFound();
         var club = authority.Clubs.SingleOrDefault(x => x.ClubId == activity.ClubId);
-        if (club is null || !club.CanViewPrivate && !(activity.DiscoveryVisibility == "CAMPUS_PUBLIC" && club.CampusCode == user.CampusCode))
+        if (club is null || (activity.IsInternal ? !club.IsApprovedMember : club.CampusCode != user.CampusCode))
             return Results.NotFound();
         if (!await db.ActivityParticipants.AsNoTracking().AnyAsync(x => x.ActivityId == activityId && x.UserId == actor, ct)) return Results.Forbid();
-        if (activity.Eligibility == "CAMPUS_PUBLIC" ? club.CampusCode != user.CampusCode : !club.IsApprovedMember || !club.JoinedAt.HasValue)
+        if (!activity.IsInternal ? club.CampusCode != user.CampusCode : !club.IsApprovedMember || !club.JoinedAt.HasValue)
             return Results.Forbid();
         var query = db.Sessions.AsNoTracking().Include(x => x.Activity).Where(x => x.ActivityId == activityId);
-        if (activity.Eligibility != "CAMPUS_PUBLIC") query = query.Where(x => x.StartTimeUtc >= club.JoinedAt!.Value);
+        if (activity.IsInternal) query = query.Where(x => x.StartTimeUtc >= club.JoinedAt!.Value);
         var total = await query.CountAsync(ct);
         var sessions = await query.OrderBy(x => x.StartTimeUtc).ThenBy(x => x.Id)
             .Skip((int)Math.Min((long)(current - 1) * size, int.MaxValue)).Take(size).ToListAsync(ct);

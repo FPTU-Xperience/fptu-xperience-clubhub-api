@@ -123,7 +123,7 @@ public static class StudentActivityEndpoints
         {
             var session = sessions.FirstOrDefault(s => s.ActivityId == a.Id);
             var club = metadata[a.ClubId];
-            var eligible = a.Eligibility == "CAMPUS_PUBLIC" ? club.CampusCode == user.CampusCode
+            var eligible = !a.IsInternal ? club.CampusCode == user.CampusCode
                 : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;
             var canRegister = eligible && !registered.Contains(a.Id) && a.PublicationStatus == "PUBLISHED"
                 && a.RegistrationOpensAt <= now && a.RegistrationClosesAt > now && (a.Capacity == null || a.RegisteredCount < a.Capacity);
@@ -153,15 +153,15 @@ public static class StudentActivityEndpoints
     private static Expression<Func<ClubActivity, bool>> Eligibility(StudentClubScope scope, int[] campusIds)
     {
         var p = Expression.Parameter(typeof(ClubActivity), "activity");
-        var audience = Expression.Property(p, nameof(ClubActivity.Eligibility));
+        var audience = Expression.Property(p, nameof(ClubActivity.IsInternal));
         var clubId = Expression.Property(p, nameof(ClubActivity.ClubId));
-        Expression predicate = Expression.AndAlso(Expression.Equal(audience, Expression.Constant("CAMPUS_PUBLIC")),
+        Expression predicate = Expression.AndAlso(Expression.Not(audience),
             Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [typeof(int)], Expression.Constant(campusIds), clubId));
         foreach (var member in scope.Clubs.Where(x => x.IsApprovedMember && x.JoinedAt.HasValue))
         {
             var joined = Expression.AndAlso(Expression.Equal(clubId, Expression.Constant(member.ClubId)),
                 Expression.GreaterThanOrEqual(Expression.Property(p, nameof(ClubActivity.StartTimeUtc)), Expression.Constant(member.JoinedAt!.Value)));
-            predicate = Expression.OrElse(predicate, Expression.AndAlso(Expression.Equal(audience, Expression.Constant("CLUB_MEMBER")), joined));
+            predicate = Expression.OrElse(predicate, Expression.AndAlso(audience, joined));
         }
         return Expression.Lambda<Func<ClubActivity, bool>>(predicate, p);
     }

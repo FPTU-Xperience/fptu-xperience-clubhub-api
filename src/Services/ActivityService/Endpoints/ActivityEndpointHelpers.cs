@@ -75,7 +75,7 @@ internal static class ActivityEndpointHelpers
             Capacity = activity.Capacity,
             RegistrationOpensAt = activity.RegistrationOpensAt,
             RegistrationClosesAt = activity.RegistrationClosesAt,
-            Eligibility = activity.Eligibility,
+            Eligibility = activity.IsInternal ? "CLUB_MEMBER" : "CAMPUS_PUBLIC",
             CoverImageUrl = activity.CoverImageUrl,
             RegisteredCount = activity.Participants.Count,
             VerifiedAttendanceCount = activity.Attendances.Count(x => x.VerificationStatus == "VERIFIED"),
