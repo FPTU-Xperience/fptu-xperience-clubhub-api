@@ -6,10 +6,36 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  CI: "true"
+  SQL_PASSWORD: "Backend_Validation_CI_Only_2026!"
+  JWT_SIGNING_KEY: "ci-only-signing-key-with-at-least-32-characters"
+  INTERNAL_WORKFLOW_TOKEN: "ci-only-workflow-secret-at-least-32-characters"
+  ATTENDANCE_SIGNING_KEY: "ci-only-attendance-secret-at-least-32-characters"
+  FRONTEND_ORIGIN: "https://ci.example.invalid"
+  ADMIN_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
+  FINANCE_SERVICE_TEST_CONNECTION_STRING: "Server=localhost,1433;Initial Catalog=master;User Id=sa;Password=Backend_Validation_CI_Only_2026!;Encrypt=True;TrustServerCertificate=True"
+
 jobs:
   graph:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: Backend_Validation_CI_Only_2026!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Backend_Validation_CI_Only_2026!' -C -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+          --health-start-period 20s
+
     steps:
       - uses: actions/checkout@v4
         with:
