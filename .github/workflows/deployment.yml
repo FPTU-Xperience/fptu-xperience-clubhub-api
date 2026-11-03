@@ -79,3 +79,24 @@ jobs:
           gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.ReadAsync#17' --direction upstream --repo . > /tmp/registration-impact.txt
           cat /tmp/registration-impact.txt
           git grep -n 'RegisterParticipant\|RegistrationOpensAt\|RegistrationClosesAt' -- src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs
+
+      - name: Apply registration window fix after impact review
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs')
+          before = "            var canRegister = eligible && !registered.Contains(a.Id) && a.PublicationStatus == \"PUBLISHED\"\n                && a.RegistrationOpensAt <= now && a.RegistrationClosesAt > now && (a.Capacity == null || a.RegisteredCount < a.Capacity);"
+          after = "            var canRegister = eligible && !registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled\n                && a.PublicationStatus == \"PUBLISHED\"\n                && (a.RegistrationOpensAt == null || a.RegistrationOpensAt <= now)\n                && (a.RegistrationClosesAt == null || a.RegistrationClosesAt > now)\n                && (a.Capacity == null || a.RegisteredCount < a.Capacity);"
+          text = path.read_text()
+          assert before in text, 'Predicate must match reviewed source'
+          path.write_text(text.replace(before, after, 1))
+          Path('tests/Backend.StabilizationTests/StudentRegistrationWindowRegressionTests.cs').write_text("using System.Net.Http.Json;\nusing System.Text.Json;\nusing ActivityService.Data;\nusing ClubReportHub.Shared.Auth;\nusing Microsoft.Extensions.DependencyInjection;\nusing Xunit;\n\nnamespace Backend.StabilizationTests;\n\npublic sealed partial class CrossServiceWorkflowAuthorizationTests\n{\n    [Theory]\n    [InlineData(null, null, false, \"Scheduled\", true)]\n    [InlineData(null, 60, false, \"Scheduled\", true)]\n    [InlineData(-60, null, false, \"Scheduled\", true)]\n    [InlineData(60, null, false, \"Scheduled\", false)]\n    [InlineData(null, -60, false, \"Scheduled\", false)]\n    [InlineData(-60, 60, false, \"Scheduled\", true)]\n    [InlineData(null, null, true, \"Scheduled\", false)]\n    [InlineData(null, null, false, \"Cancelled\", false)]\n    public async Task Student_RegistrationWindowMatchesWriteContract(int? opensMinutes, int? closesMinutes, bool full,\n        string activityStatus, bool expected)\n    {\n        await using var app = await CreateStudentActivityAppAsync();\n        int id;\n        await using (var scope = app.Services.CreateAsyncScope())\n        {\n            var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>();\n            var activity = StudentActivity(\"Nullable registration windows\");\n            var now = DateTimeOffset.UtcNow;\n            activity.RegistrationOpensAt = opensMinutes.HasValue ? now.AddMinutes(opensMinutes.Value) : null;\n            activity.RegistrationClosesAt = closesMinutes.HasValue ? now.AddMinutes(closesMinutes.Value) : null;\n            activity.Status = activityStatus;\n            activity.Capacity = full ? 1 : null;\n            activity.RegisteredCount = full ? 1 : 0;\n            db.Add(activity);\n            await db.SaveChangesAsync();\n            id = activity.Id;\n        }\n        using var client = CreateAdminContractClient(app, 104, AuthRoles.ClubMember);\n        var detail = await client.GetFromJsonAsync<JsonElement>($\"/api/v2/activities/{id}\");\n        Assert.True(detail.GetProperty(\"isEligible\").GetBoolean());\n        Assert.Equal(expected, detail.GetProperty(\"canRegister\").GetBoolean());\n        Assert.Equal(expected ? \"REGISTER\" : \"VIEW\", detail.GetProperty(\"nextAction\").GetString());\n    }\n}\n")
+          PY
+          git add src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs tests/Backend.StabilizationTests/StudentRegistrationWindowRegressionTests.cs
+      - name: Analyze changes before source commit
+        run: gitnexus detect-changes --scope all --repo .
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Test nullable windows, public reads and participant persistence
+        run: dotnet test tests/Backend.StabilizationTests/Backend.StabilizationTests.csproj --configuration Release --filter 'FullyQualifiedName~Student_RegistrationWindowMatchesWriteContract|FullyQualifiedName~ActivityAudienceRegressionTests|FullyQualifiedName~ActivityWriteContractTests|FullyQualifiedName~Student_Discovery|FullyQualifiedName~Student_Feed' --logger 'console;verbosity=normal'
