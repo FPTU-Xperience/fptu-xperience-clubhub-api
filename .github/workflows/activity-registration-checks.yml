@@ -74,6 +74,18 @@ jobs:
           git grep -n -E 'StudentActivityItem|MapStudentSessionSourceEndpoints|SessionAttendanceEndpoints.CheckInAsync' -- src tests
           gitnexus detect-changes --scope all --repo .
 
+      - name: Check existing session fixture impact before applying candidate
+        run: |
+          gitnexus context CreateSessionSourceAppAsync --repo .
+          gitnexus impact CreateSessionSourceAppAsync --direction upstream --repo . > /tmp/session-fixture-impact.txt
+          cat /tmp/session-fixture-impact.txt
+          python3 - <<'PY'
+          import json
+          text = open('/tmp/session-fixture-impact.txt').read()
+          result = json.loads(text[text.index('{'):])
+          assert result.get('risk') not in ['HIGH', 'CRITICAL'], 'Review high impact before changing fixture'
+          assert result.get('status') != 'ambiguous', 'Disambiguate fixture symbol'
+          PY
       - name: Apply reviewed source candidate
         run: |
           node --input-type=module <<'NODE'
@@ -81,7 +93,7 @@ jobs:
           const patch = JSON.parse(fs.readFileSync('.github/validation/activity-audience-patch.json', 'utf8'));
           for (const [path, content] of Object.entries(patch)) fs.writeFileSync(path, content);
           NODE
-          git add src/Services/ActivityService tests/Backend.StabilizationTests/ActivityAudienceRegressionTests.cs
+          git add src/Services/ActivityService tests/Backend.StabilizationTests/ActivityAudienceRegressionTests.cs tests/Backend.StabilizationTests/StudentSessionSourceTests.cs
       - name: Analyze source changes before commit
         run: |
           gitnexus detect-changes --scope all --repo .
