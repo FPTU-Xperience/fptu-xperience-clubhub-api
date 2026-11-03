@@ -1,41 +1,400 @@
 name: Deploy to Ubuntu VPC
+
 on:
-  push:
-    branches: [cuongnk/implement-api-contract]
-    paths: [.github/workflows/deployment.yml]
   workflow_dispatch:
+    inputs:
+      deploy_rcm:
+        description: Deploy and enable the recommendation service on the API Docker network
+        type: boolean
+        default: true
+      rcm_ref:
+        description: Recommendation engine revision to validate and deploy
+        type: string
+        default: main
+      reuse_built_images:
+        description: Reuse images from a completed build when recovering an interrupted rollout
+        type: boolean
+        default: false
+
 permissions:
   contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
 jobs:
-  registration-graph:
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
+  validate:
+    uses: ./.github/workflows/backend-validate.yml
+
+  validate-rcm:
+    if: inputs.deploy_rcm
+    # MongoDB 8.0 rejects the newer kernel on ubuntu-latest (SERVER-121912).
+    # The Ubuntu 22.04 runner uses the compatible 6.8 kernel family.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    services:
+      mongo:
+        image: mongo:8.0
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
+          repository: FPTU-Xperience/recommendation-engine
+          ref: ${{ inputs.rcm_ref }}
+          persist-credentials: false
+      - id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v5
         with:
-          node-version: '22'
-      - uses: actions/setup-dotnet@v4
+          python-version: '3.13'
+      - run: pip install -r requirements-service.txt
+      - run: python -m unittest discover -s tests -v
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      - run: docker build -t recommendation:validated .
+
+  deploy:
+    needs: [validate, validate-rcm]
+    if: >-
+      always() && needs.validate.result == 'success' &&
+      (needs.validate-rcm.result == 'success' || needs.validate-rcm.result == 'skipped') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cuongnk/implement-api-contract')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Required-reviewer protection can be configured for this environment in repository settings.
+    environment: production
+    env:
+      TARGET_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api
+      RELEASE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}
+    steps:
+      - name: Checkout validated revision
+        uses: actions/checkout@v4
+
+      - name: Checkout validated recommendation revision
+        if: inputs.deploy_rcm
+        uses: actions/checkout@v4
         with:
-          dotnet-version: '8.0.x'
-      - run: npm install --global gitnexus
-      - name: Inspect student and legacy participation graph
-        run: |
-          gitnexus analyze --index-only
-          gitnexus query "student legacy internal registration eligibility" --repo .
-          gitnexus context 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.ReadAsync#17' --repo .
-          gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.ReadAsync#17' --direction upstream --repo .
-          gitnexus context RegisterParticipant --repo .
-          git grep -n 'PublicationStatus.*LEGACY\|var canRegister\|RegistrationOpensAt\|RegistrationClosesAt' -- src/Services/ActivityService/Endpoints/ActivityWriteEndpoints.cs src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs
-      - name: Validate candidate before source commit
-        run: |
-          gitnexus impact CrossServiceWorkflowAuthorizationTests --direction upstream --repo .
-          node <<'NODE'
-          const fs = require('fs');
-          for (const file of [{"path":"src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs","content":"using System.Linq.Expressions;\nusing System.Text.Json;\nusing System.Security.Cryptography;\nusing System.Text;\nusing ActivityService.Data;\nusing ActivityService.Models;\nusing ClubReportHub.Shared.Auth;\nusing ClubReportHub.Shared.Data;\nusing ClubReportHub.Shared.Experience;\nusing Microsoft.EntityFrameworkCore;\n\nnamespace ActivityService.Endpoints;\n\npublic static class StudentActivityEndpoints\n{\n    public static void MapStudentActivityEndpoints(this IEndpointRouteBuilder app)\n    {\n        app.MapGet(\"/api/v2/activities/feed\", FeedAsync).RequireAuthorization(AuthPolicies.BusinessAccess).WithTags(\"Student activities\");\n        app.MapGet(\"/api/v2/activities/{activityId:int}\", DetailAsync).RequireAuthorization(AuthPolicies.BusinessAccess).WithTags(\"Student activities\");\n        app.MapPost(\"/api/internal/experience/student/candidates\", async (StudentCandidateQuery request, ActivityDbContext db,\n            HttpContext http, CurrentUserProfileClient users, ClubExperienceAuthorityClient clubs, IConfiguration config, CancellationToken ct) =>\n        {\n            if (!VerifiedExperienceRules.InternalRequest(http, config)) return Results.Forbid();\n            if (request.UserId <= 0 || request.ActivityIds is { Count: > 100 }\n                || request.ActivityIds?.Any(x => x <= 0) == true || request.SessionIds is { Count: 0 or > 100 }\n                || request.SessionIds?.Any(x => x <= 0) == true) return Results.BadRequest();\n            return await ReadAsync(request.UserId, null, null, null, request.SemesterId, request.Page, request.PageSize,\n                db, http, users, clubs, ct, candidates: true, activityIds: request.ActivityIds, includeRegistered: request.IncludeRegistered,\n                sessionIds: request.SessionIds);\n        }).AllowAnonymous().ExcludeFromDescription();\n        app.MapPost(\"/api/internal/experience/student/counters\", CountersAsync).AllowAnonymous().ExcludeFromDescription();\n        app.MapPost(\"/api/internal/experience/student/source-status\", SourceStatusAsync).AllowAnonymous().ExcludeFromDescription();\n    }\n\n    private static Task<IResult> FeedAsync(int? clubId, string? search, string? status, string? semesterId,\n        int? page, int? pageSize, ActivityDbContext db, HttpContext http, CurrentUserProfileClient users,\n        ClubExperienceAuthorityClient clubs, CancellationToken ct)\n        => ReadAsync(http.User.GetUserId(), clubId, search, status, semesterId, page ?? 1, pageSize ?? 50,\n            db, http, users, clubs, ct);\n\n    private static Task<IResult> DetailAsync(int activityId, ActivityDbContext db, HttpContext http,\n        CurrentUserProfileClient users, ClubExperienceAuthorityClient clubs, CancellationToken ct)\n        => ReadAsync(http.User.GetUserId(), null, null, null, null, 1, 1, db, http, users, clubs, ct, detailId: activityId);\n\n    private static async Task<IResult> ReadAsync(int userId, int? clubId, string? search, string? status, string? semesterId,\n        int page, int size, ActivityDbContext db, HttpContext http, CurrentUserProfileClient users,\n        ClubExperienceAuthorityClient clubs, CancellationToken ct, bool candidates = false,\n        int? detailId = null, IReadOnlyList<int>? activityIds = null, bool includeRegistered = false, IReadOnlyList<int>? sessionIds = null)\n    {\n        if (page < 1 || size is < 1 or > 100 || clubId is <= 0 || search?.Length > 200 || semesterId?.Length > 40)\n            return ApiOperations.Error(400, \"INVALID_DISCOVERY_QUERY\", \"Check filters and pagination.\");\n        var state = status?.Trim().ToUpperInvariant();\n        if (!string.IsNullOrWhiteSpace(state) && state is not (\"UPCOMING\" or \"LIVE\"))\n            return ApiOperations.Error(400, \"INVALID_ACTIVITY_STATUS\", \"The actionable feed supports UPCOMING and LIVE.\");\n        InternalUserProfile? user; StudentClubScope authority;\n        try\n        {\n            user = (await users.GetAsync([userId], ct)).GetValueOrDefault(userId);\n            if (user is null || !user.IsActive || user.IsLocked) return Results.Forbid();\n            authority = await clubs.StudentScopeAsync(userId, user.CampusCode, ct);\n        }\n        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)\n        { return ApiOperations.Error(503, \"DISCOVERY_AUTHORITY_UNAVAILABLE\", \"Account or club visibility authority is unavailable.\"); }\n        var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;\n        var campusIds = authority.Clubs.Where(x => x.CampusCode == user.CampusCode).Select(x => x.ClubId).ToArray();\n        var memberIds = authority.Clubs.Where(x => x.IsApprovedMember).Select(x => x.ClubId).ToArray();\n        // Application executions own their publication flag. Older records have\n        // no execution: preserve published discovery and member-only legacy reads.\n        // Legacy registration follows the existing write contract; recommendation/XP candidates stay excluded.\n        var query = db.Activities.AsNoTracking().Where(x =>\n            (db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id && e.IsPublished)\n                || !db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id)\n                    && (x.PublicationStatus == \"PUBLISHED\" || x.PublicationStatus == \"CLOSED\"\n                        || !candidates && x.PublicationStatus == \"LEGACY\"))\n            && (x.IsInternal && memberIds.Contains(x.ClubId) || !x.IsInternal && campusIds.Contains(x.ClubId)));\n        if (detailId.HasValue) query = query.Where(x => x.Id == detailId);\n        else query = query.Where(x => x.Status != ActivityStatuses.Cancelled && x.Status != ActivityStatuses.Completed\n            && (db.Sessions.Any(s => s.ActivityId == x.Id && s.Status == \"SCHEDULED\" && s.EndTimeUtc > now)\n                || !db.Sessions.Any(s => s.ActivityId == x.Id) && x.EndTimeUtc > now));\n        if (clubId.HasValue) query = query.Where(x => x.ClubId == clubId);\n        if (!string.IsNullOrWhiteSpace(search)) { var text = search.Trim(); query = query.Where(x => x.Title.Contains(text) || x.Description.Contains(text)); }\n        if (!string.IsNullOrWhiteSpace(semesterId)) query = query.Where(x => x.SemesterId == semesterId);\n        if (sessionIds is not null) query = query.Where(x => db.Sessions.Any(s => s.ActivityId == x.Id\n            && sessionIds.Contains(s.Id) && s.Status == \"SCHEDULED\" && s.StartTimeUtc > now));\n        var timed = query.Select(x => new\n        {\n            Activity = x,\n            Start = db.Sessions.Where(s => s.ActivityId == x.Id && s.Status == \"SCHEDULED\" && s.EndTimeUtc > now\n                && (sessionIds == null || sessionIds.Contains(s.Id)))\n                .OrderBy(s => s.StartTimeUtc).Select(s => (DateTimeOffset?)s.StartTimeUtc).FirstOrDefault() ?? x.StartTimeUtc\n        });\n        if (state == \"UPCOMING\") timed = timed.Where(x => x.Start > now);\n        if (state == \"LIVE\") timed = timed.Where(x => x.Start <= now);\n        if (candidates)\n        {\n            query = timed.Where(x => x.Start > now)\n                .Select(x => x.Activity).Where(x => includeRegistered && db.ActivityParticipants.Any(p => p.ActivityId == x.Id && p.UserId == userId)\n                    || x.PublicationStatus == \"PUBLISHED\" && x.RegistrationOpensAt <= now && x.RegistrationClosesAt > now\n                        && (x.Capacity == null || x.RegisteredCount < x.Capacity));\n            query = query.Where(Eligibility(authority, campusIds));\n            timed = query.Select(x => new\n            {\n                Activity = x,\n                Start = db.Sessions.Where(s => s.ActivityId == x.Id && s.Status == \"SCHEDULED\" && s.EndTimeUtc > now\n                    && (sessionIds == null || sessionIds.Contains(s.Id)))\n                    .OrderBy(s => s.StartTimeUtc).Select(s => (DateTimeOffset?)s.StartTimeUtc).FirstOrDefault() ?? x.StartTimeUtc\n            });\n            if (activityIds is not null) timed = timed.Where(x => activityIds.Contains(x.Activity.Id));\n        }\n        var total = await timed.CountAsync(ct);\n        var rows = await timed.OrderBy(x => x.Start).ThenBy(x => x.Activity.Id)\n            .Skip((int)Math.Min((long)(page - 1) * size, int.MaxValue)).Take(size).Select(x => x.Activity).ToListAsync(ct);\n        var ids = rows.Select(x => x.Id).ToArray();\n        var sessions = await db.Sessions.AsNoTracking().Where(x => ids.Contains(x.ActivityId) && x.Status == \"SCHEDULED\" && x.EndTimeUtc > now\n            && (sessionIds == null || sessionIds.Contains(x.Id)))\n            .OrderBy(x => x.StartTimeUtc).ThenBy(x => x.Id).ToListAsync(ct);\n        var registered = await db.ActivityParticipants.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId))\n            .Select(x => x.ActivityId).ToListAsync(ct);\n        var checkedIn = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId\n            && x.VerificationStatus == \"VERIFIED\" && ids.Contains(x.ActivityId)).Select(x => x.SessionId).ToListAsync(ct);\n        var metadata = authority.Clubs.ToDictionary(x => x.ClubId);\n        var items = rows.Select(a =>\n        {\n            var session = sessions.FirstOrDefault(s => s.ActivityId == a.Id);\n            var club = metadata[a.ClubId];\n            var eligible = !a.IsInternal ? club.CampusCode == user.CampusCode\n                : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;\n            var canRegister = eligible && !registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled\n                && (a.PublicationStatus == \"LEGACY\"\n                    || a.PublicationStatus == \"PUBLISHED\"\n                        && (a.RegistrationOpensAt == null || a.RegistrationOpensAt <= now)\n                        && (a.RegistrationClosesAt == null || a.RegistrationClosesAt > now)\n                        && (a.Capacity == null || a.RegisteredCount < a.Capacity));\n            var start = session?.StartTimeUtc ?? a.StartTimeUtc; var end = session?.EndTimeUtc ?? a.EndTimeUtc;\n            var action = canRegister ? \"REGISTER\" : eligible && registered.Contains(a.Id) && session is not null\n                && session.OpensAt <= now && session.ClosesAt >= now && !checkedIn.Contains(session.Id) ? \"CHECK_IN\" : \"VIEW\";\n            return new StudentActivityItem(a.Id, a.ClubId, club.ClubCode, club.ClubName, a.Title, a.Description,\n                a.CoverImageUrl, start, end, session?.Location ?? a.Location,\n                a.Status == ActivityStatuses.Cancelled ? \"CANCELLED\" : end <= now ? \"COMPLETED\" : start > now ? \"UPCOMING\" : \"LIVE\",\n                action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,\n                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])\n            {\n                IsInternal = a.IsInternal,\n                // No required/optional flag exists yet. Treat every published session as\n                // required conservatively; never invent an attendable aggregate interval.\n                RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,\n                    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($\"{a.Version}:\" +\n                        string.Join(\"|\", sessions.Where(s => s.ActivityId == a.Id).Select(s => $\"{s.Id}:{s.Version}\"))))),\n                    sessions.Where(s => s.ActivityId == a.Id).Select(s => new RecommendationSession(s.Id,\n                        s.StartTimeUtc, s.EndTimeUtc, true)).ToArray()) : null\n            };\n        }).ToArray();\n        if (detailId.HasValue) return items.Length == 0 ? Results.NotFound() : Results.Ok(items[0]);\n        return Results.Ok(new StudentActivityPage(items, page, size, total, (int)Math.Ceiling((decimal)total / size), now, authority.Version));\n    }\n\n    private static Expression<Func<ClubActivity, bool>> Eligibility(StudentClubScope scope, int[] campusIds)\n    {\n        var p = Expression.Parameter(typeof(ClubActivity), \"activity\");\n        var audience = Expression.Property(p, nameof(ClubActivity.IsInternal));\n        var clubId = Expression.Property(p, nameof(ClubActivity.ClubId));\n        Expression predicate = Expression.AndAlso(Expression.Not(audience),\n            Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [typeof(int)], Expression.Constant(campusIds), clubId));\n        foreach (var member in scope.Clubs.Where(x => x.IsApprovedMember && x.JoinedAt.HasValue))\n        {\n            var joined = Expression.AndAlso(Expression.Equal(clubId, Expression.Constant(member.ClubId)),\n                Expression.GreaterThanOrEqual(Expression.Property(p, nameof(ClubActivity.StartTimeUtc)), Expression.Constant(member.JoinedAt!.Value)));\n            predicate = Expression.OrElse(predicate, Expression.AndAlso(audience, joined));\n        }\n        return Expression.Lambda<Func<ClubActivity, bool>>(predicate, p);\n    }\n\n    private static async Task<IResult> SourceStatusAsync(StudentSourceStatusQuery request, ActivityDbContext db,\n        HttpContext http, IConfiguration configuration, CancellationToken ct)\n    {\n        if (!VerifiedExperienceRules.InternalRequest(http, configuration)) return Results.Forbid();\n        if (request.Sources is not { Count: > 0 and <= 100 } || request.Sources.Any(x => x is null || x.ActivityId <= 0 || x.SessionId <= 0))\n            return Results.BadRequest();\n        var sessionIds = request.Sources.Select(x => x.SessionId).Distinct().ToArray();\n        var available = await db.Sessions.AsNoTracking().Where(x => sessionIds.Contains(x.Id) && x.Status != \"CANCELLED\"\n            && x.Activity.Status != ActivityStatuses.Cancelled && x.Activity.PublicationStatus != \"CANCELLED\"\n            && x.Activity.PublicationStatus != \"DRAFT\")\n            .Select(x => new StudentSourceReference(x.ActivityId, x.Id)).ToListAsync(ct);\n        var requested = request.Sources.ToHashSet();\n        return Results.Ok(new StudentSourceStatus(available.Where(requested.Contains).ToArray(), DateTimeOffset.UtcNow));\n    }\n\n    private static async Task<IResult> CountersAsync(StudentCounterQuery request, ActivityDbContext db,\n        HttpContext http, IConfiguration configuration, CancellationToken ct)\n    {\n        if (!VerifiedExperienceRules.InternalRequest(http, configuration)) return Results.Forbid();\n        if (request.UserId <= 0 || request.Scope is not (\"PERIOD\" or \"CUMULATIVE\")\n            || request.Scope == \"PERIOD\" && string.IsNullOrWhiteSpace(request.SemesterId)) return Results.BadRequest();\n        var query = db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == request.UserId && x.SessionId != null\n            && x.VerificationStatus == \"VERIFIED\" && (x.Status == AttendanceStatuses.Present || x.Status == AttendanceStatuses.Late)\n            && x.Activity.Status != ActivityStatuses.Cancelled\n            && db.Sessions.Any(s => s.Id == x.SessionId && s.Status != \"CANCELLED\"));\n        if (request.Scope == \"PERIOD\") query = query.Where(x => db.Sessions.Any(s => s.Id == x.SessionId && s.SemesterId == request.SemesterId));\n        var rows = await query.OrderBy(x => x.Id).Select(x => new { x.Id, x.SessionId, x.Version, ActivityVersion = x.Activity.Version }).ToListAsync(ct);\n        var count = rows.Select(x => x.SessionId).Distinct().Count();\n        var fingerprint = $\"{request.UserId}:{request.Scope}:{request.SemesterId}:\" + string.Join(\"|\", rows.Select(x => $\"{x.Id}:{x.SessionId}:{x.Version}:{x.ActivityVersion}\"));\n        var version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));\n        return Results.Ok(new StudentCounters(request.UserId, count, null, DateTimeOffset.UtcNow, version));\n    }\n}\n\n"},{"path":"tests/Backend.StabilizationTests/StudentLegacyRegistrationRegressionTests.cs","content":"using System.Net.Http.Json;\nusing System.Text.Json;\nusing ActivityService.Data;\nusing ActivityService.Models;\nusing ClubReportHub.Shared.Auth;\nusing Microsoft.Extensions.DependencyInjection;\nusing Xunit;\n\nnamespace Backend.StabilizationTests;\n\npublic sealed partial class CrossServiceWorkflowAuthorizationTests\n{\n    [Theory]\n    [InlineData(false, \"Scheduled\", false, true)]\n    [InlineData(true, \"Scheduled\", false, true)]\n    [InlineData(true, \"Scheduled\", true, false)]\n    [InlineData(true, \"Completed\", false, false)]\n    [InlineData(true, \"Cancelled\", false, false)]\n    public async Task Student_LegacyRegistrationCapabilityMatchesExistingWriter(bool internalOnly, string status,\n        bool registered, bool expected)\n    {\n        await using var app = await CreateStudentActivityAppAsync();\n        int id;\n        await using (var scope = app.Services.CreateAsyncScope())\n        {\n            var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>();\n            var activity = StudentActivity(\"Legacy registration\");\n            activity.ClubId = internalOnly ? 3 : 1;\n            activity.IsInternal = internalOnly;\n            activity.PublicationStatus = \"LEGACY\";\n            activity.Status = status;\n            activity.RegistrationOpensAt = null;\n            activity.RegistrationClosesAt = null;\n            db.Add(activity);\n            await db.SaveChangesAsync();\n            id = activity.Id;\n            if (registered)\n            {\n                db.ActivityParticipants.Add(new ActivityParticipant { ActivityId = id, UserId = 104, FullName = \"Student\" });\n                await db.SaveChangesAsync();\n            }\n        }\n        using var client = CreateAdminContractClient(app, 104, AuthRoles.ClubMember);\n        var detail = await client.GetFromJsonAsync<JsonElement>($\"/api/v2/activities/{id}\");\n        Assert.True(detail.GetProperty(\"isEligible\").GetBoolean());\n        Assert.Equal(expected, detail.GetProperty(\"canRegister\").GetBoolean());\n        Assert.Equal(expected ? \"REGISTER\" : \"VIEW\", detail.GetProperty(\"nextAction\").GetString());\n    }\n}\n"}]) fs.writeFileSync(file.path, file.content);
-          NODE
-          git add src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs tests/Backend.StabilizationTests/StudentLegacyRegistrationRegressionTests.cs
-          gitnexus detect-changes --scope all --repo .
-          dotnet test tests/Backend.StabilizationTests/Backend.StabilizationTests.csproj --filter "FullyQualifiedName~Student_" --verbosity minimal
+          repository: FPTU-Xperience/recommendation-engine
+          ref: ${{ needs.validate-rcm.outputs.sha }}
+          path: rcm-source
+          persist-credentials: false
+
+      - name: Copy recommendation immutable release
+        if: inputs.deploy_rcm
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          source: rcm-source
+          strip_components: 1
+          target: /${{ secrets.VPC_USERNAME }}/fptux/recommendation/releases/${{ needs.validate-rcm.outputs.sha }}
+          rm: false
+
+      - name: Provision and deploy recommendation stack
+        if: inputs.deploy_rcm
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/recommendation
+          RELEASE_SHA: ${{ needs.validate-rcm.outputs.sha }}
+          RECOMMENDATION_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 20m
+          envs: DEPLOY_ROOT,RELEASE_SHA,RECOMMENDATION_TOKEN
+          script: |
+            set -Eeuo pipefail
+            umask 077
+            # Match the real API Compose project, including preserved legacy volumes.
+            api_project="$(docker inspect clubreporthub-admin --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
+            test -n "${api_project}"
+            export API_NETWORK="${api_project}_internal-net"
+            docker network inspect "${API_NETWORK}" >/dev/null
+            if [ ! -s "${DEPLOY_ROOT}/mongo.password" ]; then
+              openssl rand -hex 32 > "${DEPLOY_ROOT}/mongo.password"
+            fi
+            export MONGODB_PASSWORD="$(cat "${DEPLOY_ROOT}/mongo.password")"
+            bash "${DEPLOY_ROOT}/releases/${RELEASE_SHA}/ops/deploy.sh"
+
+      - name: Copy source into versioned release directory
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          source: "."
+          target: ${{ env.RELEASE_DIR }}
+          # A rerun can target the active release; never delete it before validation.
+          rm: false
+
+      - name: Build, start, and verify production stack
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          TARGET_ROOT: ${{ env.TARGET_ROOT }}
+          RELEASE_DIR: ${{ env.RELEASE_DIR }}
+          COMPOSE_PROJECT_NAME: fptux-clubhub-api
+          SQL_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          INTERNAL_WORKFLOW_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+          RECOMMENDATION_TOKEN: ${{ secrets.INTERNAL_WORKFLOW_TOKEN }}
+          RECOMMENDATION_ENABLED: ${{ inputs.deploy_rcm && 'true' || vars.RECOMMENDATION_ENABLED || 'false' }}
+          ATTENDANCE_SIGNING_KEY: ${{ secrets.ATTENDANCE_SIGNING_KEY }}
+          LOCAL_SSO_ENABLED: ${{ vars.LOCAL_SSO_ENABLED }}
+          CLUBHUB_ORIGIN: ${{ vars.CLUBHUB_ORIGIN || 'https://fptux-clubhub-ui.pages.dev' }}
+          ADMIN_ORIGIN: ${{ vars.ADMIN_ORIGIN || 'https://fptux-admin-ui.pages.dev' }}
+          BROWSER_SESSION_SAME_SITE: ${{ vars.BROWSER_SESSION_SAME_SITE || 'None' }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          R2_PUBLIC_ORIGIN: ${{ vars.R2_PUBLIC_ORIGIN }}
+          FRONTEND_ORIGIN: ${{ secrets.FRONTEND_ORIGIN }}
+          CORS_ADDITIONAL_ORIGINS: "${{ vars.CORS_ADDITIONAL_ORIGINS }},https://fptux-clubhub-ui.pages.dev,https://*.fptux-clubhub-ui.pages.dev,https://fptux-legacy-ui.pages.dev,https://*.fptux-legacy-ui.pages.dev,http://localhost:*,http://127.0.0.1:*,http://localhost:5173,http://localhost:3000,http://localhost:5174,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:3000"
+          GOOGLE_CLIENT_ID: ${{ secrets.CLUBHUB_GOOGLE_CLIENT_ID }}
+          GOOGLE_ALLOWED_HOSTED_DOMAIN: ${{ secrets.GOOGLE_ALLOWED_HOSTED_DOMAIN }}
+          GOOGLE_ALLOWED_EMAIL_DOMAINS: "fpt.edu.vn,gmail.com"
+          REUSE_BUILT_IMAGES: ${{ inputs.reuse_built_images }}
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 50m
+          envs: CLUBHUB_ORIGIN,ADMIN_ORIGIN,BROWSER_SESSION_SAME_SITE,LOCAL_SSO_ENABLED,TARGET_ROOT,RELEASE_DIR,COMPOSE_PROJECT_NAME,SQL_PASSWORD,JWT_SIGNING_KEY,INTERNAL_WORKFLOW_TOKEN,RECOMMENDATION_TOKEN,RECOMMENDATION_ENABLED,ATTENDANCE_SIGNING_KEY,R2_ENDPOINT,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET,R2_PUBLIC_ORIGIN,FRONTEND_ORIGIN,CORS_ADDITIONAL_ORIGINS,GOOGLE_CLIENT_ID,GOOGLE_ALLOWED_HOSTED_DOMAIN,GOOGLE_ALLOWED_EMAIL_DOMAINS,REUSE_BUILT_IMAGES
+          script: |
+            set -Eeuo pipefail
+
+            export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
+
+            wait_for_database() {
+              for attempt in $(seq 1 24); do
+                if docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                  -S localhost -U sa -P "${SQL_PASSWORD}" -C -b -l 5 -t 5 -Q "SELECT 1" >/dev/null 2>&1; then
+                  return 0
+                fi
+                echo "Waiting for SQL Server query readiness (${attempt}/24)..."
+                sleep 5
+              done
+              docker inspect clubreporthub-sqlserver --format '{{json .State}}' >&2 || true
+              docker logs --tail 80 clubreporthub-sqlserver >&2 || true
+              docker stats --no-stream >&2 || true
+              echo "SQL Server query readiness failed; refusing to change application containers." >&2
+              return 1
+            }
+
+            if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
+              existing_project="$(
+                docker inspect clubreporthub-sqlserver \
+                  --format '{{ index .Config.Labels "com.docker.compose.project" }}'
+              )"
+              if [ -n "${existing_project}" ]; then
+                echo "Preserving existing Compose project: '${existing_project}' to protect volume attachment."
+                COMPOSE_PROJECT_NAME="${existing_project}"
+              else
+                echo "Existing SQL Server container has no Compose project label; refusing to guess its volume ownership." >&2
+                exit 1
+              fi
+            fi
+
+            cd "${RELEASE_DIR}"
+            docker compose -p "${COMPOSE_PROJECT_NAME}" config --quiet
+
+            if docker container inspect clubreporthub-sqlserver >/dev/null 2>&1; then
+              if ! docker ps --format '{{.Names}}' | grep -q '^clubreporthub-sqlserver$'; then
+                echo "SQL Server container exists but is not running; deployment aborted without changing it." >&2
+                exit 1
+              fi
+
+              wait_for_database
+
+              echo "Creating and verifying database backups before deployment..."
+              backup_timestamp="$(date +%Y%m%d_%H%M%S)"
+              docker exec clubreporthub-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "${SQL_PASSWORD}" -C -b \
+                -Q "
+                  DECLARE @name NVARCHAR(256), @sql NVARCHAR(MAX);
+                  DECLARE db_cursor CURSOR FOR
+                    SELECT name FROM sys.databases WHERE name LIKE 'ClubReportHub_%';
+                  OPEN db_cursor;
+                  FETCH NEXT FROM db_cursor INTO @name;
+                  WHILE @@FETCH_STATUS = 0
+                  BEGIN
+                    SET @sql = 'BACKUP DATABASE [' + @name + '] TO DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH FORMAT, INIT, CHECKSUM;';
+                    EXEC sp_executesql @sql;
+                    SET @sql = 'RESTORE VERIFYONLY FROM DISK = ''/var/opt/mssql/backup_' + @name + '_${backup_timestamp}.bak'' WITH CHECKSUM;';
+                    EXEC sp_executesql @sql;
+                    FETCH NEXT FROM db_cursor INTO @name;
+                  END
+                  CLOSE db_cursor;
+                  DEALLOCATE db_cursor;
+                "
+            else
+              echo "No existing SQL Server container; first deployment has no databases to back up."
+            fi
+
+            if [ "${REUSE_BUILT_IMAGES:-false}" = "true" ]; then
+              echo "Recovery requested: verifying all previously built images exist locally."
+              while IFS= read -r image; do
+                docker image inspect "${image}" >/dev/null
+              done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --images)
+            else
+              # Keep live SQL Server responsive on a small VPC; BuildKit can otherwise build every service at once.
+              while IFS= read -r service; do
+                docker compose -p "${COMPOSE_PROJECT_NAME}" build "${service}"
+              done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services)
+            fi
+
+            # Builds can leave the SQL healthcheck temporarily unhealthy from resource contention.
+            # Verify an actual authenticated query before starting apps, while preserving existing infrastructure.
+            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-recreate sqlserver redis
+            wait_for_database
+            redis_ready=false
+            for attempt in $(seq 1 24); do
+              if [ "$(docker exec clubreporthub-redis redis-cli ping 2>/dev/null)" = "PONG" ]; then
+                redis_ready=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "${redis_ready}" != "true" ]; then
+              echo "Redis is not ready; refusing to change application containers." >&2
+              exit 1
+            fi
+            mapfile -t application_services < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services | grep -Ev '^(sqlserver|redis)$')
+
+            previous_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
+            rollback() {
+              trap - ERR
+              if [ -n "${previous_release}" ] && [ -f "${previous_release}/docker-compose.yml" ]; then
+                echo "Deployment failed; rolling back to ${previous_release}." >&2
+                cd "${previous_release}"
+                docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --no-deps "${application_services[@]}"
+              else
+                echo "Deployment failed; no previous versioned release is available for rollback." >&2
+              fi
+            }
+            trap rollback ERR
+
+            docker compose -p "${COMPOSE_PROJECT_NAME}" up -d --no-build --no-deps "${application_services[@]}"
+
+            gateway_port="${GATEWAY_PORT:-7000}"
+            network_name="${COMPOSE_PROJECT_NAME}_internal-net"
+
+            wait_for_gateway() {
+              gateway_url="http://127.0.0.1:${gateway_port}/health"
+              echo "Checking Gateway readiness at ${gateway_url}."
+
+              for attempt in $(seq 1 30); do
+                if gateway_probe_error="$(curl \
+                  --fail \
+                  --silent \
+                  --show-error \
+                  --connect-timeout 3 \
+                  --max-time 5 \
+                  "${gateway_url}" 2>&1)"; then
+                  echo "Gateway is healthy (attempt ${attempt}/30)."
+                  return 0
+                fi
+
+                if [ "${attempt}" -eq 30 ]; then
+                  echo "Gateway failed to become healthy after ${attempt} attempts." >&2
+                  echo "Last Gateway probe error: ${gateway_probe_error}" >&2
+                  docker ps >&2 || true
+                  docker logs --tail 200 clubreporthub-gateway >&2 || true
+                  return 1
+                fi
+
+                echo "Waiting for Gateway readiness (${attempt}/30)..."
+                sleep 3
+              done
+            }
+
+            wait_for_internal_service() {
+              service_name="$1"
+              container_name="$2"
+              health_path="$3"
+              service_url="http://${service_name}:8080${health_path}"
+              echo "Checking ${service_name} readiness at ${service_url}."
+
+              for attempt in $(seq 1 30); do
+                if service_probe_error="$(docker run --rm --network "${network_name}" curlimages/curl:8.10.1 \
+                  --fail \
+                  --silent \
+                  --show-error \
+                  --connect-timeout 3 \
+                  --max-time 5 \
+                  "${service_url}" 2>&1)"; then
+                  echo "${service_name} is healthy (attempt ${attempt}/30)."
+                  return 0
+                fi
+
+                if [ "${attempt}" -eq 30 ]; then
+                  echo "${service_name} failed to become healthy after ${attempt} attempts." >&2
+                  echo "Last ${service_name} probe error: ${service_probe_error}" >&2
+                  docker ps >&2 || true
+                  docker logs --tail 200 "${container_name}" >&2 || true
+                  return 1
+                fi
+
+                echo "Waiting for ${service_name} readiness (${attempt}/30)..."
+                sleep 3
+              done
+            }
+
+            wait_for_gateway
+            wait_for_internal_service auth-service clubreporthub-auth /health
+            wait_for_internal_service club-service clubreporthub-club /health
+            wait_for_internal_service activity-service clubreporthub-activity /health
+            wait_for_internal_service report-service clubreporthub-report /health
+            wait_for_internal_service finance-service clubreporthub-finance /health
+            wait_for_internal_service notification-service clubreporthub-notification /health
+            wait_for_internal_service export-service clubreporthub-export /health
+            wait_for_internal_service admin-service clubreporthub-admin /health/ready
+
+            ln -sfn "${RELEASE_DIR}" "${TARGET_ROOT}/current"
+            trap - ERR
+            docker image prune -f
+
+            # Retain the 5 newest releases and always preserve active/rollback targets (OPS-F03).
+            if [ -d "${TARGET_ROOT}/releases" ]; then
+              target_root_real="$(readlink -f "${TARGET_ROOT}")"
+              releases_root="$(readlink -f "${TARGET_ROOT}/releases")"
+              if [ "${target_root_real}" = "/" ] ||
+                 [ "${releases_root}" != "${target_root_real}/releases" ]; then
+                echo "Refusing to prune releases through an unexpected directory or symlink." >&2
+                exit 1
+              fi
+              current_release="$(readlink -f "${TARGET_ROOT}/current" 2>/dev/null || true)"
+              echo "Pruning old releases in ${releases_root}, keeping the newest 5 and rollback targets..."
+              find "${releases_root}" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' |
+                sort -z -nr |
+                tail -z -n +6 |
+                while IFS= read -r -d '' candidate; do
+                  old_release="${candidate#* }"
+                  resolved_release="$(readlink -f "${old_release}")"
+                  case "${resolved_release}" in
+                    "${releases_root}/"*) ;;
+                    *) echo "Refusing to prune a path outside the release directory." >&2; exit 1 ;;
+                  esac
+                  if [ "${resolved_release}" = "${current_release}" ] ||
+                     [ "${resolved_release}" = "${previous_release}" ]; then
+                    continue
+                  fi
+                  rm -rf -- "${resolved_release}"
+                done
+            fi

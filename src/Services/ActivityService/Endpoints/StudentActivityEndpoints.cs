@@ -66,7 +66,7 @@ public static class StudentActivityEndpoints
         var memberIds = authority.Clubs.Where(x => x.IsApprovedMember).Select(x => x.ClubId).ToArray();
         // Application executions own their publication flag. Older records have
         // no execution: preserve published discovery and member-only legacy reads.
-        // Legacy reads do not make those records registration/XP candidates.
+        // Legacy registration follows the existing write contract; recommendation/XP candidates stay excluded.
         var query = db.Activities.AsNoTracking().Where(x =>
             (db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id && e.IsPublished)
                 || !db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id)
@@ -126,10 +126,11 @@ public static class StudentActivityEndpoints
             var eligible = !a.IsInternal ? club.CampusCode == user.CampusCode
                 : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;
             var canRegister = eligible && !registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled
-                && a.PublicationStatus == "PUBLISHED"
-                && (a.RegistrationOpensAt == null || a.RegistrationOpensAt <= now)
-                && (a.RegistrationClosesAt == null || a.RegistrationClosesAt > now)
-                && (a.Capacity == null || a.RegisteredCount < a.Capacity);
+                && (a.PublicationStatus == "LEGACY"
+                    || a.PublicationStatus == "PUBLISHED"
+                        && (a.RegistrationOpensAt == null || a.RegistrationOpensAt <= now)
+                        && (a.RegistrationClosesAt == null || a.RegistrationClosesAt > now)
+                        && (a.Capacity == null || a.RegisteredCount < a.Capacity));
             var start = session?.StartTimeUtc ?? a.StartTimeUtc; var end = session?.EndTimeUtc ?? a.EndTimeUtc;
             var action = canRegister ? "REGISTER" : eligible && registered.Contains(a.Id) && session is not null
                 && session.OpensAt <= now && session.ClosesAt >= now && !checkedIn.Contains(session.Id) ? "CHECK_IN" : "VIEW";
