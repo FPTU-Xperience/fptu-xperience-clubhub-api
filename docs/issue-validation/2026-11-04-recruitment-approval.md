@@ -10,3 +10,11 @@
 - Local ActivityService Release build passed, no warnings/errors. Local SQLite action regression: 20 passed, zero failed/skipped. EF reports no pending model changes. Full SQL Server CI and production rollout are pending at source commit time.
 - GitNexus 1.6.12 query/context/impact ran against the exact base worktree. Query degraded because FTS was disabled. Endpoint/Join graph impact UNKNOWN was resolved with route registration, endpoint mappings and route-level tests. Configuration impact LOW with receiver limitation; shared contracts HIGH and completion model CRITICAL were reported before editing. Index process tracing is bounded and not claimed exhaustive. detect-changes --scope all plus raw result inspection ran with no partial/truncated flag; CLI display alone abbreviates symbols. Source-level review supplements graph limitations.
 - Real signed-in production acceptance is not established by these source tests.
+
+## Production release (2026-11-04 Asia/Saigon)
+
+- Source: `fe61bb66c7c7e3c593cfecc2d9894098513188c4`. Full CI https://github.com/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41685958506 succeeded: 130 + 85 + 800 = 1,015 tests, zero failed/skipped; Release solution build with warnings as errors, quality, Admin image and eight service model/migration checks passed. Includes SQL Server last-seat approval concurrency and upgrade preservation test.
+- Rollout: https://github.com/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41686494582 succeeded. Images built only on Actions, explicit pre-change rollback image retained, targeted ActivityService `--no-build --no-deps` with runtime/Compose settings preserved. Live image checked as `sha256:2f32796ce333b1872fee8790edcf5d2b2c7fa7074203aa829feda67f38565a53`.
+- Online health `/health`, `/api/health`, `/api/auth/health`: 200. Anonymous staffing GET and new recruitment application review POST: 401, independently rechecked from the local executor after rollout. Existing feed/session protected boundaries also 401 in workflow.
+- Deployment workflow restored to its original workflow_dispatch-only configuration after success. No secrets, origin allow-lists or accounts changed; no real-user recruitment/registration mutations performed.
+- Real signed-in student/CTSV acceptance remains unverified. SQL fixtures and anonymous online checks are distinct evidence.
