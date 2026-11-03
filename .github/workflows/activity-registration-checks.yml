@@ -47,3 +47,22 @@ jobs:
           gitnexus impact 'Method:src/Services/ActivityService/Endpoints/SessionAttendanceEndpoints.cs:SessionAttendanceEndpoints.CheckInAsync#7' --direction upstream --repo .
           git grep -n -E 'StudentActivityItem|MapStudentSessionSourceEndpoints|SessionAttendanceEndpoints.CheckInAsync' -- src tests
           gitnexus detect-changes --scope all --repo .
+
+      - name: Apply reviewed source candidate
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const patch = JSON.parse(fs.readFileSync('.github/validation/activity-audience-patch.json', 'utf8'));
+          for (const [path, content] of Object.entries(patch)) fs.writeFileSync(path, content);
+          NODE
+          git add src/Services/ActivityService tests/Backend.StabilizationTests/ActivityAudienceRegressionTests.cs
+      - name: Analyze source changes before commit
+        run: |
+          gitnexus detect-changes --scope all --repo .
+          git diff --cached --stat
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Run audience, registration, session and experience regressions
+        run: |
+          dotnet test tests/Backend.StabilizationTests/Backend.StabilizationTests.csproj --configuration Release --filter 'FullyQualifiedName~ActivityAudienceRegressionTests|FullyQualifiedName~Student_PublicRegistrationAndCandidates|FullyQualifiedName~Student_InternalActivityNever|FullyQualifiedName~ActivityWriteContractTests|FullyQualifiedName~StudentActivity|FullyQualifiedName~StudentSessionSource|FullyQualifiedName~ClubManagerExperienceTests' --logger 'console;verbosity=normal'
