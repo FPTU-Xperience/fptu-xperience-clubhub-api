@@ -30,4 +30,10 @@ jobs:
           gitnexus impact ActivityEligibility --direction upstream --repo .
           gitnexus context StudentActivityEndpoints --repo .
           gitnexus impact StudentActivityEndpoints --direction upstream --repo .
+          gitnexus context 'Method:src/Services/ActivityService/Services/ActivityEligibility.cs:ActivityEligibility.ResolveAsync#6' --repo .
+          gitnexus impact 'Method:src/Services/ActivityService/Services/ActivityEligibility.cs:ActivityEligibility.ResolveAsync#6' --direction upstream --repo .
+          gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.ReadAsync#17' --direction upstream --repo .
+          gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.Eligibility#2' --direction upstream --repo .
+          gitnexus impact ToResponse --direction upstream --repo .
+          rg -n 'Eligibility|RegisterParticipant|ActivityEligibility.ResolveAsync|MapStudentActivityEndpoints' src/Services/ActivityService tests/Backend.StabilizationTests
           gitnexus detect-changes --scope all --repo .
