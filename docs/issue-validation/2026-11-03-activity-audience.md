@@ -20,3 +20,15 @@
 - Public online verification waits for the exact release to deploy successfully: https://github.com/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41607378579 . It checks actual public health and anonymous authorization boundaries, not authenticated production registration.
 - Cloud blocker notification task creation was confirmed; delivery to a phone remains unknown. No SMS/push delivery claim.
 - Temporary automatic deployment trigger restored to the original manual workflow. This does not cancel the already-running release.
+
+
+## Final deployment — completed 2026-11-03 09:46 UTC
+- Production ActivityService source: 0d38e9ed1af75455ce4bf26bdff75bef047756a0.
+- Actual running image verified: sha256:245fc67564528c4b57b4d2e277c1555a778409a8adcb886ba293d55a88c3ba64.
+- Successful existing deployment workflow: https://github.com/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41613702644 . No extra workflow file was needed for the final deployment.
+- Built release and rollback images on CI from exact revisions 0d38e9ed1af75455ce4bf26bdff75bef047756a0 and pre-change 0a638e80d6ca789309e79afd09d92c8c7eb9f932. The prior running image metadata could not be tagged, so rollback uses the explicitly built pre-change source image.
+- Only activity-service was recreated, using the current Compose project/configuration. Required configuration variables were preserved from actual running container settings without logging their values or creating/rotating secrets. Other services were not restarted by this scoped rollout. Recommendation__Enabled=true confirmed afterward.
+- Online verification passed against https://clubreporthub.duckdns.org: /health, /api/health, /api/auth/health all 200; anonymous /api/v2/activities/feed and /api/v2/activities/1/sessions both 401.
+- This is health/authorization-boundary verification. Authenticated production student registration was not exercised; registration persistence and eligibility were tested in the validated 999-test source suite.
+- All temporary agent-created workflow files and the source-staging JSON were removed from both fix/activity-internal-registration-20261103 and fix/activity-audience-production-20261103. Verified only backend-ci.yml, backend-validate.yml, deployment.yml remain. Historical Actions runs remain as validation evidence.
+- Original deployment.yml restored to manual-only after successful rollout. No extra automatic deployment trigger remains.
