@@ -19,6 +19,12 @@ jobs:
           node-version: '22'
       - name: Install GitNexus
         run: npm install --global gitnexus
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .gitnexus
+            ~/.gitnexus
+          key: activity-graph-977eab9-v1
       - name: Index and inspect graph
         run: |
           gitnexus analyze --index-only
@@ -34,6 +40,6 @@ jobs:
           gitnexus impact 'Method:src/Services/ActivityService/Services/ActivityEligibility.cs:ActivityEligibility.ResolveAsync#6' --direction upstream --repo .
           gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.ReadAsync#17' --direction upstream --repo .
           gitnexus impact 'Method:src/Services/ActivityService/Endpoints/StudentActivityEndpoints.cs:StudentActivityEndpoints.Eligibility#2' --direction upstream --repo .
-          gitnexus impact ToResponse --direction upstream --repo .
-          rg -n 'Eligibility|RegisterParticipant|ActivityEligibility.ResolveAsync|MapStudentActivityEndpoints' src/Services/ActivityService tests/Backend.StabilizationTests
+          gitnexus impact 'Method:src/Services/ActivityService/Endpoints/ActivityEndpointHelpers.cs:ActivityEndpointHelpers.ToResponse#2' --direction upstream --repo .
+          git grep -n -E 'Eligibility|RegisterParticipant|ActivityEligibility.ResolveAsync|MapStudentActivityEndpoints' src/Services/ActivityService tests/Backend.StabilizationTests
           gitnexus detect-changes --scope all --repo .
