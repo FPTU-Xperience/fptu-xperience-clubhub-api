@@ -15,40 +15,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: 0d38e9ed1af75455ce4bf26bdff75bef047756a0
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Verify source validation
+      - name: Verify source validation and successful image build
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
-          const response = await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41605909431',
-            { headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN } });
+          const headers = { Authorization: 'Bearer ' + process.env.GH_TOKEN };
+          const base = 'https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/';
+          const response = await fetch(base + '41605909431', { headers });
           assert.equal(response.status, 200);
-          const run = await response.json();
-          assert.equal(run.head_sha, '0d38e9ed1af75455ce4bf26bdff75bef047756a0');
-          assert.equal(run.conclusion, 'success');
+          const ci = await response.json();
+          assert.equal(ci.head_sha, '0d38e9ed1af75455ce4bf26bdff75bef047756a0');
+          assert.equal(ci.conclusion, 'success');
+          const jobsResponse = await fetch(base + '41612778513/jobs', { headers });
+          assert.equal(jobsResponse.status, 200);
+          const jobs = await jobsResponse.json();
+          assert.equal(jobs.jobs.find(job => job.name === 'build-activity')?.conclusion, 'success');
+          console.log('Validated release and pre-change images were built successfully.');
           NODE
-      - name: Build validated release and pre-change rollback image on CI
-        run: |
-          git checkout --detach 0a638e80d6ca789309e79afd09d92c8c7eb9f932
-          docker build --file src/Services/ActivityService/Dockerfile --tag clubreporthub-activity:rollback-0a638e80d6ca789309e79afd09d92c8c7eb9f932 .
-          git checkout --detach 0d38e9ed1af75455ce4bf26bdff75bef047756a0
-          docker build --file src/Services/ActivityService/Dockerfile --tag clubreporthub-activity:0d38e9ed1af75455ce4bf26bdff75bef047756a0 .
-          mkdir -p activity-image
-          docker save clubreporthub-activity:rollback-0a638e80d6ca789309e79afd09d92c8c7eb9f932 clubreporthub-activity:0d38e9ed1af75455ce4bf26bdff75bef047756a0 | gzip > activity-image/images.tar.gz
-          sha256sum activity-image/images.tar.gz > activity-image/images.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: validated-activity-release
-          path: activity-image
-          retention-days: 3
 
   deploy:
     needs: build-activity
@@ -57,21 +45,6 @@ jobs:
     timeout-minutes: 20
     environment: production
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: validated-activity-release
-          path: activity-image
-      - name: Transfer images
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPC_HOST }}
-          username: ${{ secrets.VPC_USERNAME }}
-          key: ${{ secrets.VPC_SSH_KEY }}
-          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
-          password: ${{ secrets.VPC_PASSWORD }}
-          source: activity-image
-          target: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/0d38e9ed1af75455ce4bf26bdff75bef047756a0/prebuilt-final
-          rm: false
       - name: Rollout validated ActivityService with existing runtime config
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -99,7 +72,9 @@ jobs:
             test -n "${project}"
             test -d "${workdir}"
             network="$(docker inspect clubreporthub-activity --format '{{range $name, $details := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' | head -n 1)"
-            docker load --input activity-image/images.tar.gz
+            if ! docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || ! docker image inspect "${ROLLBACK_TAG}" >/dev/null 2>&1; then
+              docker load --input activity-image/images.tar.gz
+            fi
             new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
             docker image inspect "${ROLLBACK_TAG}" --format '{{.Id}}'
             override="${IMAGE_DIR}/activity.override.yml"
@@ -108,6 +83,39 @@ jobs:
             IFS=',' read -ra files <<< "${configs}"
             for file in "${files[@]}"; do test -f "${file}"; args+=(-f "${file}"); done
             cd "${workdir}"
+            runtime_exports="$(python3 - <<'PY'
+            import json, re, shlex, subprocess
+            values = {}
+            for name in ('clubreporthub-activity', 'clubreporthub-gateway'):
+                data = json.loads(subprocess.check_output(['docker', 'inspect', '--format', '{{json .Config.Env}}', name], text=True))
+                current = dict(item.split('=', 1) for item in data)
+                if name == 'clubreporthub-activity':
+                    mapping = {
+                        'JWT_SIGNING_KEY': 'Jwt__SigningKey',
+                        'INTERNAL_WORKFLOW_TOKEN': 'Security__InternalWorkflowToken',
+                        'ATTENDANCE_SIGNING_KEY': 'Attendance__SigningKey',
+                        'REDIS_STREAM_NAME': 'Redis__StreamName'
+                    }
+                    for variable, key in mapping.items():
+                        if current.get(key):
+                            values[variable] = current[key]
+                    connection = current.get('ConnectionStrings__DefaultConnection', '')
+                    pattern = r'''(?:^|;)\s*(?:Password|Pwd)\s*=\s*("(?:""|[^"])*"|'(?:''|[^'])*'|[^;]*)'''
+                    match = re.search(pattern, connection, re.IGNORECASE)
+                    if not match:
+                        raise RuntimeError('Current ActivityService database password could not be preserved')
+                    values['SQL_PASSWORD'] = match.group(1).strip()
+                else:
+                    values['FRONTEND_ORIGIN'] = current.get('Cors__AllowedOrigins__0', '')
+            for variable in ('SQL_PASSWORD', 'JWT_SIGNING_KEY', 'INTERNAL_WORKFLOW_TOKEN', 'ATTENDANCE_SIGNING_KEY', 'FRONTEND_ORIGIN'):
+                if not values.get(variable):
+                    raise RuntimeError('Missing current runtime setting: ' + variable)
+            for variable, value in values.items():
+                print('export ' + variable + '=' + shlex.quote(value))
+            PY
+            )"
+            eval "${runtime_exports}"
+            unset runtime_exports
             successful=false
             if docker compose -p "${project}" "${args[@]}" -f "${override}" up -d --no-build --no-deps activity-service; then
               for attempt in $(seq 1 30); do
