@@ -24,12 +24,7 @@ jobs:
           script: |
             set -eu
             docker ps --format '{{.Names}} | {{.Status}}'
-            docker stats --no-stream --format '{{.Name}} | CPU {{.CPUPerc}} | Memory {{.MemUsage}}'
-            ps -eo comm,etime | awk 'NR == 1 || $1 ~ /^(dotnet|docker|buildkitd|buildkit-runc|MSBuild)$/'
+            ps -C docker -o args= | awk '/compose/ && /build/ && $NF ~ /^(api-gateway|auth-service|club-service|activity-service|report-service|finance-service|export-service|notification-service|admin-service|kpi-service)$/ {print "ACTIVE_BUILD_SERVICE=" $NF}'
             free -m
             df -h /
-            df -i /
-            docker system df
             docker inspect clubreporthub-admin --format '{{range .Config.Env}}{{println .}}{{end}}' | awk '/^RECOMMENDATION_ENABLED=/ || /^Recommendation__Enabled=/ {print}'
-
-# Inspect rollout and recommendation config after reclaiming build cache.
