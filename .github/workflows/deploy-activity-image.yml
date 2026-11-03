@@ -1,0 +1,179 @@
+name: Deploy validated ActivityService image
+on:
+  push:
+    branches: [fix/activity-audience-production-20261103]
+    paths: [.github/workflows/deploy-activity-image.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  stop-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    steps:
+      - name: Stop only the previous release's active compose build
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          EXPECTED_RELEASE: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/0d38e9ed1af75455ce4bf26bdff75bef047756a0
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          envs: EXPECTED_RELEASE
+          command_timeout: 3m
+          script: |
+            python3 - <<'PY'
+            import os, pathlib, signal
+            expected = os.path.realpath(os.environ['EXPECTED_RELEASE'])
+            matched = 0
+            for proc in pathlib.Path('/proc').iterdir():
+                if not proc.name.isdigit():
+                    continue
+                try:
+                    if (proc / 'comm').read_text().strip() != 'docker':
+                        continue
+                    args = (proc / 'cmdline').read_bytes().split(b'\0')
+                    if b'compose' not in args or b'build' not in args:
+                        continue
+                    if os.path.realpath(proc / 'cwd') != expected:
+                        continue
+                    os.kill(int(proc.name), signal.SIGTERM)
+                    matched += 1
+                except (FileNotFoundError, ProcessLookupError, PermissionError):
+                    continue
+            print('Stopped matching release build clients:', matched)
+            PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Confirm previous rollout has stopped and source CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const get = async id => {
+            const response = await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/' + id,
+              { headers: { Authorization: 'Bearer ' + process.env.GH_TOKEN } });
+            assert.equal(response.status, 200);
+            return response.json();
+          };
+          const ci = await get(41605909431);
+          assert.equal(ci.head_sha, '0d38e9ed1af75455ce4bf26bdff75bef047756a0');
+          assert.equal(ci.conclusion, 'success');
+          let stopped = false;
+          for (let attempt = 0; attempt < 30; attempt++) {
+            const previous = await get(41605909513);
+            assert.equal(previous.head_sha, '0d38e9ed1af75455ce4bf26bdff75bef047756a0');
+            if (previous.status === 'completed') { stopped = true; break; }
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
+          assert.ok(stopped, 'Previous production workflow must stop before targeted rollout');
+          NODE
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 0d38e9ed1af75455ce4bf26bdff75bef047756a0
+      - name: Build exact validated source
+        run: |
+          test "$(git rev-parse HEAD)" = "0d38e9ed1af75455ce4bf26bdff75bef047756a0"
+          docker build --file src/Services/ActivityService/Dockerfile --tag clubreporthub-activity:0d38e9ed1af75455ce4bf26bdff75bef047756a0 .
+          mkdir -p activity-image
+          docker save clubreporthub-activity:0d38e9ed1af75455ce4bf26bdff75bef047756a0 | gzip > activity-image/image.tar.gz
+          sha256sum activity-image/image.tar.gz > activity-image/image.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-activity-image
+          path: activity-image
+          retention-days: 3
+
+  rollout:
+    needs: [stop-build, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-activity-image
+          path: activity-image
+      - name: Transfer validated image
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          source: activity-image
+          target: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/0d38e9ed1af75455ce4bf26bdff75bef047756a0/prebuilt
+          rm: false
+      - name: Load and rollout ActivityService with existing runtime config
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/0d38e9ed1af75455ce4bf26bdff75bef047756a0/prebuilt
+          IMAGE_TAG: clubreporthub-activity:0d38e9ed1af75455ce4bf26bdff75bef047756a0
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          envs: IMAGE_DIR,IMAGE_TAG
+          command_timeout: 10m
+          script: |
+            set -Eeuo pipefail
+            umask 077
+            cd "${IMAGE_DIR}"
+            sha256sum --check activity-image/image.sha256
+            old_image="$(docker inspect clubreporthub-activity --format '{{.Image}}')"
+            project="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
+            workdir="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+            configs="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+            service="$(docker inspect clubreporthub-activity --format '{{ index .Config.Labels "com.docker.compose.service" }}')"
+            test "${service}" = activity-service
+            test -n "${project}"
+            test -d "${workdir}"
+            network="$(docker inspect clubreporthub-activity --format '{{range $name, $details := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' | head -n 1)"
+            docker load --input activity-image/image.tar.gz
+            new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
+            rollback_tag="clubreporthub-activity:rollback-0d38e9ed1af75455ce4bf26bdff75bef047756a0"
+            docker tag "${old_image}" "${rollback_tag}"
+            override="${IMAGE_DIR}/activity.override.yml"
+            printf 'services:\n  activity-service:\n    image: %s\n' "${IMAGE_TAG}" > "${override}"
+            args=()
+            IFS=',' read -ra files <<< "${configs}"
+            for file in "${files[@]}"; do test -f "${file}"; args+=(-f "${file}"); done
+            cd "${workdir}"
+            successful=false
+            if docker compose -p "${project}" "${args[@]}" -f "${override}" up -d --no-build --no-deps activity-service; then
+              for attempt in $(seq 1 30); do
+                if [ "$(docker inspect clubreporthub-activity --format '{{.Image}}')" = "${new_image}" ] &&
+                  docker run --rm --network "${network}" curlimages/curl:8.10.1 --fail --silent --show-error --connect-timeout 3 --max-time 5 http://activity-service:8080/health; then
+                  successful=true
+                  break
+                fi
+                sleep 2
+              done
+            fi
+            if [ "${successful}" != true ]; then
+              printf 'services:\n  activity-service:\n    image: %s\n' "${rollback_tag}" > "${override}"
+              docker compose -p "${project}" "${args[@]}" -f "${override}" up -d --no-build --no-deps activity-service
+              echo 'Activity rollout failed; restored previous ActivityService image.' >&2
+              exit 1
+            fi
+            curl --fail --silent --show-error --connect-timeout 5 --max-time 20 https://clubreporthub.duckdns.org/health
+            printf 'ACTIVITY_IMAGE_DEPLOYED 0d38e9ed1af75455ce4bf26bdff75bef047756a0 %s\n' "${new_image}"
+            docker inspect clubreporthub-admin --format '{{range .Config.Env}}{{println .}}{{end}}' | awk '/^RECOMMENDATION_ENABLED=/ || /^Recommendation__Enabled=/ {print}'
+            df -h /
