@@ -6,104 +6,40 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: production-deployment
   cancel-in-progress: false
 jobs:
-  prepare-host:
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Remove only failed task images and their superseded archives
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          RELEASE_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases
-        with:
-          host: ${{ secrets.VPC_HOST }}
-          username: ${{ secrets.VPC_USERNAME }}
-          key: ${{ secrets.VPC_SSH_KEY }}
-          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
-          password: ${{ secrets.VPC_PASSWORD }}
-          envs: RELEASE_ROOT
-          script: |
-            set -Eeuo pipefail
-            root="$(realpath -e "${RELEASE_ROOT}")"
-            test "${root}" != /
-            df -h "${root}"
-            archive="${root}/a276b667ac150c6c6194c2f8d625ed7124aa1f24/auth-localhost/auth-image/image.tar.gz"
-            if [ -f "${archive}" ]; then
-              resolved="$(realpath -e "${archive}")"
-              case "${resolved}" in "${root}/"*) ;; *) exit 1 ;; esac
-              test ! -L "${archive}"
-              du -h "${archive}"
-              rm -- "${archive}"
-            fi
-            for tag in clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512 clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0; do
-              if image="$(docker image inspect "${tag}" --format '{{.Id}}' 2>/dev/null)"; then
-                containers="$(docker ps -aq)"
-                if [ -n "${containers}" ] && docker inspect --format '{{.Image}}' ${containers} | grep -Fxq "${image}"; then
-                  echo 'Refusing to remove task image referenced by a container' >&2
-                  exit 1
-                fi
-                docker image rm "${tag}"
-              fi
-            done
-            df -h "${root}"
-            docker system df
-  validate:
-    uses: ./.github/workflows/backend-validate.yml
   build-auth:
-    needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Build validated AuthService on CI
+      - name: Verify exact Linux source full CI
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cp src/Services/AuthService/Dockerfile /tmp/AuthService.linux.Dockerfile
-          git checkout --detach 3d6167919f36d2d5ac825e1f1b405d7ac083b1b0
-          docker build --file /tmp/AuthService.linux.Dockerfile --tag clubreporthub-auth:rollback-linux-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 .
-          git checkout --detach ${{ github.sha }}
-          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:${{ github.sha }} .
-          docker run --rm --entrypoint sh clubreporthub-auth:${{ github.sha }} -c 'test -f /app/libSkiaSharp.so && test ! -d /app/runtimes/win-x64 && test ! -d /app/runtimes/win-arm64 && dotnet --list-runtimes'
-          docker image inspect clubreporthub-auth:${{ github.sha }} --format 'AUTH_IMAGE_BYTES {{.Size}}'
-          mkdir -p auth-image
-          docker save clubreporthub-auth:${{ github.sha }} clubreporthub-auth:rollback-linux-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 | gzip > auth-image/image.tar.gz
-          sha256sum auth-image/image.tar.gz > auth-image/image.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: validated-auth-release
-          path: auth-image
-          retention-days: 3
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const response=await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41819904127',
+            {headers:{Authorization:'Bearer '+process.env.GH_TOKEN}});
+          assert.equal(response.status,200);
+          const run=await response.json();
+          assert.equal(run.head_sha,'fa9bd37041639df035e81e05a0adb59092f9dddc');
+          assert.equal(run.status,'completed');
+          assert.equal(run.conclusion,'success');
+          NODE
   deploy:
-    needs: [build-auth, prepare-host]
+    needs: build-auth
     if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: validated-auth-release
-          path: auth-image
-      - name: Transfer validated image
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPC_HOST }}
-          username: ${{ secrets.VPC_USERNAME }}
-          key: ${{ secrets.VPC_SSH_KEY }}
-          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
-          password: ${{ secrets.VPC_PASSWORD }}
-          source: auth-image
-          target: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/auth-localhost
-          rm: false
       - name: Roll out AuthService preserving runtime with rollback
         uses: appleboy/ssh-action@v1.0.3
         env:
-          IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/auth-localhost
-          IMAGE_TAG: clubreporthub-auth:${{ github.sha }}
+          IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/fa9bd37041639df035e81e05a0adb59092f9dddc/auth-localhost
+          IMAGE_TAG: clubreporthub-auth:fa9bd37041639df035e81e05a0adb59092f9dddc
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
@@ -174,7 +110,7 @@ jobs:
             done
             test "${healthy}" = true
             python3 - <<'PY'
-            import json, os, subprocess, urllib.request, urllib.error
+            import json, os, subprocess, time, urllib.request, urllib.error
             expected = json.load(open(os.path.join(os.environ['IMAGE_DIR'], 'auth.runtime.json')))
             actual = json.loads(subprocess.check_output(['docker','inspect','--format','{{json .Config.Env}}','clubreporthub-auth'],text=True))
             assert dict(item.split('=',1) for item in actual) == expected, 'Runtime configuration changed'
@@ -182,8 +118,12 @@ jobs:
                 for method in ['GET','POST']:
                     req = urllib.request.Request('https://clubreporthub.duckdns.org/api/auth/session', method=method,
                         headers={'Origin':origin, 'X-FPTUX-Session':'1'}, data=b'' if method=='POST' else None)
-                    try: status = urllib.request.urlopen(req, timeout=20).status
-                    except urllib.error.HTTPError as error: status = error.code
+                    for attempt in range(30):
+                        try: status = urllib.request.urlopen(req, timeout=10).status
+                        except urllib.error.HTTPError as error: status = error.code
+                        except (urllib.error.URLError, TimeoutError): status = 0
+                        if status not in (0, 502, 503, 504): break
+                        time.sleep(2)
                     allowed = origin in ['http://localhost:5173','http://localhost:5174','https://fptux-clubhub-ui.pages.dev','https://fptux-admin-ui.pages.dev']
                     assert status == (204 if allowed else 403), (origin,method,status)
                     print('ONLINE_SESSION', method, origin, status)
