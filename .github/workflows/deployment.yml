@@ -6,47 +6,15 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: production-deployment
   cancel-in-progress: false
 jobs:
-  build-auth:
+  prepare-host:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: 501548a27058e0bc7c65087f2d5a985448a1e512
-          fetch-depth: 0
-      - name: Verify exact source full CI
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          node --input-type=module <<'NODE'
-          import assert from 'node:assert/strict';
-          const response = await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41817103947',
-            {headers:{Authorization:'Bearer '+process.env.GH_TOKEN}});
-          assert.equal(response.status,200);
-          const run=await response.json();
-          assert.equal(run.head_sha,'501548a27058e0bc7c65087f2d5a985448a1e512');
-          assert.equal(run.status,'completed');
-          assert.equal(run.conclusion,'success');
-          NODE
-  deploy:
-    needs: build-auth
-    if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
     environment: production
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: validated-auth-release
-          path: auth-image
-          github-token: ${{ github.token }}
-          run-id: 41818275177
-      - name: Remove only superseded deployment image archives
+      - name: Remove only failed task images and their superseded archives
         uses: appleboy/ssh-action@v1.0.3
         env:
           RELEASE_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases
@@ -62,20 +30,64 @@ jobs:
             root="$(realpath -e "${RELEASE_ROOT}")"
             test "${root}" != /
             df -h "${root}"
-            for relative in \
-              501548a27058e0bc7c65087f2d5a985448a1e512/auth-localhost/auth-image/image.tar.gz \
-              ee105a6d1ee364e84668d08a16de63b83d317f5e/auth-localhost/auth-image/image.tar.gz \
-              39b82c5942c24f0ab9e68f6687891162f5c15ec7/prebuilt-final/club-image/images.tar.gz; do
-              archive="${root}/${relative}"
-              if [ -f "${archive}" ]; then
-                resolved="$(realpath -e "${archive}")"
-                case "${resolved}" in "${root}/"*) ;; *) exit 1 ;; esac
-                test ! -L "${archive}"
-                du -h "${archive}"
-                rm -- "${archive}"
+            archive="${root}/a276b667ac150c6c6194c2f8d625ed7124aa1f24/auth-localhost/auth-image/image.tar.gz"
+            if [ -f "${archive}" ]; then
+              resolved="$(realpath -e "${archive}")"
+              case "${resolved}" in "${root}/"*) ;; *) exit 1 ;; esac
+              test ! -L "${archive}"
+              du -h "${archive}"
+              rm -- "${archive}"
+            fi
+            for tag in clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512 clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0; do
+              if image="$(docker image inspect "${tag}" --format '{{.Id}}' 2>/dev/null)"; then
+                containers="$(docker ps -aq)"
+                if [ -n "${containers}" ] && docker inspect --format '{{.Image}}' ${containers} | grep -Fxq "${image}"; then
+                  echo 'Refusing to remove task image referenced by a container' >&2
+                  exit 1
+                fi
+                docker image rm "${tag}"
               fi
             done
             df -h "${root}"
+            docker system df
+  validate:
+    uses: ./.github/workflows/backend-validate.yml
+  build-auth:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build validated AuthService on CI
+        run: |
+          cp src/Services/AuthService/Dockerfile /tmp/AuthService.linux.Dockerfile
+          git checkout --detach 3d6167919f36d2d5ac825e1f1b405d7ac083b1b0
+          docker build --file /tmp/AuthService.linux.Dockerfile --tag clubreporthub-auth:rollback-linux-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 .
+          git checkout --detach ${{ github.sha }}
+          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:${{ github.sha }} .
+          docker run --rm --entrypoint sh clubreporthub-auth:${{ github.sha }} -c 'test -f /app/libSkiaSharp.so && test ! -d /app/runtimes/win-x64 && test ! -d /app/runtimes/win-arm64 && dotnet --list-runtimes'
+          docker image inspect clubreporthub-auth:${{ github.sha }} --format 'AUTH_IMAGE_BYTES {{.Size}}'
+          mkdir -p auth-image
+          docker save clubreporthub-auth:${{ github.sha }} clubreporthub-auth:rollback-linux-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 | gzip > auth-image/image.tar.gz
+          sha256sum auth-image/image.tar.gz > auth-image/image.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-auth-release
+          path: auth-image
+          retention-days: 3
+  deploy:
+    needs: [build-auth, prepare-host]
+    if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-auth-release
+          path: auth-image
       - name: Transfer validated image
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -91,7 +103,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/auth-localhost
-          IMAGE_TAG: clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512
+          IMAGE_TAG: clubreporthub-auth:${{ github.sha }}
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
@@ -107,7 +119,7 @@ jobs:
             sha256sum --check auth-image/image.sha256
             docker load --input auth-image/image.tar.gz
             new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
-            old_image="$(docker image inspect clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 --format '{{.Id}}')"
+            old_image="$(docker image inspect clubreporthub-auth:rollback-linux-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 --format '{{.Id}}')"
             project="$(docker inspect clubreporthub-auth --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
             workdir="$(docker inspect clubreporthub-auth --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
             configs="$(docker inspect clubreporthub-auth --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
@@ -148,7 +160,7 @@ jobs:
             cd "${workdir}"
             rollback() {
               docker compose -p "${project}" "${args[@]}" -f "${IMAGE_DIR}/auth.rollback.json" up -d --no-build --no-deps auth-service
-              echo 'Auth rollout failed; restored pre-change source image and preserved runtime.' >&2
+              echo 'Auth rollout failed; restored pre-change source with Linux packaging and preserved runtime.' >&2
             }
             trap rollback ERR
             docker compose -p "${project}" "${args[@]}" -f "${IMAGE_DIR}/auth.override.json" up -d --no-build --no-deps auth-service
