@@ -33,20 +33,6 @@ jobs:
           assert.equal(run.status,'completed');
           assert.equal(run.conclusion,'success');
           NODE
-      - name: Build validated AuthService on CI
-        run: |
-          git checkout --detach 3d6167919f36d2d5ac825e1f1b405d7ac083b1b0
-          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 .
-          git checkout --detach 501548a27058e0bc7c65087f2d5a985448a1e512
-          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512 .
-          mkdir -p auth-image
-          docker save clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512 clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 | gzip > auth-image/image.tar.gz
-          sha256sum auth-image/image.tar.gz > auth-image/image.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: validated-auth-release
-          path: auth-image
-          retention-days: 3
   deploy:
     needs: build-auth
     if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
@@ -58,6 +44,38 @@ jobs:
         with:
           name: validated-auth-release
           path: auth-image
+          github-token: ${{ github.token }}
+          run-id: 41818275177
+      - name: Remove only superseded deployment image archives
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          RELEASE_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          envs: RELEASE_ROOT
+          script: |
+            set -Eeuo pipefail
+            root="$(realpath -e "${RELEASE_ROOT}")"
+            test "${root}" != /
+            df -h "${root}"
+            for relative in \
+              501548a27058e0bc7c65087f2d5a985448a1e512/auth-localhost/auth-image/image.tar.gz \
+              ee105a6d1ee364e84668d08a16de63b83d317f5e/auth-localhost/auth-image/image.tar.gz \
+              39b82c5942c24f0ab9e68f6687891162f5c15ec7/prebuilt-final/club-image/images.tar.gz; do
+              archive="${root}/${relative}"
+              if [ -f "${archive}" ]; then
+                resolved="$(realpath -e "${archive}")"
+                case "${resolved}" in "${root}/"*) ;; *) exit 1 ;; esac
+                test ! -L "${archive}"
+                du -h "${archive}"
+                rm -- "${archive}"
+              fi
+            done
+            df -h "${root}"
       - name: Transfer validated image
         uses: appleboy/scp-action@v0.1.7
         with:
