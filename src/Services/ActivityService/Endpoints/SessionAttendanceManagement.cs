@@ -23,14 +23,31 @@ internal static class SessionAttendanceManagement
         catch (HttpRequestException) { return ApiOperations.Error(503, "MEMBERSHIP_SERVICE_UNAVAILABLE", "Roster is unavailable."); }
         var ids = members.Items.Select(x => x.UserId).ToArray();
         var rows = await db.ActivityAttendances.AsNoTracking().Where(x => x.SessionId == session.Id && ids.Contains(x.UserId)).ToDictionaryAsync(x => x.UserId, ct);
+        var registered = await db.ActivityParticipants.AsNoTracking().Where(x => x.ActivityId == activityId && ids.Contains(x.UserId)).Select(x => x.UserId).ToArrayAsync(ct);
+        var authority = http.RequestServices.GetService<ExperienceAuthorityClient>();
+        bool canVerify;
+        try { canVerify = authority is not null && await authority.CanVerifyAsync(session.Activity.ClubId, "attendance.verify", http, ct); }
+        catch (HttpRequestException) { return ApiOperations.Error(503, "VERIFICATION_SERVICE_UNAVAILABLE", "Verification assignments are unavailable."); }
+        var now = ActivitySessionEndpoints.Now(http);
         var count = await db.ActivityAttendances.CountAsync(x => x.SessionId == session.Id && x.VerificationStatus == "VERIFIED", ct);
         return Results.Ok(new
         {
             activityId,
             sessionId,
             sessionVersion = session.Version,
+            capabilities = new { canVerify },
             items = members.Items.Select(m => new
-            { memberId = m.Id, m.UserId, m.FullName, m.Role, attendance = rows.TryGetValue(m.UserId, out var attendance) ? SessionAttendanceEndpoints.Response(attendance) : null }),
+            {
+                memberId = m.Id, m.UserId, m.FullName, m.Role,
+                isRegistered = registered.Contains(m.UserId),
+                attendance = rows.TryGetValue(m.UserId, out var attendance) ? SessionAttendanceEndpoints.Response(attendance) : null,
+                canMarkPresent = canVerify && registered.Contains(m.UserId) && m.UserId != http.User.GetUserId()
+                    && attendance?.VerificationStatus is not ("VERIFIED" or "REVOKED") && session.Status != "CANCELLED" && session.Activity.Status != ActivityStatuses.Cancelled
+                    && session.ManualConfirmationEnabled && session.StartTimeUtc <= now,
+                canMarkAbsent = canVerify && registered.Contains(m.UserId) && m.UserId != http.User.GetUserId()
+                    && attendance?.VerificationStatus is not ("VERIFIED" or "REVOKED") && session.Status != "CANCELLED" && session.Activity.Status != ActivityStatuses.Cancelled
+                    && session.EndTimeUtc <= now
+            }),
             members.Page,
             members.PageSize,
             members.TotalItems,
@@ -69,7 +86,7 @@ internal static class SessionAttendanceManagement
             {
                 var member = members.Single(x => x.Id == item.MemberId); existing.TryGetValue(member.UserId, out var row);
                 if (row?.Version != item.ExpectedVersion) return ApiOperations.Error(409, "STALE_ATTENDANCE", "Reload all attendance versions.");
-                if (row?.VerificationStatus == "VERIFIED") return ApiOperations.Error(409, "VERIFIED_ATTENDANCE_PROTECTED", "Use the contribution adjustment workflow for verified attendance.");
+                if (row?.VerificationStatus is "VERIFIED" or "REVOKED") return ApiOperations.Error(409, "VERIFIED_ATTENDANCE_PROTECTED", "Use the contribution adjustment workflow for verified or revoked attendance.");
                 if (item.Status is "Present" or "Late" && !session.ManualConfirmationEnabled) return ApiOperations.Error(409, "MANUAL_CONFIRMATION_DISABLED", "This session does not allow manual verification.");
                 if (item.Status is "Absent" or "Excused" && session.EndTimeUtc > ActivitySessionEndpoints.Now(http)) return ApiOperations.Error(409, "SESSION_NOT_FINISHED", "Mark absence after the session ends.");
             }

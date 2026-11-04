@@ -76,6 +76,7 @@ public static class StudentSessionSourceEndpoints
                 activityVersion = activity.Version,
                 source,
                 alreadyVerified,
+                attendanceWindow = new { session.Mode, session.OpensAt, session.ClosesAt, requiresLocation = session.Mode == "ONSITE" },
                 sourceActions = new
                 {
                     canCheckIn = AttendanceChallenge.Configured(configuration) && !cancelled && !alreadyVerified && session.Status == "SCHEDULED" && activity.Status == ActivityStatuses.Scheduled
