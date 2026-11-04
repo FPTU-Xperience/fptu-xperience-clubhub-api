@@ -42,8 +42,8 @@ public static class FinanceExtensions
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
-        return access.Where(x => x.CanManageFinance || x.CanManage).Select(x => x.ClubId).ToHashSet();
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
+        return access.Where(x => x.CanManageFinance || x.CanManage || x.HasCapability("club.finance.read")).Select(x => x.ClubId).ToHashSet();
     }
 
     public static async Task<bool> CanAccessFinanceClubAsync(
@@ -52,8 +52,8 @@ public static class FinanceExtensions
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
-        return access.Any(x => x.ClubId == clubId && (x.CanManageFinance || x.CanManage));
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
+        return access.Any(x => x.ClubId == clubId && (x.CanManageFinance || x.CanManage || x.HasCapability("club.finance.read")));
     }
 
     public static async Task<bool> CanManageFinanceClubAsync(
@@ -62,7 +62,7 @@ public static class FinanceExtensions
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
-        return access.Any(x => x.ClubId == clubId && x.CanManageFinance);
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
+        return access.Any(x => x.ClubId == clubId && (x.CanManageFinance || x.HasCapability("club.finance.draft.write") && x.HasCapability("club.finance.submit")));
     }
 }

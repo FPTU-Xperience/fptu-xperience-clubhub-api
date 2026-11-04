@@ -61,7 +61,7 @@ public static class ReportWorkflowEndpoints
                     cancellationToken))
                 .FirstOrDefault(access => access.ClubId == report.ClubId);
 
-            if (clubMembership is not null
+            if (clubMembership is not null && clubMembership.Capabilities is null
                 && ReportSubmissionRules.CanUseUploadedReportAuthorAccess(
                     report,
                     currentUserId,

@@ -41,7 +41,9 @@ public static class PublicMediaEndpoints
                     if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return Results.Forbid();
                     response.EnsureSuccessStatusCode(); var activity = await response.Content.ReadFromJsonAsync<JsonElement>(ct); clubId = activity.GetProperty("clubId").GetInt32();
                 }
-                if (!self && !(await access.GetMyAccessAsync(http.GetBearerToken(), ct, true)).Any(x => x.ClubId == clubId && x.CanManage)) return Results.Forbid();
+                var permission = input.Kind is "club-logo" or "club-cover" ? "club.media.write" : input.Kind == "activity-cover" ? "event.content.write" : null;
+                if (!self && !(await access.GetMyAccessAsync(http.GetBearerToken(), ct, true)).Any(x => x.ClubId == clubId
+                    && (x.CanManage || (permission is not null && x.HasCapability(permission))))) return Results.Forbid();
             }
             catch (HttpRequestException) { return ApiOperations.Error(503, "MEDIA_AUTHORITY_UNAVAILABLE", "Club/activity authority is unavailable."); }
             return await ApiOperations.ExecuteAsync(http, db, input, async () =>

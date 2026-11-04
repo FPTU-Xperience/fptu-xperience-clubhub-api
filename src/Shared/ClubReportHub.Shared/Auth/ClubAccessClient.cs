@@ -24,9 +24,16 @@ public sealed record ClubAccessSnapshot(
     IReadOnlyCollection<int>? MemberUserIds = null,
     IReadOnlyCollection<int>? TreasurerUserIds = null)
 {
-    public bool CanManage => IsManager;
-    public bool CanManageFinance => IsTreasurer;
-    public bool CanView => IsManager || IsApprovedMember;
+    public IReadOnlyCollection<string>? Capabilities { get; init; }
+    public DateTimeOffset? AccessValidUntilUtc { get; init; }
+    public bool IsVicePresident { get; init; }
+    public Guid? GovernanceRevisionId { get; init; }
+    public IReadOnlyCollection<Guid>? GroupIds { get; init; }
+    public bool HasCapability(string code) => CanManage || (Capabilities?.Contains(code) == true
+        && AccessValidUntilUtc.HasValue && DateTimeOffset.UtcNow < AccessValidUntilUtc);
+    public bool CanManage => IsManager || (IsVicePresident && AccessValidUntilUtc.HasValue && DateTimeOffset.UtcNow < AccessValidUntilUtc);
+    public bool CanManageFinance => CanManage || (IsTreasurer && (Capabilities is null || new[] { "club.finance.read", "club.finance.draft.write", "club.finance.submit" }.All(HasCapability)));
+    public bool CanView => IsManager || IsApprovedMember || IsVicePresident;
 }
 
 public sealed class ClubAccessClient(
@@ -39,6 +46,7 @@ public sealed class ClubAccessClient(
     private static readonly TimeSpan ActiveAbsoluteExpiration = TimeSpan.FromMinutes(3);
     // Negative caching duration for users without club access (PERF-F04)
     private static readonly TimeSpan NegativeCacheDuration = TimeSpan.FromMinutes(1);
+    private static bool Cacheable(IReadOnlyList<ClubAccessSnapshot> snapshots) => snapshots.All(x => x.Capabilities is null && !x.IsVicePresident);
 
     // Cache stampede protection (PERF-F04)
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _userLocks = new();
@@ -68,7 +76,7 @@ public sealed class ClubAccessClient(
         var cacheKey = GetCacheKey(userId);
 
         // Try to get from cache first (if not bypassing cache)
-        if (!bypassCache && cache.TryGetValue(cacheKey, out IReadOnlyList<ClubAccessSnapshot>? cachedAccess) && cachedAccess is not null)
+        if (!bypassCache && cache.TryGetValue(cacheKey, out IReadOnlyList<ClubAccessSnapshot>? cachedAccess) && cachedAccess is not null && Cacheable(cachedAccess))
         {
             return cachedAccess;
         }
@@ -79,13 +87,20 @@ public sealed class ClubAccessClient(
         try
         {
             // Double-checked locking
-            if (!bypassCache && cache.TryGetValue(cacheKey, out cachedAccess) && cachedAccess is not null)
+            if (!bypassCache && cache.TryGetValue(cacheKey, out cachedAccess) && cachedAccess is not null && Cacheable(cachedAccess))
             {
                 return cachedAccess;
             }
 
             // Fetch from API
             var access = await FetchAccessFromApiAsync(bearerToken, cancellationToken);
+            // Group revisions and approved leadership are request-time authority.
+            // Outbox delivery is not a prerequisite for revoking a delegated grant.
+            if (!Cacheable(access))
+            {
+                cache.Remove(cacheKey);
+                return access;
+            }
 
             if (access.Count > 0)
             {

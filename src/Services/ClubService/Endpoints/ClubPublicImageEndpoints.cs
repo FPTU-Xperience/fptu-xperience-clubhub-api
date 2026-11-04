@@ -6,6 +6,8 @@ using ClubReportHub.Shared.Experience;
 using ClubService.Data;
 using ClubService.Extensions;
 using ClubService.Mappers;
+using ClubService.Services;
+using ClubReportHub.Shared.Rosters;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Endpoints;
@@ -18,7 +20,8 @@ public static class ClubPublicImageEndpoints
         app.MapPut("/api/clubs/{clubId:int}/public-images", async (int clubId, JsonElement request,
             ClubDbContext db, [Microsoft.AspNetCore.Mvc.FromServices] MediaAttachmentClient media, HttpContext http, CancellationToken ct) =>
         {
-            if (!await db.CanManageMembershipsAsync(clubId, http.User, ct)) return Results.Forbid();
+            if (!await db.CanManageMembershipsAsync(clubId, http.User, ct)
+                && !await ClubGovernancePolicy.CanPerform(db, clubId, "club.media.write", http, ct)) return Results.Forbid();
             var club = await db.Clubs.Include(x => x.ManagerAssignments).Include(x => x.Memberships).SingleOrDefaultAsync(x => x.Id == clubId, ct);
             if (club is null) return Results.NotFound();
             if (request.ValueKind != JsonValueKind.Object
@@ -38,6 +41,9 @@ public static class ClubPublicImageEndpoints
             // Keep the raw body in the operation fingerprint: omission and explicit clearing are different commands.
             return await ApiOperations.ExecuteAsync(http, db, request, async () =>
             {
+                if (!await db.CanManageMembershipsAsync(clubId, http.User, ct)
+                    && !await ClubGovernancePolicy.CanPerform(db, clubId, "club.media.write", http, ct))
+                    return ApiOperations.Error(403, "MEDIA_AUTHORITY_REQUIRED", "Current club media authority is required.");
                 if (!club.IsActive || club.DeletedAtUtc.HasValue || expected != club.ConcurrencyToken)
                     return ApiOperations.Error(409, "STALE_CLUB", "Reload an active club before changing its images.");
                 var logo = await media.VerifyAsync(hasLogo ? logoValue.GetString() : club.LogoUrl, club.LogoUrl, "club-logo", clubId, http, ct);
@@ -47,5 +53,5 @@ public static class ClubPublicImageEndpoints
                 club.LogoUrl = logo.PublicUrl; club.CoverImageUrl = cover.PublicUrl; club.ConcurrencyToken = Guid.NewGuid();
                 await db.SaveChangesAsync(ct); return Results.Ok(ClubMappers.ToPublicDetailResponse(club));
             }, ct, required: false);
-        }).RequireAuthorization(AuthPolicies.BusinessAccess).WithTags("Club public images");
+        }).RequireAuthorization(AuthPolicies.BusinessAccess).AddEndpointFilter<RosterExceptionFilter>().WithTags("Club public images");
 }

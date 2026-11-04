@@ -131,7 +131,14 @@ public sealed record ClubAccessResponse(
     bool IsApprovedMember,
     IReadOnlyCollection<int> ManagerUserIds,
     IReadOnlyCollection<int> MemberUserIds,
-    IReadOnlyCollection<int> TreasurerUserIds);
+    IReadOnlyCollection<int> TreasurerUserIds)
+{
+    public IReadOnlyCollection<string>? Capabilities { get; init; }
+    public DateTimeOffset? AccessValidUntilUtc { get; init; }
+    public bool IsVicePresident { get; init; }
+    public Guid? GovernanceRevisionId { get; init; }
+    public IReadOnlyCollection<Guid>? GroupIds { get; init; }
+}
 
 public sealed record FoundingMemberResponse(string FullName, string Organization, string Email);
 

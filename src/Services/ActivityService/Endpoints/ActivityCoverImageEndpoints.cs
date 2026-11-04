@@ -18,7 +18,7 @@ public static class ActivityCoverImageEndpoints
         {
             var activity = await db.Activities.SingleOrDefaultAsync(x => x.Id == activityId, ct);
             if (activity is null) return Results.NotFound();
-            if (!await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, ct, true)) return Results.Forbid();
+            if (!await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, ct, true, "event.content.write")) return Results.Forbid();
             return await ApiOperations.ExecuteAsync(http, db, request, async () =>
             {
                 if (request.ExpectedVersion != activity.Version) return ApiOperations.Error(409, "STALE_ACTIVITY", "Reload the activity.");

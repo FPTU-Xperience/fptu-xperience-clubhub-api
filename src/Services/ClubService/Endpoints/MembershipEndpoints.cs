@@ -22,7 +22,7 @@ public static class MembershipEndpoints
     {
         var clubs = app.MapGroup("/api/clubs")
             .WithTags("Memberships")
-            .RequireAuthorization(AuthPolicies.BusinessAccess);
+            .RequireAuthorization(AuthPolicies.BusinessAccess).AddEndpointFilter<ClubReportHub.Shared.Rosters.RosterExceptionFilter>();
 
         // POST /api/clubs/{id}/join - Join a club
         clubs.MapPost("/{id:int}/join", JoinClub)
@@ -171,9 +171,10 @@ public static class MembershipEndpoints
         int id,
         ClaimsPrincipal user,
         ClubDbContext db,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(id, user.GetUserId(), cancellationToken))
+        if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.CanPerform(db, id, "club.members.recruit", httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -211,7 +212,7 @@ public static class MembershipEndpoints
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
+        if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.CanPerform(db, membership.ClubId, "club.members.recruit", httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -220,7 +221,7 @@ public static class MembershipEndpoints
         if (invitationEligibility.Error is not null) return invitationEligibility.Error;
         return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
         {
-            if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken)) return Results.Forbid();
+            if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.CanPerform(db, membership.ClubId, "club.members.recruit", httpContext, cancellationToken)) return ApiOperations.Error(403, "RECRUITMENT_AUTHORITY_REQUIRED", "Current club recruitment authority is required.");
             if (request.ExpectedVersion.HasValue && request.ExpectedVersion != membership.ConcurrencyToken)
                 return ApiOperations.Error(409, "STALE_VERSION", "Reload the membership request.");
             if (membership.Status != ClubMembershipStatuses.Pending)
@@ -276,14 +277,14 @@ public static class MembershipEndpoints
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
+        if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.CanPerform(db, membership.ClubId, "club.members.recruit", httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
 
         return await ApiOperations.ExecuteAsync(httpContext, db, request, async () =>
         {
-            if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken)) return Results.Forbid();
+            if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.CanPerform(db, membership.ClubId, "club.members.recruit", httpContext, cancellationToken)) return ApiOperations.Error(403, "RECRUITMENT_AUTHORITY_REQUIRED", "Current club recruitment authority is required.");
             if (request.ExpectedVersion.HasValue && request.ExpectedVersion != membership.ConcurrencyToken)
                 return ApiOperations.Error(409, "STALE_VERSION", "Reload the membership request.");
             if (membership.Status != ClubMembershipStatuses.Pending)
@@ -319,10 +320,13 @@ public static class MembershipEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(id, user.GetUserId(), cancellationToken))
+        if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.HasLeadership(db, id, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
+
+        if (await db.Set<ClubGovernanceTerm>().AnyAsync(x => x.ClubId == id, cancellationToken))
+            return ApiOperations.Error(409, "VERSIONED_ROLE_ROUTE_REQUIRED", "Use current governance groups to assign duty or the versioned roles route to revoke an existing legacy role.");
 
         var club = await db.Clubs
             .Include(x => x.Memberships)
@@ -416,10 +420,13 @@ public static class MembershipEndpoints
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
+        if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.HasLeadership(db, membership.ClubId, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
+
+        if (await db.Set<ClubGovernanceTerm>().AnyAsync(x => x.ClubId == membership.ClubId, cancellationToken))
+            return ApiOperations.Error(409, "VERSIONED_ROLE_ROUTE_REQUIRED", "Use current governance groups to assign duty or the versioned roles route to revoke an existing legacy role.");
 
         ClubMemberRoleRules.ApplyMemberRole(membership);
         membership.Club.ConcurrencyToken = Guid.NewGuid();
@@ -451,7 +458,7 @@ public static class MembershipEndpoints
             return Results.NotFound();
         }
 
-        if (!user.IsSuperAdmin() && !await db.UserOwnsClubAsync(membership.ClubId, user.GetUserId(), cancellationToken))
+        if (!user.IsSuperAdmin() && !await ClubGovernancePolicy.HasLeadership(db, membership.ClubId, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }

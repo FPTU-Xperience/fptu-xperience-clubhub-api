@@ -19,7 +19,7 @@ internal static class ActivityLifecycleEndpoints
     {
         var activity = await db.Activities.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (activity is null) return Results.NotFound();
-        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, cancellationToken, true)) return Results.Forbid();
+        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, cancellationToken, true, "event.content.write")) return Results.Forbid();
         if (await db.Set<ActivityExecution>().AnyAsync(x => x.ActivityId == id, cancellationToken))
             return ApiOperations.Error(409, "ACTION_WORKFLOW_PROTECTED", "Use the application/publication workflow. Action scoring is pending policy approval.");
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>

@@ -1,47 +1,98 @@
 name: Deploy to Ubuntu VPC
-on:
+'on':
   push:
-    branches: [cuongnk/implement-api-contract]
-    paths: [.github/workflows/deployment.yml]
-  workflow_dispatch:
+    branches:
+      - cuongnk/implement-api-contract
+    paths:
+      - .github/workflows/deployment.yml
+  workflow_dispatch: null
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: production-deployment
   cancel-in-progress: false
 jobs:
+  validate:
+    uses: ./.github/workflows/backend-validate.yml
+  build-services:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: admin
+            service: admin-service
+            dockerfile: src/Services/AdminService/Dockerfile
+          - name: auth
+            service: auth-service
+            dockerfile: src/Services/AuthService/Dockerfile
+          - name: activity
+            service: activity-service
+            dockerfile: src/Services/ActivityService/Dockerfile
+          - name: finance
+            service: finance-service
+            dockerfile: src/Services/FinanceService/Dockerfile
+          - name: report
+            service: report-service
+            dockerfile: src/Services/ReportService/Dockerfile
+          - name: export
+            service: export-service
+            dockerfile: src/Services/ExportService/Dockerfile
+          - name: notification
+            service: notification-service
+            dockerfile: src/Services/NotificationService/Dockerfile
+          - name: gateway
+            service: api-gateway
+            dockerfile: src/Gateway/ApiGateway/Dockerfile
+          - name: club
+            service: club-service
+            dockerfile: src/Services/ClubService/Dockerfile
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build validated ${{ matrix.name }} on CI
+        run: |
+          docker build --file ${{ matrix.dockerfile }} --tag clubreporthub-${{ matrix.name }}:${{ github.sha }} .
+          mkdir -p ${{ matrix.name }}-image
+          docker save clubreporthub-${{ matrix.name }}:${{ github.sha }} | gzip > ${{ matrix.name }}-image/image.tar.gz
+          sha256sum ${{ matrix.name }}-image/image.tar.gz > ${{ matrix.name }}-image/image.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-${{ matrix.name }}-release
+          path: ${{ matrix.name }}-image
+          retention-days: 3
   deploy:
+    needs: build-services
     strategy:
       fail-fast: true
       max-parallel: 1
       matrix:
         include:
-          - {name: admin, service: admin-service}
-          - {name: auth, service: auth-service}
-          - {name: activity, service: activity-service}
-          - {name: gateway, service: api-gateway}
+          - name: admin
+            service: admin-service
+          - name: auth
+            service: auth-service
+          - name: activity
+            service: activity-service
+          - name: finance
+            service: finance-service
+          - name: report
+            service: report-service
+          - name: export
+            service: export-service
+          - name: notification
+            service: notification-service
+          - name: gateway
+            service: api-gateway
     if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     steps:
-      - name: Verify completed source SQL CI before reusing artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          node --input-type=module <<'NODE'
-          import assert from 'node:assert/strict';
-          const response=await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41864166282', {headers:{Authorization:'Bearer '+process.env.GH_TOKEN}});
-          assert.equal(response.status,200); const run=await response.json();
-          assert.equal(run.head_sha,'1b87129fb22d5b29cc47854194aeca3e4f91c5b0'); assert.equal(run.conclusion,'success');
-          console.log('EXACT_SOURCE_SQL_CI_OK',run.id,run.head_sha);
-          NODE
       - uses: actions/download-artifact@v4
         with:
           name: validated-${{ matrix.name }}-release
-          run-id: 41864166230
-          github-token: ${{ github.token }}
           path: ${{ matrix.name }}-image
       - name: Measure transfer
         run: echo "ARCHIVE_BYTES=$(stat -c %s ${{ matrix.name }}-image/image.tar.gz)" >> "$GITHUB_ENV"
@@ -49,62 +100,15 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           ARCHIVE_BYTES: ${{ env.ARCHIVE_BYTES }}
-          RELEASE_ROOT: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
           key: ${{ secrets.VPC_SSH_KEY }}
           passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
           password: ${{ secrets.VPC_PASSWORD }}
-          envs: ARCHIVE_BYTES,RELEASE_ROOT
+          envs: ARCHIVE_BYTES
           script: |
             set -euo pipefail
-            python3 - <<'PY'
-            import json, os, pathlib, subprocess
-            root=pathlib.Path(os.environ['RELEASE_ROOT']).resolve(strict=True)
-            archives={
-              'fa9bd37041639df035e81e05a0adb59092f9dddc/auth-localhost/auth-image/image.tar.gz':112020320,
-              '0d38e9ed1af75455ce4bf26bdff75bef047756a0/prebuilt/activity-image/image.tar.gz':96476949,
-              '0d38e9ed1af75455ce4bf26bdff75bef047756a0/prebuilt-final/activity-image/images.tar.gz':104497537,
-              '913c698e62278eb78e6cb08f4adf704a92153906/prebuilt-final/club-image/images.tar.gz':104299994,
-              'be3ea55d9d95d2efead675fdcebbc2c469732cc7/prebuilt-final/activity-image/images.tar.gz':104493306,
-              'a25f6ef42e2fb6557fed5fd54157530ece6b58d5/prebuilt-final/activity-image/images.tar.gz':104495186,
-              '793dbf8ce4d7ce5bbfbab44d62a44cad88de5a79/prebuilt-final/activity-image/images.tar.gz':104535253,
-              '0d3d9d3957160b68bbc6dc1be184f885153ef71e/prebuilt-final/activity-image/images.tar.gz':104497723,
-              'fe61bb66c7c7e3c593cfecc2d9894098513188c4/prebuilt-final/activity-image/images.tar.gz':104508998,
-            }
-            targets=[]
-            for relative,size in archives.items():
-                path=root/relative
-                if not path.exists(): continue
-                assert path.resolve(strict=True)==path and path.is_file() and root in path.parents, 'Unexpected artifact path'
-                assert path.stat().st_size==size, 'Artifact changed since inventory: '+relative
-                targets.append((path,relative,size))
-            containers=subprocess.check_output(['docker','ps','-aq'],text=True).split()
-            used={x['Image'] for x in json.loads(subprocess.check_output(['docker','inspect',*containers],text=True))}
-            for tag in ['clubreporthub-auth:rollback-linux-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0','clubreporthub-activity:rollback-6a73da218ebee059bdf3f1850bb4ef1fe637dd9a','clubreporthub-club:rollback-6a73da218ebee059bdf3f1850bb4ef1fe637dd9a']:
-                subprocess.check_output(['docker','image','inspect',tag])
-            images={
-              'clubreporthub-activity:0d38e9ed1af75455ce4bf26bdff75bef047756a0':'245fc6756452',
-              'clubreporthub-activity:be3ea55d9d95d2efead675fdcebbc2c469732cc7':'d7f4779660e0',
-              'clubreporthub-activity:0d3d9d3957160b68bbc6dc1be184f885153ef71e':'87968c9329d5',
-              'clubreporthub-activity:a25f6ef42e2fb6557fed5fd54157530ece6b58d5':'72b8e7463a63',
-              'clubreporthub-activity:fe61bb66c7c7e3c593cfecc2d9894098513188c4':'2f32796ce333',
-              'clubreporthub-activity:793dbf8ce4d7ce5bbfbab44d62a44cad88de5a79':'a93fc51dfa87',
-              'clubreporthub-club:913c698e62278eb78e6cb08f4adf704a92153906':'2e723684d3e1',
-            }
-            removable=[]
-            for tag,prefix in images.items():
-                result=subprocess.run(['docker','image','inspect','--format','{{.Id}}',tag],capture_output=True,text=True)
-                if result.returncode: continue
-                image=result.stdout.strip()
-                assert image.startswith('sha256:'+prefix) and image not in used, 'Image changed or is in use: '+tag
-                removable.append(tag)
-            for path,relative,size in targets:
-                path.unlink(); print('OWN_ARCHIVE_REMOVED',relative,size)
-            for tag in removable:
-                subprocess.run(['docker','image','rm',tag],check=True); print('OWN_UNUSED_IMAGE_REMOVED',tag)
-            PY
             available=$(df -PB1 /var/lib/docker | awk 'NR==2 {print $4}')
             printf 'QUEUE_DISK_AVAILABLE %s REQUIRED_ARCHIVE %s\n' "${available}" "${ARCHIVE_BYTES}"
             test "${available}" -gt "$((ARCHIVE_BYTES * 3 + 536870912))"
@@ -126,7 +130,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/queue-${{ matrix.name }}
-          IMAGE_TAG: clubreporthub-${{ matrix.name }}:1b87129fb22d5b29cc47854194aeca3e4f91c5b0
+          IMAGE_TAG: clubreporthub-${{ matrix.name }}:${{ github.sha }}
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
@@ -220,3 +224,153 @@ jobs:
             trap - ERR
             rm -- "${IMAGE_DIR}/${{ matrix.name }}-image/image.tar.gz"
             printf 'QUEUE_IMAGE_DEPLOYED ${{ matrix.name }} %s\n' "${new_image}"
+    name: Deploy consumers before governance authority
+  deploy-club:
+    needs: deploy
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        include:
+          - name: club
+            service: club-service
+    if: github.ref == 'refs/heads/cuongnk/implement-api-contract'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-${{ matrix.name }}-release
+          path: ${{ matrix.name }}-image
+      - name: Measure transfer
+        run: echo "ARCHIVE_BYTES=$(stat -c %s ${{ matrix.name }}-image/image.tar.gz)" >> "$GITHUB_ENV"
+      - name: Verify free disk and existing rollback image
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          ARCHIVE_BYTES: ${{ env.ARCHIVE_BYTES }}
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          envs: ARCHIVE_BYTES
+          script: |
+            set -euo pipefail
+            available=$(df -PB1 /var/lib/docker | awk 'NR==2 {print $4}')
+            printf 'QUEUE_DISK_AVAILABLE %s REQUIRED_ARCHIVE %s\n' "${available}" "${ARCHIVE_BYTES}"
+            test "${available}" -gt "$((ARCHIVE_BYTES * 3 + 536870912))"
+            old=$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')
+            docker image inspect "${old}" >/dev/null
+            printf 'QUEUE_ROLLBACK_AVAILABLE %s %s\n' '${{ matrix.name }}' "${old}"
+      - name: Transfer validated image
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          source: ${{ matrix.name }}-image
+          target: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/queue-${{ matrix.name }}
+          rm: false
+      - name: Roll out ${{ matrix.name }} preserving runtime with rollback
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/queue-${{ matrix.name }}
+          IMAGE_TAG: clubreporthub-${{ matrix.name }}:${{ github.sha }}
+        with:
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          envs: IMAGE_DIR,IMAGE_TAG
+          command_timeout: 15m
+          script: |
+            set -Eeuo pipefail
+            umask 077
+            cd "${IMAGE_DIR}"
+            sha256sum --check ${{ matrix.name }}-image/image.sha256
+            docker load --input ${{ matrix.name }}-image/image.tar.gz
+            new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
+            old_image="$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')"
+            network="$(docker inspect clubreporthub-activity --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}}{{end}}')"
+            test -n "${network}"
+            docker image inspect curlimages/curl:8.10.1 >/dev/null
+            project="$(docker inspect clubreporthub-${{ matrix.name }} --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
+            workdir="$(docker inspect clubreporthub-${{ matrix.name }} --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
+            configs="$(docker inspect clubreporthub-${{ matrix.name }} --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
+            test "$(docker inspect clubreporthub-${{ matrix.name }} --format '{{ index .Config.Labels "com.docker.compose.service" }}')" = ${{ matrix.service }}
+            test -n "${project}"
+            test -d "${workdir}"
+            docker image inspect "${old_image}" >/dev/null
+            export NEW_IMAGE="${new_image}" OLD_IMAGE="${old_image}"
+            runtime_exports="$(python3 - <<'PY'
+            import json, os, re, shlex, subprocess
+            data = json.loads(subprocess.check_output(['docker', 'inspect', 'clubreporthub-${{ matrix.name }}'], text=True))[0]
+            env = dict(item.split('=', 1) for item in data['Config']['Env'])
+            # Compose interpolates dollars even in JSON. Escape each value while retaining exact runtime settings.
+            preserved = {key: value.replace('$', '$$') for key, value in env.items()}
+            for filename, image in [('${{ matrix.name }}.override.json', os.environ['NEW_IMAGE']), ('${{ matrix.name }}.rollback.json', os.environ['OLD_IMAGE'])]:
+                with open(os.path.join(os.environ['IMAGE_DIR'], filename), 'w') as f:
+                    json.dump({'services': {'${{ matrix.service }}': {'image': image, 'environment': preserved}}}, f)
+            with open(os.path.join(os.environ['IMAGE_DIR'], '${{ matrix.name }}.runtime.json'), 'w') as f:
+                json.dump(env, f)
+            auth_data = json.loads(subprocess.check_output(['docker','inspect','--format','{{json .Config.Env}}','clubreporthub-auth'],text=True))
+            auth = dict(item.split('=',1) for item in auth_data)
+            connection = auth.get('ConnectionStrings__DefaultConnection', '')
+            match = re.search(r'''(?:^|;)\s*(?:Password|Pwd)\s*=\s*("(?:""|[^"])*"|'(?:''|[^'])*'|[^;]*)''', connection, re.IGNORECASE)
+            if not match: raise RuntimeError('Cannot preserve database configuration')
+            activity_env = json.loads(subprocess.check_output(['docker','inspect','--format','{{json .Config.Env}}','clubreporthub-activity'],text=True))
+            activity = dict(item.split('=',1) for item in activity_env)
+            values = {'SQL_PASSWORD': match.group(1).strip(), 'JWT_SIGNING_KEY': auth.get('Jwt__SigningKey'),
+                'INTERNAL_WORKFLOW_TOKEN': auth.get('Security__InternalWorkflowToken'),
+                'ATTENDANCE_SIGNING_KEY': activity.get('Attendance__SigningKey'), 'FRONTEND_ORIGIN': auth.get('Cors__AllowedOrigins__0')}
+            for key, value in values.items():
+                if not value: raise RuntimeError('Missing required runtime setting: ' + key)
+                print('export ' + key + '=' + shlex.quote(value))
+            PY
+            )"
+            eval "${runtime_exports}"
+            unset runtime_exports
+            args=()
+            IFS=',' read -ra files <<< "${configs}"
+            for file in "${files[@]}"; do test -f "${file}"; args+=(-f "${file}"); done
+            cd "${workdir}"
+            rollback() {
+              docker compose -p "${project}" "${args[@]}" -f "${IMAGE_DIR}/${{ matrix.name }}.rollback.json" up -d --no-build --no-deps ${{ matrix.service }}
+              echo '${{ matrix.name }} rollout failed; restored exact previous image and runtime.' >&2
+            }
+            trap rollback ERR
+            docker compose -p "${project}" "${args[@]}" -f "${IMAGE_DIR}/${{ matrix.name }}.override.json" up -d --no-build --no-deps ${{ matrix.service }}
+            healthy=false
+            for attempt in $(seq 1 30); do
+              if [ "$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')" = "${new_image}" ] && docker run --rm --pull never --network "${network}" curlimages/curl:8.10.1 --fail --silent --show-error --connect-timeout 3 --max-time 5 http://${{ matrix.service }}:8080/health; then
+                healthy=true
+                break
+              fi
+              sleep 2
+            done
+            test "${healthy}" = true
+            python3 - <<'PY'
+            import json, os, subprocess, urllib.request, urllib.error
+            expected = json.load(open(os.path.join(os.environ['IMAGE_DIR'], '${{ matrix.name }}.runtime.json')))
+            actual = json.loads(subprocess.check_output(['docker','inspect','--format','{{json .Config.Env}}','clubreporthub-${{ matrix.name }}'],text=True))
+            assert dict(item.split('=',1) for item in actual) == expected, 'Runtime configuration changed'
+            for origin in ['http://localhost:5173', 'http://localhost:5174', 'https://fptux-clubhub-ui.pages.dev', 'https://fptux-admin-ui.pages.dev', 'http://localhost:5175', 'http://localhost:5173.attacker.example']:
+                for method in ['GET','POST']:
+                    req = urllib.request.Request('https://clubreporthub.duckdns.org/api/auth/session', method=method,
+                        headers={'Origin':origin, 'X-FPTUX-Session':'1'}, data=b'' if method=='POST' else None)
+                    try: status = urllib.request.urlopen(req, timeout=20).status
+                    except urllib.error.HTTPError as error: status = error.code
+                    allowed = origin in ['http://localhost:5173','http://localhost:5174','https://fptux-clubhub-ui.pages.dev','https://fptux-admin-ui.pages.dev']
+                    assert status == (204 if allowed else 403), (origin,method,status)
+                    print('ONLINE_SESSION', method, origin, status)
+            print('QUEUE_RUNTIME_PRESERVED ${{ matrix.name }}')
+            PY
+            trap - ERR
+            rm -- "${IMAGE_DIR}/${{ matrix.name }}-image/image.tar.gz"
+            printf 'QUEUE_IMAGE_DEPLOYED ${{ matrix.name }} %s\n' "${new_image}"
+    name: Activate governance after all consumers

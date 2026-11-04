@@ -28,12 +28,13 @@ public static class ActivityResourceEndpoints
         var activity = await db.Activities.AsNoTracking().SingleOrDefaultAsync(x => x.Id == activityId, ct);
         Require(activity is not null, 404, "ACTIVITY_NOT_FOUND", "The activity does not exist.");
         var scope = await Authorize(activity!.ClubId, http, ct);
-        var canReadClub = scope.Manager || scope.Club.IsApprovedMember;
+        var canManage = scope.Can("event.content.write");
+        var canReadClub = canManage || scope.Club.IsApprovedMember;
         var visible = canReadClub || scope.Reviewer
             || activity.DiscoveryVisibility == "CAMPUS_PUBLIC" && activity.PublicationStatus is "PUBLISHED" or "CLOSED";
-        Require(visible && (activity.PublicationStatus != "DRAFT" || scope.Manager || scope.Reviewer),
+        Require(visible && (activity.PublicationStatus != "DRAFT" || canManage || scope.Reviewer),
             403, "RESOURCE_ACCESS_DENIED", "Current activity access is required.");
-        return new(activity, scope.Manager, canReadClub);
+        return new(activity, canManage, canReadClub);
     }
     private static void Management(ResourceScope scope) => Require(scope.Manager, 403, "RESOURCE_MANAGEMENT_REQUIRED", "Current club management is required.");
     private static async Task Writable(ResourceScope scope, ActivityDbContext db, CancellationToken ct) =>

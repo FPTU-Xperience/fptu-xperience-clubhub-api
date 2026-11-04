@@ -55,8 +55,7 @@ public static class ReportFileEndpoints
             return Results.NotFound();
         }
         if (report.CreatedByUserId != user.GetUserId()
-            || !await ReportExtensions.CanAuthorReportsAsync(
-                report.ClubId, report.Tag, report.ReportType, clubAccess, httpContext, cancellationToken))
+            || !await ReportExtensions.CanEditDraftReportAsync(report, user, clubAccess, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -132,7 +131,7 @@ public static class ReportFileEndpoints
 
         var tag = ReportExtensions.NormalizeReportTag(reportType, reportType);
         var normReportType = ReportExtensions.NormalizeReportType(reportType, tag);
-        var authorAccess = await ReportExtensions.GetAuthorAccessAsync(
+        var authorAccess = await ReportExtensions.GetDraftAuthorAccessAsync(
             clubId,
             tag,
             normReportType,
@@ -439,7 +438,7 @@ public static class ReportFileEndpoints
             return Results.NotFound(new { message = "Không tìm thấy báo cáo." });
         }
 
-        if (!await ReportExtensions.CanAuthorReportsAsync(report.ClubId, report.Tag, report.ReportType, clubAccess, httpContext, cancellationToken))
+        if (!await ReportExtensions.CanEditDraftReportAsync(report, user, clubAccess, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -525,7 +524,7 @@ public static class ReportFileEndpoints
             return Results.NotFound(new { message = "Không tìm thấy báo cáo." });
         }
 
-        if (!await ReportExtensions.CanAuthorReportsAsync(report.ClubId, report.Tag, report.ReportType, clubAccess, httpContext, cancellationToken))
+        if (!await ReportExtensions.CanEditDraftReportAsync(report, user, clubAccess, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -564,13 +563,7 @@ public static class ReportFileEndpoints
         }
 
         if (report.CreatedByUserId != user.GetUserId()
-            || !await ReportExtensions.CanAuthorReportsAsync(
-                report.ClubId,
-                report.Tag,
-                report.ReportType,
-                clubAccess,
-                httpContext,
-                cancellationToken))
+            || !await ReportExtensions.CanEditDraftReportAsync(report, user, clubAccess, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }
@@ -649,13 +642,7 @@ public static class ReportFileEndpoints
         }
 
         if (report.CreatedByUserId != user.GetUserId()
-            || !await ReportExtensions.CanAuthorReportsAsync(
-                report.ClubId,
-                report.Tag,
-                report.ReportType,
-                clubAccess,
-                httpContext,
-                cancellationToken))
+            || !await ReportExtensions.CanEditDraftReportAsync(report, user, clubAccess, httpContext, cancellationToken))
         {
             return Results.Forbid();
         }

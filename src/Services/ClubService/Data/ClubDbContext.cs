@@ -40,6 +40,9 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
     private void ValidateMembershipAudit()
     {
+        if (ChangeTracker.Entries().Any(x => x.State is EntityState.Modified or EntityState.Deleted
+            && x.Entity is ClubGovernanceRevision or ClubGovernanceReport or ClubGovernanceLeadershipEvent or ClubGovernanceMemberChange or ClubGovernanceAuditEvent))
+            throw new InvalidOperationException("Governance revisions, reports and leadership history are append-only.");
         ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
         if (ChangeTracker.Entries<ClubMembershipAction>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Membership action audit records are append-only.");
@@ -47,6 +50,7 @@ public sealed class ClubDbContext(DbContextOptions<ClubDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ClubGovernanceModel.Apply(modelBuilder);
         modelBuilder.Entity<ClubMembership>().Property(x => x.RosterCampusCode).HasMaxLength(40);
         modelBuilder.Entity<Club>(entity =>
         {

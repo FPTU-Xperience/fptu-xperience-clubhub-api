@@ -7,6 +7,8 @@ using ClubReportHub.Shared.Experience;
 using ClubService.Data;
 using ClubService.Extensions;
 using ClubService.Mappers;
+using ClubService.Services;
+using ClubReportHub.Shared.Rosters;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Endpoints;
@@ -17,12 +19,13 @@ public static class ClubPublicProfileEndpoints
 
     public static void MapClubPublicProfileEndpoints(this WebApplication app) =>
         app.MapPatch("/api/clubs/{clubId:int}/public-profile", UpdateAsync)
-            .RequireAuthorization(AuthPolicies.BusinessAccess).WithTags("Club public profile");
+            .RequireAuthorization(AuthPolicies.BusinessAccess).AddEndpointFilter<RosterExceptionFilter>().WithTags("Club public profile");
 
     private static async Task<IResult> UpdateAsync(int clubId, JsonElement request,
         ClubDbContext db, ClaimsPrincipal user, HttpContext http, CancellationToken cancellationToken)
     {
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)) return Results.Forbid();
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)
+            && !await ClubGovernancePolicy.CanPerform(db, clubId, "club.profile.write", http, cancellationToken)) return Results.Forbid();
         var club = await db.Clubs.Include(x => x.ManagerAssignments).Include(x => x.Memberships)
             .SingleOrDefaultAsync(x => x.Id == clubId, cancellationToken);
         if (club is null) return Results.NotFound();
@@ -59,6 +62,9 @@ public static class ClubPublicProfileEndpoints
 
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
+            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)
+                && !await ClubGovernancePolicy.CanPerform(db, clubId, "club.profile.write", http, cancellationToken))
+                return ApiOperations.Error(403, "PROFILE_AUTHORITY_REQUIRED", "Current club profile authority is required.");
             if (expected != club.ConcurrencyToken) return ApiOperations.Error(409, "STALE_VERSION", "Reload the club before saving.");
             if (request.EnumerateObject().All(x => x.Name == "expectedVersion"))
                 return ApiOperations.Error(400, "EMPTY_PATCH", "Provide a public text field.");

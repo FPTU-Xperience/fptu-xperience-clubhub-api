@@ -75,7 +75,7 @@ public static class ProposalEndpoints
         if (proposal.Status != FinanceStatuses.Submitted)
             return Results.Conflict(new { message = "Only submitted proposals can receive a manager review note." });
         var access = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken))
-            .FirstOrDefault(x => x.ClubId == proposal.ClubId && x.IsManager);
+            .FirstOrDefault(x => x.ClubId == proposal.ClubId && x.CanManage);
         if (access is null) return Results.Forbid();
         if (proposal.ProposedByUserId == user.GetUserId())
             return Results.BadRequest(new { message = "The proposal creator cannot review their own proposal." });
@@ -237,8 +237,8 @@ public static class ProposalEndpoints
             return Results.BadRequest(new { message = "Requested amount must be greater than zero." });
         }
 
-        var access = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken))
-            .FirstOrDefault(x => x.ClubId == request.ClubId && x.CanManageFinance);
+        var access = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true))
+            .FirstOrDefault(x => x.ClubId == request.ClubId && (x.CanManageFinance || x.HasCapability("club.finance.draft.write") && x.HasCapability("club.finance.submit")));
         if (access is null)
         {
             return Results.Forbid();
@@ -470,7 +470,7 @@ public static class ProposalEndpoints
         }
 
         var access = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken))
-            .FirstOrDefault(x => x.ClubId == proposal.ClubId && x.IsManager);
+            .FirstOrDefault(x => x.ClubId == proposal.ClubId && x.CanManage);
         if (access is null) return Results.Forbid();
         if (proposal.ProposedByUserId == user.GetUserId())
         {
@@ -533,7 +533,7 @@ public static class ProposalEndpoints
         }
 
         var canManage = (await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken))
-            .Any(x => x.ClubId == proposal.ClubId && x.IsManager);
+            .Any(x => x.ClubId == proposal.ClubId && x.CanManage);
         if (!canManage) return Results.Forbid();
         if (proposal.ProposedByUserId == user.GetUserId())
         {

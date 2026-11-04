@@ -25,7 +25,7 @@ public static class MemberManagementEndpoints
     {
         var clubs = app.MapGroup("/api/clubs")
             .WithTags("Member Management")
-            .RequireAuthorization(AuthPolicies.BusinessAccess);
+            .RequireAuthorization(AuthPolicies.BusinessAccess).AddEndpointFilter<ClubReportHub.Shared.Rosters.RosterExceptionFilter>();
 
         // GET /api/clubs/{clubId}/members - List members with pagination
         clubs.MapGet("/{clubId:int}/members", ListClubMembers)
@@ -107,7 +107,7 @@ public static class MemberManagementEndpoints
         var club = await db.Clubs.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == clubId && x.IsActive, cancellationToken);
         if (club is null) return Results.NotFound();
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, http, "club.members.recruit"))
             return Results.Forbid();
         if (!user.IsSuperAdmin() && club.CampusCode != CampusCodes.Global && user.GetCampus() != club.CampusCode)
             return Results.Forbid();
@@ -130,7 +130,7 @@ public static class MemberManagementEndpoints
         if (eligibility.Error is not null) return eligibility.Error;
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
-            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)) return Results.Forbid();
+            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, http, "club.members.recruit")) return ApiOperations.Error(403, "RECRUITMENT_AUTHORITY_REQUIRED", "Current club recruitment authority is required.");
             if (await db.ClubManagerAssignments.AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == parsedNumber && x.IsActive, cancellationToken)
                 || await db.ClubMemberships.IgnoreQueryFilters().AnyAsync(x => x.ClubId == clubId && x.UserId == parsedNumber && !x.IsDeleted, cancellationToken))
                 return ApiOperations.Error(409, "MEMBERSHIP_EXISTS", "A current membership, invitation or manager assignment already exists.");
@@ -203,7 +203,7 @@ public static class MemberManagementEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, httpContext))
             return Results.Forbid();
 
         if (!await db.Clubs.AnyAsync(x => x.Id == clubId, cancellationToken))
@@ -283,7 +283,7 @@ public static class MemberManagementEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, httpContext))
             return Results.Forbid();
 
         var membership = await db.ClubMemberships.AsNoTracking()
@@ -405,7 +405,7 @@ public static class MemberManagementEndpoints
         ILogger<Program> logger,
         CancellationToken cancellationToken)
     {
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, httpContext))
             return Results.Forbid();
 
         var membership = await db.ClubMemberships.IgnoreQueryFilters()
@@ -416,7 +416,7 @@ public static class MemberManagementEndpoints
 
         return await ApiOperations.ExecuteAsync(httpContext, db, new { clubId, memberId, expectedVersion }, async () =>
         {
-            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken)) return Results.Forbid();
+            if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, httpContext)) return ApiOperations.Error(403, "MEMBERSHIP_AUTHORITY_REQUIRED", "Current scoped leadership is required.");
             if (membership.IsDeleted) return Results.NotFound();
             if (expectedVersion.HasValue && expectedVersion != membership.ConcurrencyToken)
                 return ApiOperations.Error(409, "STALE_VERSION", "Reload the member before removal.");
@@ -426,12 +426,27 @@ public static class MemberManagementEndpoints
             var removalError = ClubMemberRoleRules.ValidateRemoval(isActiveManager);
             if (removalError is not null)
                 return Results.Conflict(new { message = removalError });
+            if (await db.Set<ClubViceAppointment>().AnyAsync(x => x.ClubId == clubId && x.UserId == membership.UserId && x.Status == "APPROVED" && x.Until > DateTimeOffset.UtcNow, cancellationToken))
+                return ApiOperations.Error(409, "LEADERSHIP_REVOCATION_REQUIRED", "CTSV must revoke the protected vice appointment before forced membership removal.");
+            var previousStatus = membership.Status;
 
             membership.IsDeleted = true;
             membership.DeletedAtUtc = DateTimeOffset.UtcNow;
             membership.DeletedByUserId = user.GetUserId();
             membership.Status = ClubMembershipStatuses.Inactive;
             membership.TreasurerSlot = null;
+            var club = await db.Clubs.SingleAsync(x => x.Id == clubId, cancellationToken);
+            club.ConcurrencyToken = Guid.NewGuid();
+            var removalAudit = ClubGovernanceAudit.Record(db, clubId, "MEMBERSHIP", "MEMBER_DEPARTED", "",
+                new { membershipId = membership.Id, membership.UserId, displayName = membership.FullName, before = previousStatus, after = membership.Status }, httpContext, membership.Id, membership.UserId);
+            var configuration = await ClubGovernancePolicy.Current(db, clubId, httpContext, cancellationToken);
+            if (configuration is not null && configuration.Groups.Any(g => g.Assignments.Any(a => a.MembershipId == membership.Id)))
+            {
+                var next = configuration with { Groups = configuration.Groups.Select(g => g with { Assignments = g.Assignments.Where(a => a.MembershipId != membership.Id).ToArray() }).ToArray() };
+                var term = await db.Set<ClubGovernanceTerm>().SingleAsync(x => x.ClubId == clubId && x.SemesterId == configuration.SemesterId, cancellationToken);
+                var revision = await ClubGovernanceEndpoints.Append(term, configuration, next, "MEMBER_DEPARTED", "", db, httpContext, cancellationToken);
+                removalAudit.RevisionId = revision.Id;
+            }
 
             db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
                 Guid.NewGuid(),
@@ -457,9 +472,10 @@ public static class MemberManagementEndpoints
         int pageSize,
         ClubDbContext db,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, httpContext))
             return Results.Forbid();
 
         page = Math.Max(1, page);
@@ -497,9 +513,10 @@ public static class MemberManagementEndpoints
         ResolveClubMemberRosterRequest request,
         ClubDbContext db,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken))
+        if (!await db.CanManageMembershipsAsync(clubId, user, cancellationToken, httpContext))
             return Results.Forbid();
 
         var memberIds = request.MemberIds?.Where(id => id > 0).Distinct().ToArray() ?? [];

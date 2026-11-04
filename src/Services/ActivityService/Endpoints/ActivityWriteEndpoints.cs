@@ -82,7 +82,7 @@ internal static class ActivityWriteEndpoints
             return await ActivityLifecycleEndpoints.UpdateAsync(id, request, db, httpContext, clubAccess, authority,
                 httpContext.RequestServices.GetRequiredService<IConfiguration>(), cancellationToken);
         }
-        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess, httpContext, cancellationToken, bypassCache: true))
+        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess, httpContext, cancellationToken, bypassCache: true, capability: "event.content.write"))
             return Results.Forbid();
         if (activity.Status != ActivityStatuses.Scheduled || activity.SourceReportId.HasValue)
             return Results.Conflict(new { message = "Only scheduled standalone activities can be edited here." });

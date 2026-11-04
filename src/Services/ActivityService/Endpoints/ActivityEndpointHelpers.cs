@@ -123,7 +123,7 @@ internal static class ActivityEndpointHelpers
         ClubAccessClient clubAccess,
         HttpContext httpContext,
         CancellationToken cancellationToken,
-        bool bypassCache = false)
+        bool bypassCache = false, string? capability = null)
     {
         var access = await clubAccess.GetMyAccessAsync(
             httpContext.GetBearerToken(),
@@ -131,7 +131,7 @@ internal static class ActivityEndpointHelpers
             bypassCache);
 
         return access.Any(
-            x => x.ClubId == clubId && x.CanManage);
+            x => x.ClubId == clubId && (x.CanManage || capability is not null && x.HasCapability(capability)));
     }
 
     internal static async Task<bool> CanManageClubOrReviewAllAsync(
@@ -140,7 +140,7 @@ internal static class ActivityEndpointHelpers
         ClubAccessClient clubAccess,
         HttpContext httpContext,
         CancellationToken cancellationToken,
-        bool bypassCache = false)
+        bool bypassCache = false, string? capability = null)
     {
         return CanReviewAllActivities(user)
             || await CanManageClubAsync(
@@ -148,7 +148,7 @@ internal static class ActivityEndpointHelpers
                 clubAccess,
                 httpContext,
                 cancellationToken,
-                bypassCache);
+                bypassCache, capability);
     }
 
     internal static string? ValidateAttendance(
