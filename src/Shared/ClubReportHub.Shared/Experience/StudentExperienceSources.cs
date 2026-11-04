@@ -25,6 +25,8 @@ public sealed record StudentActivityItem(int Id, int ClubId, string ClubCode, st
     public RecommendationActivitySource? RecommendationSource { get; init; }
     public bool IsInternal { get; init; } = true;
     public bool IsRegistered { get; init; }
+    public bool CanCancelRegistration { get; init; }
+    public Guid? RegistrationVersion { get; init; }
 }
 public sealed record StudentActivityPage(IReadOnlyList<StudentActivityItem> Items, int Page, int PageSize,
     int TotalItems, int TotalPages, DateTimeOffset AsOf, string ScopeVersion);

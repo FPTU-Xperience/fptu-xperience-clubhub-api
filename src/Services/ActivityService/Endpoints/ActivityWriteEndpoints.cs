@@ -21,6 +21,7 @@ internal static class ActivityWriteEndpoints
         activities.MapPut("/{id:int}", UpdateActivity);
         activities.MapDelete("/{id:int}", CancelActivity);
         activities.MapPost("/{id:int}/participants", RegisterParticipant);
+        activities.MapPost("/{id:int}/registration/cancel", ActivityRegistrationCancellation.CancelAsync);
         activities.MapPost("/{id:int}/check-in", CheckIn);
         activities.MapGet("/{id:int}/my-attendance", GetMyAttendance);
         activities.MapMethods("/{id:int}/complete", ["PATCH"], CompleteActivity);
@@ -207,8 +208,10 @@ internal static class ActivityWriteEndpoints
                 if (current.Capacity.HasValue && current.RegisteredCount >= current.Capacity)
                     return ApiOperations.Error(409, "ACTIVITY_FULL", "The activity has no available seats.");
                 current.RegisteredCount++; current.Version = Guid.NewGuid();
-                var participant = new ActivityParticipant { ActivityId = id, UserId = targetUserId, FullName = fullName };
-                db.ActivityParticipants.Add(participant); await db.SaveChangesAsync(cancellationToken);
+                var participant = await db.ActivityParticipants.IgnoreQueryFilters().SingleOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
+                if (participant is null) { participant = new ActivityParticipant { ActivityId = id, UserId = targetUserId }; db.ActivityParticipants.Add(participant); }
+                participant.FullName = fullName; participant.CancelledAtUtc = null; participant.RegisteredAtUtc = now; participant.Version = Guid.NewGuid();
+                await db.SaveChangesAsync(cancellationToken);
                 return Results.Ok(new { success = true, participant = ToParticipantResponse(participant) });
             }, cancellationToken);
         }
@@ -216,8 +219,9 @@ internal static class ActivityWriteEndpoints
             .FirstOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
         if (existing is not null) return Results.Ok(new { success = true, participant = ToParticipantResponse(existing) });
 
-        var row = new ActivityParticipant { ActivityId = id, UserId = targetUserId, FullName = fullName };
-        db.ActivityParticipants.Add(row);
+        var row = await db.ActivityParticipants.IgnoreQueryFilters().SingleOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
+        if (row is null) { row = new ActivityParticipant { ActivityId = id, UserId = targetUserId }; db.ActivityParticipants.Add(row); }
+        row.FullName = fullName; row.CancelledAtUtc = null; row.RegisteredAtUtc = DateTimeOffset.UtcNow; row.Version = Guid.NewGuid();
         try
         {
             await db.SaveChangesAsync(cancellationToken);

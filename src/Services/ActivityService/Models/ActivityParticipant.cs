@@ -2,6 +2,9 @@ namespace ActivityService.Models;
 
 public sealed class ActivityParticipant
 {
+    [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
+    public Guid Version { get; set; } = Guid.NewGuid();
+    public DateTimeOffset? CancelledAtUtc { get; set; }
     public int Id { get; set; }
     public int ActivityId { get; set; }
     public ClubActivity Activity { get; set; } = null!;

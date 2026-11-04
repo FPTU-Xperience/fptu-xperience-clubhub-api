@@ -80,6 +80,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
 
         modelBuilder.Entity<ActivityParticipant>(entity =>
         {
+            entity.HasQueryFilter(x => x.CancelledAtUtc == null);
             entity.HasIndex(x => new { x.ActivityId, x.UserId }).IsUnique();
             entity.HasIndex(x => x.UserId).IncludeProperties(x => new { x.ActivityId, x.AttendanceStatus });
             entity.Property(x => x.FullName).HasMaxLength(200);

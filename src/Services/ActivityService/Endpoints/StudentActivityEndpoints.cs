@@ -116,6 +116,8 @@ public static class StudentActivityEndpoints
             .OrderBy(x => x.StartTimeUtc).ThenBy(x => x.Id).ToListAsync(ct);
         var registered = await db.ActivityParticipants.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId))
             .Select(x => x.ActivityId).ToListAsync(ct);
+        var registrationVersions = await db.ActivityParticipants.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId)).ToDictionaryAsync(x => x.ActivityId, x => x.Version, ct);
+        var attendanceActivities = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId)).Select(x => x.ActivityId).Distinct().ToListAsync(ct);
         var checkedIn = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId
             && x.VerificationStatus == "VERIFIED" && ids.Contains(x.ActivityId)).Select(x => x.SessionId).ToListAsync(ct);
         var metadata = authority.Clubs.ToDictionary(x => x.ClubId);
@@ -142,6 +144,8 @@ public static class StudentActivityEndpoints
             {
                 IsInternal = a.IsInternal,
                 IsRegistered = registered.Contains(a.Id),
+                RegistrationVersion = registrationVersions.TryGetValue(a.Id, out var registrationVersion) ? registrationVersion : null,
+                CanCancelRegistration = registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled && a.StartTimeUtc > now && !attendanceActivities.Contains(a.Id),
                 // No required/optional flag exists yet. Treat every published session as
                 // required conservatively; never invent an attendable aggregate interval.
                 RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,
