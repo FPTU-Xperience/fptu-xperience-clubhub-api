@@ -1,6 +1,30 @@
 {
   "ReverseProxy": {
     "Routes": {
+      "club-credit-wallet": {
+        "Order": -35, "ClusterId": "admin-service", "AuthorizationPolicy": "Default", "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs/{clubId}/wallet/{**catch-all}" }
+      },
+      "club-credit-points": {
+        "Order": -35, "ClusterId": "admin-service", "AuthorizationPolicy": "Default", "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs/{clubId}/points/{**catch-all}" }
+      },
+      "club-reward-catalog": {
+        "Order": -35, "ClusterId": "admin-service", "AuthorizationPolicy": "Anonymous", "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs/{clubId}/rewards", "Methods": ["GET"] }
+      },
+      "club-reward-create": {
+        "Order": -35, "ClusterId": "admin-service", "AuthorizationPolicy": "Default", "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs/{clubId}/rewards", "Methods": ["POST"] }
+      },
+      "club-reward-operations": {
+        "Order": -35, "ClusterId": "admin-service", "AuthorizationPolicy": "Default", "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/clubs/{clubId}/rewards/{**catch-all}" }
+      },
+      "own-cosmetic-inventory": {
+        "Order": -35, "ClusterId": "admin-service", "AuthorizationPolicy": "Default", "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/users/me/cosmetics", "Methods": ["GET"] }
+      },
       "academic-calendar": {
         "Order": -30,
         "ClusterId": "admin-service",

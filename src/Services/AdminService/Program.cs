@@ -68,6 +68,8 @@ builder.Services.AddHttpClient<SchoolAccountClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddClubAccessClient(builder.Configuration);
+builder.Services.AddHttpClient<MediaAttachmentClient>(client =>
+{ client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/"); client.Timeout = TimeSpan.FromSeconds(15); });
 builder.Services.AddHttpClient<CurrentUserProfileClient>(client =>
 { client.BaseAddress = new Uri(builder.Configuration["Services:AuthService:BaseUrl"] ?? "http://auth-service:8080/"); client.Timeout = TimeSpan.FromSeconds(10); });
 builder.Services.AddHttpClient<ClubExperienceAuthorityClient>(client =>
@@ -151,6 +153,8 @@ app.MapSemesterEndpoints();
 app.MapSemesterRosterEndpoints();
 app.MapAcademicCalendarEndpoints();
 app.MapAcademicProfileEndpoints();
+app.MapStudentInspectionEndpoints();
+app.MapClubCreditEndpoints();
 app.MapExperiencePolicyEndpoints();
 app.MapWorkspaceCatalogEndpoints();
 app.MapVerificationAssignmentEndpoints();

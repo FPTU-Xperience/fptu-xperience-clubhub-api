@@ -25,7 +25,7 @@ public static class PublicMediaEndpoints
             ClubAccessClient access, IHttpClientFactory clients, HttpContext http, CancellationToken ct) =>
         {
             var self = input.Kind is "student-avatar" or "student-cover";
-            if (input.Kind is not ("club-logo" or "club-cover" or "activity-cover" or "student-avatar" or "student-cover") || input.ContentType is not ("image/png" or "image/jpeg" or "image/webp")
+            if (input.Kind is not ("club-logo" or "club-cover" or "club-reward" or "activity-cover" or "student-avatar" or "student-cover") || input.ContentType is not ("image/png" or "image/jpeg" or "image/webp")
                 || input.SizeBytes is <= 0 or > 5_242_880 || !int.TryParse(input.OwnerId, NumberStyles.None, CultureInfo.InvariantCulture, out var owner) || owner <= 0)
                 return ApiOperations.Error(400, "INVALID_MEDIA_INTENT", "Provide an owner, a supported basic image kind, JPEG/PNG/WebP and size up to 5 MiB.");
             if (self && (owner != http.User.GetUserId() || !await db.Users.AsNoTracking().AnyAsync(x => x.Id == owner && x.IsActive && !x.IsLocked, ct))) return Results.Forbid();
