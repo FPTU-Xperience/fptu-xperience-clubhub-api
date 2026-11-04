@@ -37,8 +37,8 @@ public static class BrowserSessionEndpoints
             configuration["Sso:AdminOrigin"] ?? "https://fptux-admin-ui.pages.dev"
         };
         if (allowed.Any(value => string.Equals(value.TrimEnd('/'), origin, StringComparison.Ordinal))) return true;
-        var environment = context.RequestServices.GetRequiredService<IHostEnvironment>();
-        return environment.IsDevelopment() && origin is "http://localhost:5173" or "http://localhost:5174";
+        return configuration.GetValue("Sso:AllowLocalOrigins", true)
+            && origin is "http://localhost:5173" or "http://localhost:5174";
     }
 
     private static JwtOptions Options(HttpContext context) => context.RequestServices.GetRequiredService<IOptions<JwtOptions>>().Value;

@@ -70,6 +70,46 @@ public sealed partial class RefreshTokenSecurityTests
         Assert.Equal("no-store", restored.Headers.CacheControl?.ToString());
     }
 
+    [Theory]
+    [InlineData("http://localhost:5173")]
+    [InlineData("http://localhost:5174")]
+    public async Task BrowserSession_ProductionTrustsConfiguredLocalOrigins(string origin)
+    {
+        await using var fixture = await RefreshTestFixture.CreateAsync("Production");
+        fixture.App.Configuration["Sso:AllowLocalOrigins"] = "true";
+        using var loginClient = fixture.CreateClient();
+        loginClient.DefaultRequestHeaders.Add("Origin", origin);
+        var login = await loginClient.PostAsJsonAsync("/api/auth/email-login", new { email = "refresh@fpt.edu.vn", password = EmailPassword });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var setCookie = Assert.Single(login.Headers.GetValues("Set-Cookie"));
+        Assert.StartsWith("__Host-fptux-session=", setCookie);
+        Assert.Contains("secure", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", setCookie, StringComparison.OrdinalIgnoreCase);
+        using var client = BrowserClient(fixture, setCookie.Split(';')[0], origin);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/session")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/api/auth/session", null)).StatusCode);
+        client.DefaultRequestHeaders.Remove("X-FPTUX-Session");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/auth/session")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync("/api/auth/session", null)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:5173", false)]
+    [InlineData("http://localhost:5174", false)]
+    [InlineData("http://localhost:5175", true)]
+    [InlineData("https://localhost:5173", true)]
+    [InlineData("http://localhost:5173.attacker.example", true)]
+    [InlineData("http://127.0.0.1:5173", true)]
+    [InlineData("null", true)]
+    public async Task BrowserSession_ProductionRejectsDisabledOrNonExactLocalOrigins(string origin, bool allowLocal)
+    {
+        await using var fixture = await RefreshTestFixture.CreateAsync("Production");
+        fixture.App.Configuration["Sso:AllowLocalOrigins"] = allowLocal.ToString();
+        using var client = BrowserClient(fixture, "unrelated=value", origin);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/auth/session")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync("/api/auth/session", null)).StatusCode);
+    }
+
     [Fact]
     public async Task BrowserSession_AnonymousOrTamperedCookieDoesNotRestoreOrRedirect()
     {
