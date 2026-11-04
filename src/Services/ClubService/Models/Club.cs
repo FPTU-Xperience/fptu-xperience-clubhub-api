@@ -16,6 +16,10 @@ public sealed class Club
     public string ContactPhone { get; set; } = string.Empty;
     public string? ScheduleLabel { get; set; }
     public string? ScheduleJson { get; set; }
+    [MaxLength(500)] public string ExpectedLocation { get; set; } = string.Empty;
+    [MaxLength(2000)] public string MajorEvents { get; set; } = string.Empty;
+    [MaxLength(1000)] public string EquipmentNeeds { get; set; } = string.Empty;
+    public bool AdvisorNeeded { get; set; }
     public bool IsRecruiting { get; set; } = false;
     public bool IsActive { get; set; } = true;
     [ConcurrencyCheck]

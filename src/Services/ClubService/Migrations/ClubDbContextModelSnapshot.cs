@@ -138,6 +138,9 @@ namespace ClubService.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AdvisorNeeded")
+                        .HasColumnType("bit");
+
                     b.Property<string>("CampusCode")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -187,6 +190,16 @@ namespace ClubService.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("EquipmentNeeds")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ExpectedLocation")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -198,6 +211,11 @@ namespace ClubService.Migrations
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("MajorEvents")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -274,6 +292,12 @@ namespace ClubService.Migrations
 
                     b.Property<bool>("AdvisorNeeded")
                         .HasColumnType("bit");
+
+                    b.Property<string>("ApprovedManagerName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ApprovedManagerUserId")
+                        .HasColumnType("int");
 
                     b.Property<string>("CampusCode")
                         .IsRequired()
@@ -426,6 +450,10 @@ namespace ClubService.Migrations
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 

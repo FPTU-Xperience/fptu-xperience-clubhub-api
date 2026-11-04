@@ -13,7 +13,7 @@ namespace ClubService.Endpoints;
 
 public static class ClubPublicProfileEndpoints
 {
-    private static readonly HashSet<string> Fields = ["name", "category", "description", "contactEmail", "contactPhone", "scheduleLabel", "schedule", "expectedVersion"];
+    private static readonly HashSet<string> Fields = ["name", "category", "description", "contactEmail", "contactPhone", "scheduleLabel", "schedule", "expectedVersion", "expectedLocation", "majorEvents", "equipmentNeeds", "advisorNeeded"];
 
     public static void MapClubPublicProfileEndpoints(this WebApplication app) =>
         app.MapPatch("/api/clubs/{clubId:int}/public-profile", UpdateAsync)
@@ -64,6 +64,11 @@ public static class ClubPublicProfileEndpoints
                 return ApiOperations.Error(400, "EMPTY_PATCH", "Provide a public text field.");
             foreach (var field in request.EnumerateObject().Where(x => x.Name != "expectedVersion"))
             {
+                if (field.Name == "advisorNeeded")
+                {
+                    if (field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return ApiOperations.Error(400, "INVALID_PROFILE_FIELD", "advisorNeeded must be boolean.");
+                    club.AdvisorNeeded = field.Value.GetBoolean(); continue;
+                }
                 if (field.Name == "schedule")
                 {
                     club.ScheduleJson = field.Value.ValueKind == JsonValueKind.Null ? null : field.Value.GetRawText();
@@ -73,7 +78,7 @@ public static class ClubPublicProfileEndpoints
                 if (field.Value.ValueKind != JsonValueKind.String && !(field.Name == "scheduleLabel" && field.Value.ValueKind == JsonValueKind.Null))
                     return ApiOperations.Error(400, "INVALID_PROFILE_FIELD", "Text is required; only scheduleLabel can be null.");
                 var value = field.Value.ValueKind == JsonValueKind.Null ? null : field.Value.GetString()!.Trim();
-                var max = field.Name switch { "name" => 200, "category" => 40, "description" => 1000, "contactEmail" => 200, "contactPhone" => 20, _ => 500 };
+                var max = field.Name switch { "name" => 200, "category" => 40, "description" or "equipmentNeeds" => 1000, "majorEvents" => 2000, "contactEmail" => 200, "contactPhone" => 20, _ => 500 };
                 if (value?.Length > max || (field.Name is "name" or "category" && string.IsNullOrWhiteSpace(value))
                     || (field.Name == "contactEmail" && !string.IsNullOrEmpty(value) && !new EmailAddressAttribute().IsValid(value)))
                     return ApiOperations.Error(400, "INVALID_PROFILE_FIELD", "Check required text, lengths and email format.");
@@ -84,6 +89,9 @@ public static class ClubPublicProfileEndpoints
                     case "contactEmail": club.ContactEmail = value!; break;
                     case "contactPhone": club.ContactPhone = value!; break;
                     case "scheduleLabel": club.ScheduleLabel = value; club.ScheduleJson = null; break;
+                    case "expectedLocation": club.ExpectedLocation = value!; break;
+                    case "majorEvents": club.MajorEvents = value!; break;
+                    case "equipmentNeeds": club.EquipmentNeeds = value!; break;
                     case "category":
                         var code = value!.ToUpperInvariant();
                         if (!await db.ClubCategories.AnyAsync(x => x.Code == code, cancellationToken))

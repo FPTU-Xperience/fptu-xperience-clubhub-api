@@ -43,6 +43,10 @@ public sealed record ClubPublicDetailResponse(
 {
     public Guid Version { get; init; }
     public System.Text.Json.JsonElement? Schedule { get; init; }
+    public string ExpectedLocation { get; init; } = string.Empty;
+    public string MajorEvents { get; init; } = string.Empty;
+    public string EquipmentNeeds { get; init; } = string.Empty;
+    public bool AdvisorNeeded { get; init; }
 }
 
 public sealed record ClubResponse(
@@ -64,6 +68,10 @@ public sealed record ClubResponse(
     public Guid Version { get; init; }
     public string? CoverImageUrl { get; init; }
     public System.Text.Json.JsonElement? Schedule { get; init; }
+    public string ExpectedLocation { get; init; } = string.Empty;
+    public string MajorEvents { get; init; } = string.Empty;
+    public string EquipmentNeeds { get; init; } = string.Empty;
+    public bool AdvisorNeeded { get; init; }
 }
 
 public sealed record ManagerAssignmentResponse(
@@ -164,7 +172,10 @@ public sealed record ClubCreationApplicationResponse(
     DateTimeOffset SubmittedAtUtc,
     DateTimeOffset? ReviewedAtUtc,
     int? ReviewedByUserId,
-    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi,
+    Guid Version = default,
+    int? ApprovedManagerUserId = null,
+    string? ApprovedManagerName = null);
 
 public sealed record CreateClubRequest(
     [StringLength(20)] string Code,
@@ -258,12 +269,15 @@ public sealed record CreateClubApplicationRequest(
     bool CommittedToRules,
     bool CommittedToResponsibility,
     bool CommittedToReporting,
-    [StringLength(20)] string? CampusCode = null);
+    [StringLength(20)] string? CampusCode = null,
+    Guid? ExpectedVersion = null);
 
 public sealed record ReviewClubApplicationRequest(
     [StringLength(1000)] string? Note,
     [StringLength(1000)] string? Conditions = null,
-    [StringLength(200)] string? ReviewerSignature = null);
+    [StringLength(200)] string? ReviewerSignature = null,
+    Guid? ExpectedVersion = null,
+    int? ManagerUserId = null);
 
 // ============================================================================
 // CLUB DISBAND CONTRACTS
