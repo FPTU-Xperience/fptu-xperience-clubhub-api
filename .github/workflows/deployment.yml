@@ -6,23 +6,41 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: production-deployment
   cancel-in-progress: false
 jobs:
-  validate:
-    uses: ./.github/workflows/backend-validate.yml
   build-auth:
-    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: 501548a27058e0bc7c65087f2d5a985448a1e512
+          fetch-depth: 0
+      - name: Verify exact source full CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const response = await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41817103947',
+            {headers:{Authorization:'Bearer '+process.env.GH_TOKEN}});
+          assert.equal(response.status,200);
+          const run=await response.json();
+          assert.equal(run.head_sha,'501548a27058e0bc7c65087f2d5a985448a1e512');
+          assert.equal(run.status,'completed');
+          assert.equal(run.conclusion,'success');
+          NODE
       - name: Build validated AuthService on CI
         run: |
-          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:${{ github.sha }} .
+          git checkout --detach 3d6167919f36d2d5ac825e1f1b405d7ac083b1b0
+          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 .
+          git checkout --detach 501548a27058e0bc7c65087f2d5a985448a1e512
+          docker build --file src/Services/AuthService/Dockerfile --tag clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512 .
           mkdir -p auth-image
-          docker save clubreporthub-auth:${{ github.sha }} | gzip > auth-image/image.tar.gz
+          docker save clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512 clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 | gzip > auth-image/image.tar.gz
           sha256sum auth-image/image.tar.gz > auth-image/image.sha256
       - uses: actions/upload-artifact@v4
         with:
@@ -55,7 +73,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/auth-localhost
-          IMAGE_TAG: clubreporthub-auth:${{ github.sha }}
+          IMAGE_TAG: clubreporthub-auth:501548a27058e0bc7c65087f2d5a985448a1e512
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
@@ -71,7 +89,7 @@ jobs:
             sha256sum --check auth-image/image.sha256
             docker load --input auth-image/image.tar.gz
             new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
-            old_image="$(docker inspect clubreporthub-auth --format '{{.Image}}')"
+            old_image="$(docker image inspect clubreporthub-auth:rollback-3d6167919f36d2d5ac825e1f1b405d7ac083b1b0 --format '{{.Id}}')"
             project="$(docker inspect clubreporthub-auth --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
             workdir="$(docker inspect clubreporthub-auth --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"
             configs="$(docker inspect clubreporthub-auth --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}')"
@@ -112,7 +130,7 @@ jobs:
             cd "${workdir}"
             rollback() {
               docker compose -p "${project}" "${args[@]}" -f "${IMAGE_DIR}/auth.rollback.json" up -d --no-build --no-deps auth-service
-              echo 'Auth rollout failed; restored exact previous image and runtime.' >&2
+              echo 'Auth rollout failed; restored pre-change source image and preserved runtime.' >&2
             }
             trap rollback ERR
             docker compose -p "${project}" "${args[@]}" -f "${IMAGE_DIR}/auth.override.json" up -d --no-build --no-deps auth-service
