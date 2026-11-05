@@ -8,75 +8,64 @@ name: Deploy to Ubuntu VPC
   workflow_dispatch: null
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: production-deployment
   cancel-in-progress: false
 jobs:
-  validate:
-    uses: ./.github/workflows/backend-validate.yml
-  build-services:
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - name: admin
-            service: admin-service
-            dockerfile: src/Services/AdminService/Dockerfile
-          - name: auth
-            service: auth-service
-            dockerfile: src/Services/AuthService/Dockerfile
-          - name: activity
-            service: activity-service
-            dockerfile: src/Services/ActivityService/Dockerfile
-          - name: finance
-            service: finance-service
-            dockerfile: src/Services/FinanceService/Dockerfile
-          - name: report
-            service: report-service
-            dockerfile: src/Services/ReportService/Dockerfile
-          - name: export
-            service: export-service
-            dockerfile: src/Services/ExportService/Dockerfile
-          - name: notification
-            service: notification-service
-            dockerfile: src/Services/NotificationService/Dockerfile
-          - name: gateway
-            service: api-gateway
-            dockerfile: src/Gateway/ApiGateway/Dockerfile
-          - name: club
-            service: club-service
-            dockerfile: src/Services/ClubService/Dockerfile
-    needs: validate
+  rollback-prepare:
+    name: Verify validated source and preserve missing Report rollback
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    environment: production
     steps:
-      - uses: actions/checkout@v4
-      - name: Build validated ${{ matrix.name }} on CI
-        run: |
-          docker build --file ${{ matrix.dockerfile }} --tag clubreporthub-${{ matrix.name }}:${{ github.sha }} .
-          mkdir -p ${{ matrix.name }}-image
-          docker save clubreporthub-${{ matrix.name }}:${{ github.sha }} | gzip > ${{ matrix.name }}-image/image.tar.gz
-          sha256sum ${{ matrix.name }}-image/image.tar.gz > ${{ matrix.name }}-image/image.sha256
-      - uses: actions/upload-artifact@v4
+      - name: Verify exact successful SQL source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const r=await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41887522963',{headers:{Authorization:'Bearer '+process.env.GH_TOKEN}});assert.equal(r.status,200);const run=await r.json();assert.equal(run.head_sha,'ae9e871dcfebb91a58ec48040558bcd71aa9c140');assert.equal(run.conclusion,'success');console.log('C12_EXACT_SQL_SOURCE_OK',run.id,run.head_sha);
+          NODE
+      - name: Inspect remaining rollback images and snapshot exact running Report root
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: validated-${{ matrix.name }}-release
-          path: ${{ matrix.name }}-image
-          retention-days: 3
+          host: ${{ secrets.VPC_HOST }}
+          username: ${{ secrets.VPC_USERNAME }}
+          key: ${{ secrets.VPC_SSH_KEY }}
+          passphrase: ${{ secrets.VPC_SSH_PASSPHRASE }}
+          password: ${{ secrets.VPC_PASSWORD }}
+          command_timeout: 8m
+          script: |-
+            set -euo pipefail
+            python3 - <<'PY'
+            import json, subprocess
+            names=['report','export','notification','gateway','club']
+            def container(name): return json.loads(subprocess.check_output(['docker','inspect','clubreporthub-'+name],text=True))[0]
+            for name in names:
+                row=container(name); available=subprocess.run(['docker','image','inspect',row['Image']],capture_output=True).returncode==0
+                print('C12_ROLLBACK_INVENTORY',name,row['Image'],available,flush=True)
+                assert row['State']['Running'], 'Target must be running before recovery: '+name
+                if name!='report': assert available, 'Missing additional rollback image: '+name
+            row=container('report'); expected='sha256:bebd66ac00ef3d4bc491fd858330907a9710c07d590b423f5db2169e8912d434'
+            assert row['Image']==expected, 'Running Report changed since failed preflight'
+            tag='clubreporthub-report:rollback-c12-ae9e871'
+            if subprocess.run(['docker','image','inspect',expected],capture_output=True).returncode!=0:
+                if subprocess.run(['docker','image','inspect',tag],capture_output=True).returncode!=0:
+                    subprocess.run(['docker','commit','--pause=true','--change','LABEL clubhub.rollback.source='+expected,'clubreporthub-report',tag],check=True,capture_output=True,text=True)
+                saved=json.loads(subprocess.check_output(['docker','image','inspect',tag],text=True))[0]
+                for key in ['Cmd','Entrypoint','Env','WorkingDir','User','ExposedPorts','Healthcheck']:
+                    assert saved['Config'].get(key)==row['Config'].get(key), 'Rollback config mismatch: '+key
+                assert container('report')['Id']==row['Id'] and container('report')['State']['Running']
+                print('C12_REPORT_ROOT_AND_CONFIG_SNAPSHOT_OK',saved['Id'],flush=True)
+            PY
   deploy:
-    needs: build-services
+    needs: rollback-prepare
     strategy:
       fail-fast: true
       max-parallel: 1
       matrix:
         include:
-          - name: admin
-            service: admin-service
-          - name: auth
-            service: auth-service
-          - name: activity
-            service: activity-service
-          - name: finance
-            service: finance-service
           - name: report
             service: report-service
           - name: export
@@ -94,6 +83,8 @@ jobs:
         with:
           name: validated-${{ matrix.name }}-release
           path: ${{ matrix.name }}-image
+          run-id: 41887522699
+          github-token: ${{ github.token }}
       - name: Measure transfer
         run: echo "ARCHIVE_BYTES=$(stat -c %s ${{ matrix.name }}-image/image.tar.gz)" >> "$GITHUB_ENV"
       - name: Verify free disk and existing rollback image
@@ -113,6 +104,10 @@ jobs:
             printf 'QUEUE_DISK_AVAILABLE %s REQUIRED_ARCHIVE %s\n' "${available}" "${ARCHIVE_BYTES}"
             test "${available}" -gt "$((ARCHIVE_BYTES * 3 + 536870912))"
             old=$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')
+            if ! docker image inspect "${old}" >/dev/null 2>&1; then
+              test '${{ matrix.name }}' = report
+              old="$(docker image inspect clubreporthub-report:rollback-c12-ae9e871 --format '{{.Id}}')"
+            fi
             docker image inspect "${old}" >/dev/null
             printf 'QUEUE_ROLLBACK_AVAILABLE %s %s\n' '${{ matrix.name }}' "${old}"
       - name: Transfer validated image
@@ -130,7 +125,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/queue-${{ matrix.name }}
-          IMAGE_TAG: clubreporthub-${{ matrix.name }}:${{ github.sha }}
+          IMAGE_TAG: clubreporthub-${{ matrix.name }}:ae9e871dcfebb91a58ec48040558bcd71aa9c140
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
@@ -147,6 +142,10 @@ jobs:
             docker load --input ${{ matrix.name }}-image/image.tar.gz
             new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
             old_image="$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')"
+            if ! docker image inspect "${old_image}" >/dev/null 2>&1; then
+              test '${{ matrix.name }}' = report
+              old_image="$(docker image inspect clubreporthub-report:rollback-c12-ae9e871 --format '{{.Id}}')"
+            fi
             network="$(docker inspect clubreporthub-activity --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}}{{end}}')"
             test -n "${network}"
             docker image inspect curlimages/curl:8.10.1 >/dev/null
@@ -243,6 +242,8 @@ jobs:
         with:
           name: validated-${{ matrix.name }}-release
           path: ${{ matrix.name }}-image
+          run-id: 41887522699
+          github-token: ${{ github.token }}
       - name: Measure transfer
         run: echo "ARCHIVE_BYTES=$(stat -c %s ${{ matrix.name }}-image/image.tar.gz)" >> "$GITHUB_ENV"
       - name: Verify free disk and existing rollback image
@@ -262,6 +263,10 @@ jobs:
             printf 'QUEUE_DISK_AVAILABLE %s REQUIRED_ARCHIVE %s\n' "${available}" "${ARCHIVE_BYTES}"
             test "${available}" -gt "$((ARCHIVE_BYTES * 3 + 536870912))"
             old=$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')
+            if ! docker image inspect "${old}" >/dev/null 2>&1; then
+              test '${{ matrix.name }}' = report
+              old="$(docker image inspect clubreporthub-report:rollback-c12-ae9e871 --format '{{.Id}}')"
+            fi
             docker image inspect "${old}" >/dev/null
             printf 'QUEUE_ROLLBACK_AVAILABLE %s %s\n' '${{ matrix.name }}' "${old}"
       - name: Transfer validated image
@@ -279,7 +284,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           IMAGE_DIR: /${{ secrets.VPC_USERNAME }}/fptux/legacy/legacy-api/releases/${{ github.sha }}/queue-${{ matrix.name }}
-          IMAGE_TAG: clubreporthub-${{ matrix.name }}:${{ github.sha }}
+          IMAGE_TAG: clubreporthub-${{ matrix.name }}:ae9e871dcfebb91a58ec48040558bcd71aa9c140
         with:
           host: ${{ secrets.VPC_HOST }}
           username: ${{ secrets.VPC_USERNAME }}
@@ -296,6 +301,10 @@ jobs:
             docker load --input ${{ matrix.name }}-image/image.tar.gz
             new_image="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
             old_image="$(docker inspect clubreporthub-${{ matrix.name }} --format '{{.Image}}')"
+            if ! docker image inspect "${old_image}" >/dev/null 2>&1; then
+              test '${{ matrix.name }}' = report
+              old_image="$(docker image inspect clubreporthub-report:rollback-c12-ae9e871 --format '{{.Id}}')"
+            fi
             network="$(docker inspect clubreporthub-activity --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}}{{end}}')"
             test -n "${network}"
             docker image inspect curlimages/curl:8.10.1 >/dev/null
