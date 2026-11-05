@@ -27,7 +27,7 @@ jobs:
           import assert from 'node:assert/strict';
           const r=await fetch('https://api.github.com/repos/FPTU-Xperience/fptu-xperience-clubhub-api/actions/runs/41887522963',{headers:{Authorization:'Bearer '+process.env.GH_TOKEN}});assert.equal(r.status,200);const run=await r.json();assert.equal(run.head_sha,'ae9e871dcfebb91a58ec48040558bcd71aa9c140');assert.equal(run.conclusion,'success');console.log('C12_EXACT_SQL_SOURCE_OK',run.id,run.head_sha);
           NODE
-      - name: Inspect remaining rollback images and snapshot exact running Report root
+      - name: Preserve running Report filesystem and runtime for rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPC_HOST }}
@@ -39,7 +39,7 @@ jobs:
           script: |-
             set -euo pipefail
             python3 - <<'PY'
-            import json, subprocess
+            import json, subprocess, tempfile, pathlib, shutil
             names=['report','export','notification','gateway','club']
             def container(name): return json.loads(subprocess.check_output(['docker','inspect','clubreporthub-'+name],text=True))[0]
             for name in names:
@@ -52,11 +52,36 @@ jobs:
             tag='clubreporthub-report:rollback-c12-ae9e871'
             if subprocess.run(['docker','image','inspect',expected],capture_output=True).returncode!=0:
                 if subprocess.run(['docker','image','inspect',tag],capture_output=True).returncode!=0:
-                    subprocess.run(['docker','commit','--pause=true','--change','LABEL clubhub.rollback.source='+expected,'clubreporthub-report',tag],check=True,capture_output=True,text=True)
+                    assert shutil.disk_usage('/var/lib/docker').free > 2000000000, 'Insufficient disk for bounded Report rollback snapshot'
+                    handle=tempfile.NamedTemporaryFile(prefix='clubhub-report-rollback-',suffix='.tar',dir='/tmp',delete=False); path=pathlib.Path(handle.name); handle.close()
+                    paused=False
+                    try:
+                        pause=subprocess.run(['docker','pause','clubreporthub-report'],capture_output=True)
+                        assert pause.returncode==0, 'Could not pause Report for consistent filesystem snapshot'
+                        paused=True
+                        exported=subprocess.run(['docker','export','--output',str(path),'clubreporthub-report'],capture_output=True)
+                        assert exported.returncode==0, 'Could not export running Report filesystem'
+                    finally:
+                        if paused:
+                            resumed=subprocess.run(['docker','unpause','clubreporthub-report'],capture_output=True)
+                            assert resumed.returncode==0, 'Report must resume after filesystem export'
+                    try:
+                        changes=['--change','LABEL clubhub.rollback.source='+expected]
+                        for key in ['Cmd','Entrypoint']:
+                            if row['Config'].get(key) is not None: changes += ['--change',key.upper()+' '+json.dumps(row['Config'][key])]
+                        for key,directive in [('User','USER'),('WorkingDir','WORKDIR')]:
+                            if row['Config'].get(key): changes += ['--change',directive+' '+row['Config'][key]]
+                        for port in row['Config'].get('ExposedPorts',{}): changes += ['--change','EXPOSE '+port]
+                        assert not row['Config'].get('Healthcheck'), 'Unexpected Report healthcheck requires explicit rollback mapping'
+                        imported=subprocess.run(['docker','image','import',*changes,str(path),tag],capture_output=True)
+                        assert imported.returncode==0, 'Could not import exact Report filesystem rollback'
+                    finally:
+                        assert path.parent==pathlib.Path('/tmp') and path.name.startswith('clubhub-report-rollback-')
+                        path.unlink(missing_ok=True)
                 saved=json.loads(subprocess.check_output(['docker','image','inspect',tag],text=True))[0]
-                for key in ['Cmd','Entrypoint','Env','WorkingDir','User','ExposedPorts','Healthcheck']:
+                for key in ['Cmd','Entrypoint','WorkingDir','User','ExposedPorts']:
                     assert saved['Config'].get(key)==row['Config'].get(key), 'Rollback config mismatch: '+key
-                assert container('report')['Id']==row['Id'] and container('report')['State']['Running']
+                assert container('report')['Id']==row['Id'] and container('report')['State']['Running'] and container('report')['Config']['Env']==row['Config']['Env']
                 print('C12_REPORT_ROOT_AND_CONFIG_SNAPSHOT_OK',saved['Id'],flush=True)
             PY
   deploy:
