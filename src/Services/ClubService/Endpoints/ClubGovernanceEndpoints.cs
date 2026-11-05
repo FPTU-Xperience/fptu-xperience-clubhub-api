@@ -126,6 +126,13 @@ public static class ClubGovernanceEndpoints
         var legacyTreasurers = await LegacyTreasurers(clubId, db, ct);
         var legacyChanged = latest is not null && (!JsonSerializer.Deserialize<JsonElement>(latest.SnapshotJson).TryGetProperty("legacyTreasurers", out var capturedLegacy)
             || capturedLegacy.GetRawText() != JsonSerializer.Serialize(legacyTreasurers, ClubGovernancePolicy.Json));
+        var configuration = revision is null ? null : ClubGovernancePolicy.Parse(revision);
+        var leadershipJson = JsonSerializer.SerializeToElement(leadership, ClubGovernancePolicy.Json);
+        var visibleUserIds = (configuration?.Groups.SelectMany(group => group.Assignments).Select(member => member.UserId) ?? [])
+            .Concat(leadershipJson.GetProperty("owners").EnumerateArray().Select(member => member.GetProperty("userId").GetInt32()))
+            .Concat(leadershipJson.GetProperty("vicePresidents").EnumerateArray().Select(member => member.GetProperty("userId").GetInt32()))
+            .Distinct().ToArray();
+        var currentProfiles = await ClubGovernancePolicy.Profiles(visibleUserIds, http, ct);
         return Results.Ok(new
         {
             clubId,
@@ -139,7 +146,9 @@ public static class ClubGovernanceEndpoints
             version = term?.Version,
             revisionId = term?.RevisionId,
             sequence = term?.Sequence,
-            configuration = revision is null ? null : ClubGovernancePolicy.Parse(revision),
+            configuration,
+            currentMemberNames = visibleUserIds.Where(currentProfiles.ContainsKey)
+                .Select(userId => new { userId, displayName = currentProfiles[userId].DisplayName }),
             leadership,
             legacyTreasurers,
             leadershipDigest = Digest(leadership),

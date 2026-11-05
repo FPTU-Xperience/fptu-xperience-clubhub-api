@@ -2,6 +2,7 @@ using System.Text.Json;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
+using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Messaging;
 using ClubService.Data;
 using ClubService.Extensions;
@@ -37,6 +38,12 @@ public static class ClubRoleEndpoints
         var query = db.ClubMemberships.AsNoTracking().Where(x => x.ClubId == clubId && x.Status == ClubMembershipStatuses.Approved);
         var total = await query.CountAsync(ct); var currentPage = Math.Max(page ?? 1, 1); var size = Math.Clamp(pageSize ?? 20, 1, 100);
         var rows = await query.OrderBy(x => x.FullName).ThenBy(x => x.Id).Skip((int)Math.Min((long)(currentPage - 1) * size, int.MaxValue)).Take(size).ToListAsync(ct);
+        IReadOnlyDictionary<int, InternalUserProfile> profiles = new Dictionary<int, InternalUserProfile>();
+        var profileClient = http.RequestServices.GetService<CurrentUserProfileClient>();
+        if (profileClient is not null)
+            try { profiles = await profileClient.GetAsync(rows.Select(row => row.UserId), ct); }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException)
+            { return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "Current member display names are unavailable."); }
         return Results.Ok(new
         {
             clubId,
@@ -50,7 +57,7 @@ public static class ClubRoleEndpoints
             {
                 memberId = row.Id,
                 row.UserId,
-                displayName = row.FullName,
+                displayName = profiles.TryGetValue(row.UserId, out var profile) && !string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.DisplayName.Trim() : row.FullName,
                 joinedAtUtc = row.ReviewedAtUtc ?? row.RequestedAtUtc,
                 role = ClubMemberRoleRules.ResolveDisplayRole(row.Role, owners.Contains(row.UserId)),
                 version = row.ConcurrencyToken,
