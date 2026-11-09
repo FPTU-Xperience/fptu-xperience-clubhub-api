@@ -40,7 +40,7 @@ internal static class SessionAttendanceEndpoints
         MyClubMembership? member;
         try
         {
-            if (session.Activity.Eligibility == "CAMPUS_PUBLIC")
+            if (!session.Activity.IsInternal)
             {
                 var account = await ActivityEligibility.ResolveAsync(session.Activity, actor, session.StartTimeUtc,
                     http.RequestServices.GetRequiredService<CurrentUserProfileClient>(), http.RequestServices.GetRequiredService<ClubExperienceAuthorityClient>(), cancellationToken);

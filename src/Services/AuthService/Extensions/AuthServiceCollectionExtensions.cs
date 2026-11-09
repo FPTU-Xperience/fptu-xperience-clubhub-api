@@ -58,6 +58,16 @@ public static class AuthServiceCollectionExtensions
                         QueueLimit = 0
                     }));
 
+            options.AddPolicy("emailSignInLimit", context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: RateLimitingExtensions.ResolveClientKey(context),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+
             // Refresh token limit
             options.AddPolicy("refreshLimit", context =>
                 RateLimitPartition.GetSlidingWindowLimiter(

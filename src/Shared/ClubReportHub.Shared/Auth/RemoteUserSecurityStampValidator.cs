@@ -46,7 +46,11 @@ public sealed class RemoteUserSecurityStampValidator(
 
                 if (status != null)
                 {
-                    cache.Set(cacheKey, status, CacheDuration);
+                    cache.Set(cacheKey, status, new MemoryCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = CacheDuration,
+                        Size = 1
+                    });
                 }
             }
 

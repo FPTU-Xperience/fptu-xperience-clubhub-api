@@ -303,6 +303,21 @@ namespace ActivityService.Migrations
                     b.ToTable("ActivityAttendances");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityCompletionResource", b =>
+                {
+                    b.Property<Guid>("CompletionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("CompletionId", "ResourceId");
+
+                    b.HasIndex("ResourceId");
+
+                    b.ToTable("ActivityCompletionResource");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityExecution", b =>
                 {
                     b.Property<int>("ActivityId")
@@ -397,6 +412,9 @@ namespace ActivityService.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<DateTimeOffset?>("CancelledAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -407,6 +425,10 @@ namespace ActivityService.Migrations
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
@@ -460,6 +482,63 @@ namespace ActivityService.Migrations
                         .IsUnique();
 
                     b.ToTable("ActivityRecruitment");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecruitmentApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("AssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("PositionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("ActivityId", "Status");
+
+                    b.HasIndex("PositionId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ActivityRecruitmentApplication");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivityRecruitmentPosition", b =>
@@ -854,6 +933,11 @@ namespace ActivityService.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<bool>("IsInternal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Location")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1111,6 +1195,21 @@ namespace ActivityService.Migrations
                     b.Navigation("Activity");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityCompletionResource", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityActionCompletion", null)
+                        .WithMany()
+                        .HasForeignKey("CompletionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityResource", null)
+                        .WithMany()
+                        .HasForeignKey("ResourceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityExecution", b =>
                 {
                     b.HasOne("ActivityService.Models.ClubActivity", null)
@@ -1151,6 +1250,26 @@ namespace ActivityService.Migrations
                     b.HasOne("ActivityService.Models.ActivityExecution", null)
                         .WithOne()
                         .HasForeignKey("ActivityService.Models.ActivityRecruitment", "ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecruitmentApplication", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityExecution", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.ActivityStaffAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ActivityService.Models.ActivityRecruitmentPosition", null)
+                        .WithMany()
+                        .HasForeignKey("PositionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

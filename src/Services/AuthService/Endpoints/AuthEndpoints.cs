@@ -16,25 +16,15 @@ public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapStaffSsoEndpoints();
+        app.MapBrowserSessionEndpoints();
+        app.MapEmailLoginEndpoints();
         var auth = app.MapGroup("/api/auth").WithTags("Authentication");
 
         // Google login remains available for provisioned legacy accounts.
         auth.MapPost("/google", HandleGoogleSignIn)
             .AllowAnonymous()
             .RequireRateLimiting("googleSignInLimit");
-
-        // The admin UI uses email-based dev login in every deployed environment.
-        auth.MapPost("/dev-login", HandleDevLogin)
-            .AllowAnonymous()
-            .RequireRateLimiting("googleSignInLimit");
-
-        var env = app.ServiceProvider.GetRequiredService<IHostEnvironment>();
-        if (env.IsDevelopment() || env.IsEnvironment("Testing"))
-        {
-            // Keep the test alias limited to non-production environments.
-            auth.MapPost("/test-login", HandleDevLogin)
-                .AllowAnonymous();
-        }
 
         auth.MapPost("/refresh", HandleRefresh)
             .AllowAnonymous()
@@ -52,6 +42,7 @@ public static class AuthEndpoints
     private static async Task<IResult> HandleGoogleSignIn(
         GoogleLoginRequest request,
         GoogleSignInService googleSignInService,
+        RefreshTokenService refreshTokenService,
         HttpContext httpContext,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
@@ -71,6 +62,7 @@ public static class AuthEndpoints
         var result = await googleSignInService.SignInAsync(request.Credential, cancellationToken);
         if (result.Status == GoogleSignInStatus.Authenticated && result.Response is not null)
         {
+            await BrowserSessionEndpoints.WriteLoginCookie(httpContext, result.Response, refreshTokenService);
             logger.LogInformation("GoogleSignIn succeeded for User: {Email}, Id: {UserId}, ClientIp: {ClientIp}, CorrelationId: {CorrelationId}",
                 result.Response.User.Email, result.Response.User.Id, clientIp, correlationId);
             return Results.Ok(result.Response);
@@ -91,51 +83,6 @@ public static class AuthEndpoints
                 new { message = "Bạn không có quyền truy cập." },
                 statusCode: StatusCodes.Status403Forbidden)
         };
-    }
-
-    private static async Task<IResult> HandleDevLogin(
-        DevLoginRequest request,
-        AuthDbContext db,
-        RefreshTokenService refreshTokenService,
-        HttpContext httpContext,
-        ILoggerFactory loggerFactory,
-        CancellationToken cancellationToken)
-    {
-        var logger = loggerFactory.CreateLogger("AuthService.DevLogin");
-        var environment = httpContext.RequestServices.GetRequiredService<IHostEnvironment>();
-        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing") && !environment.IsEnvironment("Test"))
-            return Results.NotFound();
-        var correlationId = httpContext.GetCorrelationId();
-        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString();
-
-        if (string.IsNullOrWhiteSpace(request?.Email))
-        {
-            logger.LogWarning("DevLogin rejected: missing email. ClientIp: {ClientIp}, CorrelationId: {CorrelationId}",
-                clientIp, correlationId);
-            return Results.BadRequest(new { message = "Email là bắt buộc." });
-        }
-
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-        var user = await db.Users
-            .Include(x => x.UserRoles)
-            .ThenInclude(x => x.Role)
-            .SingleOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail, cancellationToken);
-
-        if (user is null || !user.IsActive || user.IsLocked ||
-            !ActorAccountPolicy.HasValidActorConfiguration(user))
-        {
-            logger.LogWarning("DevLogin rejected for email: {Email}. Found: {Found}, Active: {IsActive}, Locked: {IsLocked}, ClientIp: {ClientIp}, CorrelationId: {CorrelationId}",
-                normalizedEmail, user is not null, user?.IsActive, user?.IsLocked, clientIp, correlationId);
-            return Results.Json(
-                new { message = "Bạn không có quyền truy cập." },
-                statusCode: StatusCodes.Status403Forbidden);
-        }
-
-        logger.LogInformation("DevLogin succeeded for user: {Email}, Id: {UserId}, ClientIp: {ClientIp}, CorrelationId: {CorrelationId}",
-            normalizedEmail, user.Id, clientIp, correlationId);
-        var refreshToken = await refreshTokenService.CreateRefreshTokenAsync(user.Id);
-        return Results.Ok(refreshTokenService.CreateAuthResponse(user, refreshToken));
     }
 
     private static async Task<IResult> HandleRefresh(
@@ -199,6 +146,7 @@ public static class AuthEndpoints
         if (!string.IsNullOrWhiteSpace(request?.RefreshToken))
         {
             var token = await refreshTokenService.GetRefreshTokenAsync(request.RefreshToken);
+            if (token is not null && token.UserId != userId) return Results.Forbid();
             if (token is not null)
             {
                 await refreshTokenService.RevokeFamilyAsync(token.FamilyId, null);
@@ -220,6 +168,7 @@ public static class AuthEndpoints
             }
         }
 
+        BrowserSessionEndpoints.ClearForUser(httpContext, userId);
         logger.LogInformation("Logout processed for User: {UserId}, CorrelationId: {CorrelationId}",
             userId, correlationId);
 

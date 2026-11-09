@@ -187,6 +187,7 @@ public static class ClubEndpoints
     private static async Task<IResult> GetAccessSummary(
         ClaimsPrincipal user,
         ClubDbContext db,
+        HttpContext http,
         CancellationToken cancellationToken)
     {
         var userId = user.GetUserId();
@@ -240,7 +241,17 @@ public static class ClubEndpoints
                     .ToArray());
         });
 
-        return Results.Ok(access);
+        try
+        {
+            var projected = new List<ClubAccessResponse>();
+            foreach (var item in access) projected.Add(await Services.ClubGovernanceAccess.Project(item, userId, db, http, cancellationToken));
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(projected);
+        }
+        catch (HttpRequestException)
+        {
+            return ApiOperations.Error(503, "GOVERNANCE_AUTHORITY_UNAVAILABLE", "Current account and semester authority are unavailable.");
+        }
     }
 
     private static async Task<IResult> GetClubById(

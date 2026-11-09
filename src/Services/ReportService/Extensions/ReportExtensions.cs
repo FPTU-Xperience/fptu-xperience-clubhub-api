@@ -25,10 +25,29 @@ public static class ReportExtensions
             return null;
         }
 
-        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, bypassCache);
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
         return access.FirstOrDefault(x =>
             x.ClubId == clubId
-            && (x.CanManage || (x.CanManageFinance && IsFinancialReport(reportTag, reportType))));
+            && (x.CanManage || ((x.CanManageFinance || x.HasCapability("club.finance.submit")) && IsFinancialReport(reportTag, reportType))));
+    }
+
+    public static async Task<ClubAccessSnapshot?> GetDraftAuthorAccessAsync(int clubId, string reportTag, string reportType,
+        ClubAccessClient clubAccess, HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
+        var financial = IsFinancialReport(reportTag, reportType);
+        return access.FirstOrDefault(x => x.ClubId == clubId && (x.CanManage
+            || financial && (x.CanManageFinance || x.HasCapability("club.finance.draft.write"))
+            || !financial && x.HasCapability("club.reports.draft.write")));
+    }
+    public static async Task<bool> CanEditDraftReportAsync(Report report, ClaimsPrincipal user, ClubAccessClient clubAccess,
+        HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
+        var scope = access.FirstOrDefault(x => x.ClubId == report.ClubId); if (scope is null) return false;
+        var financial = IsFinancialReport(report.Tag, report.ReportType);
+        if (scope.CanManage || financial && scope.CanManageFinance) return true;
+        return report.CreatedByUserId == user.GetUserId() && scope.HasCapability(financial ? "club.finance.draft.write" : "club.reports.draft.write");
     }
 
     public static async Task<bool> CanAuthorReportsAsync(
@@ -99,11 +118,11 @@ public static class ReportExtensions
             return true;
         }
 
-        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
         var firstAccess = access.FirstOrDefault(x => x.ClubId == report.ClubId);
         return firstAccess is not null
             && (firstAccess.CanManage
-                || (firstAccess.CanManageFinance && IsFutureEventReportModel(report) && report.Status != ReportStatuses.Draft)
+                || ((firstAccess.CanManageFinance || firstAccess.HasCapability("club.finance.read")) && IsFutureEventReportModel(report) && report.Status != ReportStatuses.Draft)
                 || (firstAccess.CanView && report.Status == ReportStatuses.Approved));
     }
 
@@ -119,8 +138,8 @@ public static class ReportExtensions
             return true;
         }
 
-        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
-        return access.Any(x => x.ClubId == report.ClubId && (x.CanManage || x.CanManageFinance));
+        var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken, true);
+        return access.Any(x => x.ClubId == report.ClubId && (x.CanManage || x.CanManageFinance || x.HasCapability("club.finance.read")));
     }
 
     public static bool IsReportReviewer(ClaimsPrincipal user) =>

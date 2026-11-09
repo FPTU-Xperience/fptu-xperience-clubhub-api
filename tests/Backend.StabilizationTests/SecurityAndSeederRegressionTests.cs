@@ -39,22 +39,15 @@ public sealed class SecurityAndSeederRegressionTests
         Assert.Contains("cannot be used in Production", exception.Message);
     }
 
-    [Fact]
-    public async Task ProductionMapsDevLoginButNotTestLoginAlias()
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Testing")]
+    public async Task EmailPasswordRouteReplacesPasswordlessAliasesInEveryEnvironment(string environment)
     {
-        var routes = await GetAuthRoutesAsync(Environments.Production, enableDevLogin: true);
-
-        Assert.Contains("/api/auth/dev-login", routes);
+        var routes = await GetAuthRoutesAsync(environment, enableDevLogin: false);
+        Assert.Contains("/api/auth/email-login", routes);
+        Assert.DoesNotContain("/api/auth/dev-login", routes);
         Assert.DoesNotContain("/api/auth/test-login", routes);
-    }
-
-    [Fact]
-    public async Task TestingMapsExplicitTestLoginEndpoints()
-    {
-        var routes = await GetAuthRoutesAsync("Testing", enableDevLogin: false);
-
-        Assert.Contains("/api/auth/dev-login", routes);
-        Assert.Contains("/api/auth/test-login", routes);
     }
 
     [Fact]

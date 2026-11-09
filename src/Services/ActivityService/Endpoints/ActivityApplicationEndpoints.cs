@@ -25,7 +25,7 @@ public static class ActivityApplicationEndpoints
     private static async Task<IResult> Create(HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
         var input = await Body<ActivityApplicationInput>(http, ct);
-        var scope = await Authorize(input.ClubId, http, ct); Manager(scope);
+        var scope = await Authorize(input.ClubId, http, ct); Manager(scope, "event.registrations.manage");
         Require(input.ExpectedVersion is null, 400, "INVALID_VERSION", "A new draft has no expectedVersion.");
         var content = Normalize(input); Validate(content, false, http);
         var semester = await Semester(content, http, ct);
@@ -54,7 +54,7 @@ public static class ActivityApplicationEndpoints
     private static async Task<IResult> List(int clubId, string? status, int? page, int? pageSize, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
         var scope = await Authorize(clubId, http, ct);
-        Require(scope.Manager || scope.Reviewer, 403, "APPLICATION_ACCESS_DENIED", "Application access is required.");
+        Require(scope.Can("event.registrations.manage") || scope.Reviewer, 403, "APPLICATION_ACCESS_DENIED", "Application access is required.");
         var index = page ?? 1; var size = pageSize ?? 20;
         Require(index is >= 1 and <= 100000 && size is >= 1 and <= 100, 400, "INVALID_PAGINATION", "Use page >= 1 and pageSize 1–100.");
         Require(status is null or "DRAFT" or "REVISION_REQUESTED" or "SUBMITTED" or "APPROVED" or "REJECTED", 400, "INVALID_STATUS", "Use a canonical status.");
@@ -67,7 +67,7 @@ public static class ActivityApplicationEndpoints
     }
     private static async Task<IResult> Update(int id, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var row = await Find(id, db, ct); var scope = await ReadScope(row, http, ct); Manager(scope);
+        var row = await Find(id, db, ct); var scope = await ReadScope(row, http, ct); Manager(scope, "event.registrations.manage");
         var input = await Body<ActivityApplicationInput>(http, ct);
         Require(input.ClubId == row.ClubId, 400, "IMMUTABLE_CLUB", "The application club cannot change.");
         var content = Normalize(input); Validate(content, false, http);
@@ -83,7 +83,7 @@ public static class ActivityApplicationEndpoints
     }
     private static async Task<IResult> Submit(int id, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var row = await Find(id, db, ct); var scope = await ReadScope(row, http, ct); Manager(scope);
+        var row = await Find(id, db, ct); var scope = await ReadScope(row, http, ct); Manager(scope, "event.registrations.manage");
         var input = await Body<ActionVersionInput>(http, ct);
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
@@ -124,7 +124,8 @@ public static class ActivityApplicationEndpoints
                     Scale = content.Scale!,
                     SemesterId = row.SemesterId,
                     PublicationStatus = "DRAFT",
-                    DiscoveryVisibility = "CLUB_ONLY",
+                    IsInternal = content.IsInternal,
+                    DiscoveryVisibility = content.IsInternal ? "CLUB_ONLY" : "CAMPUS_PUBLIC",
                     Eligibility = "CLUB_MEMBER",
                     CreatedByUserId = row.CreatedBy,
                     CreatedAtUtc = Now(http),
@@ -175,7 +176,7 @@ public static class ActivityApplicationEndpoints
     private static async Task<Scope> ReadScope(ActivityApplication row, HttpContext http, CancellationToken ct)
     {
         var scope = await Authorize(row.ClubId, http, ct);
-        Require(scope.Manager || scope.Reviewer, 404, "APPLICATION_NOT_FOUND", "Application not found.");
+        Require(scope.Can("event.registrations.manage") || scope.Reviewer, 404, "APPLICATION_NOT_FOUND", "Application not found.");
         Require(row.CampusCode == scope.Club.CampusCode, 409, "CLUB_CAMPUS_CHANGED", "The application campus must be reconciled.");
         return scope;
     }

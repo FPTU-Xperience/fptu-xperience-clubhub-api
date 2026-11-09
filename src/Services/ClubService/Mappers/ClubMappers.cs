@@ -49,6 +49,8 @@ public static class ClubMappers
         {
             Version = club.ConcurrencyToken,
             CoverImageUrl = club.CoverImageUrl,
+            ExpectedLocation = club.ExpectedLocation, MajorEvents = club.MajorEvents,
+            EquipmentNeeds = club.EquipmentNeeds, AdvisorNeeded = club.AdvisorNeeded,
             Schedule = club.ScheduleJson is null ? null : JsonSerializer.Deserialize<JsonElement>(club.ScheduleJson)
         };
     }
@@ -120,7 +122,9 @@ public static class ClubMappers
             club.CampusCode)
         {
             Version = club.ConcurrencyToken,
-            Schedule = club.ScheduleJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(club.ScheduleJson)
+            Schedule = club.ScheduleJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(club.ScheduleJson),
+            ExpectedLocation = club.ExpectedLocation, MajorEvents = club.MajorEvents,
+            EquipmentNeeds = club.EquipmentNeeds, AdvisorNeeded = club.AdvisorNeeded
         };
     }
 
@@ -218,7 +222,10 @@ public static class ClubMappers
             application.SubmittedAtUtc,
             application.ReviewedAtUtc,
             application.ReviewedByUserId,
-            application.CampusCode);
+            application.CampusCode,
+            application.Version,
+            application.ApprovedManagerUserId,
+            application.ApprovedManagerName);
     }
 
     // ========================================================================

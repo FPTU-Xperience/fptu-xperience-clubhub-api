@@ -19,6 +19,7 @@ public static class AttendanceManagementEndpoints
         MapGetAttendance(app);
         MapUpdateMemberAttendance(app);
         MapBulkUpdateAttendance(app);
+        app.MapRegisteredSessionAttendance();
 
         return app;
     }

@@ -27,7 +27,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         {
             var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>();
             db.Activities.AddRange(Enumerable.Range(1, 55).Select(i => StudentActivity("Public " + i)));
-            var privateActivity = StudentActivity("Private"); privateActivity.DiscoveryVisibility = "CLUB_ONLY"; db.Activities.Add(privateActivity);
+            var privateActivity = StudentActivity("Private"); privateActivity.IsInternal = true; privateActivity.DiscoveryVisibility = "CLUB_ONLY"; db.Activities.Add(privateActivity);
             var draft = StudentActivity("Draft"); draft.PublicationStatus = "DRAFT"; db.Activities.Add(draft);
             var cancelled = StudentActivity("Cancelled"); cancelled.Status = ActivityStatuses.Cancelled; db.Activities.Add(cancelled);
             var ended = StudentActivity("Ended"); ended.EndTimeUtc = DateTimeOffset.UtcNow.AddDays(-1); ended.StartTimeUtc = ended.EndTimeUtc.AddHours(-1); db.Activities.Add(ended);
@@ -118,6 +118,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         Location = "Campus",
         PublicationStatus = "PUBLISHED",
         DiscoveryVisibility = "CAMPUS_PUBLIC",
+        IsInternal = false,
         Eligibility = "CAMPUS_PUBLIC",
         SemesterId = "FA26",
         PillarWeightsJson = "[{\"pillar\":\"Academic\",\"weight\":1}]",
@@ -191,7 +192,9 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         builder.Services.AddSingleton(new ClubExperienceAuthorityClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(new StudentClubScope([new(1, "C1", "Club 1", "Academic", "HN", false, false, null, Guid.NewGuid(), null),
-            new(2, "C2", "Club 2", "Research", "HCM", false, false, null, Guid.NewGuid(), null)], DateTimeOffset.UtcNow, "TEST_SCOPE_ONLY"))
+            new(2, "C2", "Club 2", "Research", "HCM", false, false, null, Guid.NewGuid(), null),
+            new(3, "C3", "Member club", "Academic", "HN", true, true, DateTimeOffset.UtcNow.AddYears(-1), Guid.NewGuid(), Guid.NewGuid()),
+            new(4, "C4", "Cross-campus member club", "Academic", "HCM", true, true, DateTimeOffset.UtcNow.AddYears(-1), Guid.NewGuid(), Guid.NewGuid())], DateTimeOffset.UtcNow, "TEST_SCOPE_ONLY"))
         }), builder.Configuration));
         var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization();
         app.MapStudentActivityEndpoints(); app.MapStudentActivityHistoryEndpoints();

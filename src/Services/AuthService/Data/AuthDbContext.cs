@@ -6,17 +6,40 @@ namespace AuthService.Data;
 
 public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options)
 {
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<StaffSsoTicket> StaffSsoTickets => Set<StaffSsoTicket>();
     public DbSet<CanonicalUserProfile> UserProfiles => Set<CanonicalUserProfile>();
     public DbSet<PublicMediaIntent> PublicMediaIntents => Set<PublicMediaIntent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         StudyScheduleModel.Apply(modelBuilder);
+        modelBuilder.ApplyOutboxConfiguration();
         modelBuilder.ApplyApiOperationConfiguration();
+        modelBuilder.Entity<StaffSsoTicket>(entity =>
+        {
+            entity.HasKey(x => x.CodeHash);
+            entity.Property(x => x.CodeHash).HasMaxLength(64);
+            entity.Property(x => x.FamilyId).HasMaxLength(100);
+            entity.Property(x => x.TargetOrigin).HasMaxLength(300);
+            entity.Property(x => x.CodeChallenge).HasMaxLength(43);
+            entity.HasIndex(x => x.ExpiresAtUtc);
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<PublicMediaIntent>(entity =>
         {
             entity.HasIndex(x => x.PublicUrl).IsUnique(); entity.Property(x => x.PublicUrl).HasMaxLength(450);
@@ -33,6 +56,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Property(x => x.Address).HasMaxLength(300);
             entity.Property(x => x.AvatarUrl).HasMaxLength(1000);
             entity.Property(x => x.CoverImageUrl).HasMaxLength(1000);
+            entity.Property(x => x.DeclaredMajor).HasMaxLength(120);
             entity.HasOne<User>().WithOne().HasForeignKey<CanonicalUserProfile>(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<User>(entity =>
@@ -70,6 +94,7 @@ public sealed class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbC
             entity.Ignore(x => x.IsActive);
             entity.Ignore(x => x.RawToken);
             entity.HasIndex(x => x.Token).IsUnique();
+            entity.HasIndex(x => x.FamilyId);
             entity.HasIndex(x => new { x.UserId, x.ExpiresAtUtc, x.RevokedAtUtc });
             entity.Property(x => x.Token).HasMaxLength(500);
             entity.Property(x => x.FamilyId).HasMaxLength(100);

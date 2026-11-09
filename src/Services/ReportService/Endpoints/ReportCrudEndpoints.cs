@@ -39,8 +39,7 @@ public static class ReportCrudEndpoints
 
         var reviewer = ReportExtensions.IsReportReviewer(user);
         if (!reviewer && (report.CreatedByUserId != user.GetUserId() ||
-            !await ReportExtensions.CanAuthorReportsAsync(report.ClubId, report.Tag,
-                report.ReportType, clubAccess, httpContext, cancellationToken)))
+            !await ReportExtensions.CanEditDraftReportAsync(report, user, clubAccess, httpContext, cancellationToken)))
         {
             return Results.Forbid();
         }
@@ -92,7 +91,7 @@ public static class ReportCrudEndpoints
         var tag = ReportExtensions.NormalizeReportTag(request.Tag, request.ReportType);
         var reportType = ReportExtensions.NormalizeReportType(request.ReportType, tag);
         var isFutureEvent = ReportExtensions.IsFutureEventReport(reportType);
-        var authorAccess = await ReportExtensions.GetAuthorAccessAsync(
+        var authorAccess = await ReportExtensions.GetDraftAuthorAccessAsync(
             request.ClubId,
             tag,
             reportType,
@@ -209,13 +208,13 @@ public static class ReportCrudEndpoints
         var reportType = ReportExtensions.NormalizeReportType(request.ReportType, tag);
         var isFutureEvent = ReportExtensions.IsFutureEventReport(reportType);
         if (report.CreatedByUserId != user.GetUserId()
-            || !await ReportExtensions.CanAuthorReportsAsync(
+            || await ReportExtensions.GetDraftAuthorAccessAsync(
                 report.ClubId,
                 tag,
                 reportType,
                 clubAccess,
                 httpContext,
-                cancellationToken))
+                cancellationToken) is null)
         {
             return Results.Forbid();
         }

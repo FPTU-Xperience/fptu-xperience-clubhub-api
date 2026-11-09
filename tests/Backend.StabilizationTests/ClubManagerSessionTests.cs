@@ -119,7 +119,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         Assert.True(radar!.IsAuthoritative); Assert.Equal(78m, radar.Pillars.Sum(x => x.RawPointsSum));
     }
 
-    internal static async Task<WebApplication> CreateManagerSessionAppAsync(string? connection = null, bool register = true)
+    internal static async Task<WebApplication> CreateManagerSessionAppAsync(string? connection = null, bool register = true, bool uiRoster = false, bool outside = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" }); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -139,11 +139,12 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         {
             Content = JsonContent.Create(new[] {
             new InternalUserProfile(104, "Student A", "student-a@example.invalid", "HN", true, false, null),
-            new InternalUserProfile(105, "Student B", "student-b@example.invalid", "HN", true, false, null) })
+            new InternalUserProfile(105, "Student B", "student-b@example.invalid", "HN", true, false, null),
+            new InternalUserProfile(106, "Other campus", "other@example.invalid", "HCM", true, false, null) })
         }), builder.Configuration));
         builder.Services.AddSingleton(new ClubExperienceAuthorityClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
         {
-            Content = JsonContent.Create(new ClubExperienceAuthority(1, "Club 1", "HN", true, true, clock.Current.AddMonths(-1)))
+            Content = JsonContent.Create(new ClubExperienceAuthority(1, "Club 1", "HN", true, !outside, clock.Current.AddMonths(-1)))
         }), builder.Configuration));
         builder.Services.AddSingleton(new ClubAccessClient(CreateFakeHttpClient(request =>
         {
@@ -151,13 +152,35 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             var access = new ClubAccessSnapshot(1, "Club 1", user == 100, false, user is 104 or 105, [100], [104, 105], []);
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { access }) };
         }), new MemoryCache(new MemoryCacheOptions()), NullLogger<ClubAccessClient>.Instance));
-        builder.Services.AddSingleton(new ClubMemberRosterClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
+        if (uiRoster) builder.Services.AddSingleton(new ExperienceAuthorityClient(CreateFakeHttpClient(request =>
+            new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new VerificationCapabilityResponse(
+                new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(request.Headers.Authorization!.Parameter).Subject == "100"))
+            }), builder.Configuration));
+        builder.Services.AddSingleton(new ClubMemberRosterClient(CreateFakeHttpClient(request =>
         {
-            Content = JsonContent.Create(new[] {
+            if (uiRoster && request.RequestUri!.AbsolutePath.Contains("member-roster", StringComparison.Ordinal))
+            {
+                ClubMemberRosterItem[] roster = outside ? [] : [new(1, 104, "Student A", "a@example.test", "", "Member", "Approved", clock.Current.AddMonths(-1)),
+                    new(2, 105, "Student B", "b@example.test", "", "Member", "Approved", clock.Current.AddMonths(-1)),
+                    new(3, 100, "Manager", "manager@example.test", "", "Manager", "Approved", clock.Current.AddMonths(-1))];
+                if (request.Method == HttpMethod.Post)
+                {
+                    var input = request.Content!.ReadFromJsonAsync<ResolveRosterRequest>().GetAwaiter().GetResult()!;
+                    return new(HttpStatusCode.OK) { Content = JsonContent.Create(roster.Where(x => input.MemberIds?.Contains(x.Id) == true).ToArray()) };
+                }
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new ClubMemberRosterPage(roster, 1, 20, roster.Length, 1)) };
+            }
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new[] {
             new MyClubMembership(1, 1, 104, "Student A", "Approved", clock.Current.AddMonths(-1), clock.Current.AddMonths(-1)),
             new MyClubMembership(2, 1, 105, "Student B", "Approved", clock.Current.AddMonths(-1), clock.Current.AddMonths(-1)) })
+            };
         })));
         var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization(); app.MapActivityEndpoints();
+        if (uiRoster) app.MapAttendanceManagementEndpoints();
         await using (var scope = app.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>(); if (connection is not null) await db.Database.MigrateAsync();
@@ -166,6 +189,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
                 ClubId = 1,
                 ClubName = "Club 1",
                 Title = "Published activity",
+                IsInternal = !outside,
                 Description = "Real activity",
                 Location = "Campus",
                 StartTimeUtc = clock.Current.AddDays(-1),

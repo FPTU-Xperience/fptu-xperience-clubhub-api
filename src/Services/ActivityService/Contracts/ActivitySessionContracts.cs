@@ -29,4 +29,7 @@ public sealed record SessionCheckInRequest(int SessionId, string Challenge, Atte
 
 public sealed record ActivitySessionResponse(int Id, int ActivityId, Guid SeriesId, string SemesterId,
     DateTimeOffset StartTime, DateTimeOffset EndTime, string Timezone, string Location, string Mode,
-    string Status, Guid Version, object AttendancePolicy, ExperienceSourceSnapshot ScoringSnapshot);
+    string Status, Guid Version, object AttendancePolicy, ExperienceSourceSnapshot ScoringSnapshot,
+    ActivitySessionCapabilities? Capabilities = null);
+
+public sealed record ActivitySessionCapabilities(bool CanEdit, bool CanClose, bool CanCancel, bool CanIssueChallenge);

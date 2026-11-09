@@ -1,3 +1,5 @@
+> Current FE integration — 2026-10-26: [Reconciliation and remaining contracts](UI_INTEGRATION_RECONCILIATION_2026-10-26.md), applied on `cuongnk/implement-api-contract`. Earlier statements that FE was unchanged/browser-only describe the original BE-only delivery. Live acceptance remains pending.
+
 # Tài liệu tiến độ BE
 
 - [Thư viện liên kết hoạt động — 23/10](TAI_NGUYEN_HOAT_DONG_BE_2026-10-23.md): 5 operation đã triển khai cho EMBED; upload DOCUMENT/MEDIA, private download và public transport vẫn chưa hoàn thành.

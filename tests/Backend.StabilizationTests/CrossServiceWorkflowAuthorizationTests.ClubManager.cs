@@ -131,7 +131,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         await using var verify = app.Services.CreateAsyncScope();
         var db = verify.ServiceProvider.GetRequiredService<ClubDbContext>();
         Assert.Equal(ClubMembershipStatuses.Approved, (await db.ClubMemberships.FindAsync(10))!.Status);
-        Assert.Equal(1, await db.OutboxMessages.CountAsync());
+        Assert.Equal(1, await db.OutboxMessages.CountAsync(x => x.EventType != "recommendation.source.changed"));
         Assert.Equal(1, await db.Set<ApiOperationReceipt>().CountAsync());
         (await db.ClubManagerAssignments.SingleAsync(x => x.ManagerUserId == 100)).IsActive = false;
         await db.SaveChangesAsync();

@@ -1,3 +1,6 @@
+using ClubReportHub.Shared.Rosters;
+using ClubReportHub.Shared.Experience;
+using ClubService.Services;
 using System.Security.Claims;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
@@ -47,7 +50,7 @@ public static class TransferEndpoints
             .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
 
         // Admin: Approve transfer request
-        clubs.MapPost("/transfer-requests/{requestId:int}/approve", ApproveTransferRequest)
+        clubs.MapPost("/transfer-requests/{requestId:int}/approve", ApproveTransferRequest).AddEndpointFilter<RosterExceptionFilter>()
             .WithName("ApproveTransferRequest")
             .WithDescription("Approve an ownership transfer request (Admin only)")
             .RequireAuthorization(AuthPolicies.StudentAffairsAdministration);
@@ -223,84 +226,65 @@ public static class TransferEndpoints
         ILogger<Program> logger,
         CancellationToken ct)
     {
-        if (!http.User.IsStudentAffairsAdministrator())
-            return Results.Forbid();
-
-        var reviewerUserId = http.User.GetUserId();
-
-        var transferRequest = await db.ClubOwnershipTransfers
-            .Include(x => x.Club)
-            .FirstOrDefaultAsync(x => x.Id == requestId, ct);
-
-        if (transferRequest is null)
-            return Results.NotFound(new { message = "Transfer request not found" });
-
-        if (transferRequest.Status != ClubOwnershipTransferStatuses.Pending)
-            return Results.BadRequest(new { message = $"Request is already {transferRequest.Status}" });
-
-        transferRequest.Status = ClubOwnershipTransferStatuses.Approved;
-        transferRequest.AdminNote = request.AdminNote;
-        transferRequest.ReviewedByUserId = reviewerUserId;
-        transferRequest.ReviewedAtUtc = DateTimeOffset.UtcNow;
-        transferRequest.ExecutedAtUtc = DateTimeOffset.UtcNow;
-
-        var newOwnerManagesAnotherClub = await db.ClubManagerAssignments
-            .AnyAsync(x => x.ManagerUserId == transferRequest.NewOwnerUserId && x.ClubId != transferRequest.ClubId && x.IsActive, ct);
-
-        if (newOwnerManagesAnotherClub)
+        if (!http.User.IsStudentAffairsAdministrator()) return Results.Forbid();
+        if (request.AdminNote?.Length > 1000) return ApiOperations.Error(400, "INVALID_REVIEW_NOTE", "The review note cannot exceed 1,000 characters.");
+        async Task<bool> Reviewer(Club club)
         {
-            return Results.Conflict(new { message = "The new owner is already an active manager of another club." });
+            if (http.User.IsSuperAdmin()) return true;
+            var client = http.RequestServices.GetService<CurrentUserProfileClient>();
+            if (client is null) return false;
+            var account = (await client.GetAsync([http.User.GetUserId()], ct)).GetValueOrDefault(http.User.GetUserId());
+            return account is { IsActive: true, IsLocked: false } && account.CampusCode == club.CampusCode;
         }
-
-        // Deactivate current owner
-        var currentAssignment = await db.ClubManagerAssignments
-            .FirstOrDefaultAsync(x => x.ClubId == transferRequest.ClubId && x.IsActive, ct);
-
-        if (currentAssignment != null)
+        var initial = await db.ClubOwnershipTransfers.AsNoTracking().Include(x => x.Club).SingleOrDefaultAsync(x => x.Id == requestId, ct);
+        if (initial is null) return Results.NotFound(new { message = "Transfer request not found" });
+        if (!await Reviewer(initial.Club)) return Results.Forbid();
+        return await ApiOperations.ExecuteAsync(http, db, new { requestId, request.AdminNote }, async () =>
         {
-            currentAssignment.IsActive = false;
-            currentAssignment.EndedAtUtc = DateTimeOffset.UtcNow;
-        }
-
-        // Create new owner assignment
-        var newAssignment = new ClubManagerAssignment
-        {
-            ClubId = transferRequest.ClubId,
-            ManagerUserId = transferRequest.NewOwnerUserId,
-            ManagerName = transferRequest.NewOwnerName,
-            AssignedAtUtc = DateTimeOffset.UtcNow,
-            IsActive = true
-        };
-        db.ClubManagerAssignments.Add(newAssignment);
-        transferRequest.Club.ConcurrencyToken = Guid.NewGuid();
-
-        db.AddOutboxMessage(new ClubAccessInvalidatedEvent(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow,
-            transferRequest.ClubId,
-            [transferRequest.CurrentOwnerUserId, transferRequest.NewOwnerUserId]), EventRoutingKeys.ClubAccessInvalidated);
-
-        try
-        {
+            var transfer = await db.ClubOwnershipTransfers.Include(x => x.Club).SingleOrDefaultAsync(x => x.Id == requestId, ct);
+            if (transfer is null) return ApiOperations.Error(404, "TRANSFER_NOT_FOUND", "Transfer request not found.");
+            if (!await Reviewer(transfer.Club)) return ApiOperations.Error(403, "CAMPUS_REVIEW_REQUIRED", "Current CTSV campus authority is required.");
+            if (transfer.Status != ClubOwnershipTransferStatuses.Pending || !transfer.Club.IsActive || transfer.Club.DeletedAtUtc.HasValue)
+                return ApiOperations.Error(409, "TRANSFER_SOURCE_CHANGED", "Reload a pending transfer for an active club.");
+            var actor = http.User.GetUserId();
+            if (actor == transfer.CurrentOwnerUserId || actor == transfer.NewOwnerUserId)
+                return ApiOperations.Error(403, "SELF_REVIEW_FORBIDDEN", "An independent CTSV reviewer is required.");
+            if (await db.ClubManagerAssignments.AnyAsync(x => x.ManagerUserId == transfer.NewOwnerUserId && x.ClubId != transfer.ClubId && x.IsActive, ct))
+                return ApiOperations.Error(409, "MANAGER_ALREADY_ASSIGNED", "The new owner is already an active manager of another club.");
+            var current = await db.ClubManagerAssignments.SingleOrDefaultAsync(x => x.ClubId == transfer.ClubId && x.IsActive, ct);
+            var member = await db.ClubMemberships.SingleOrDefaultAsync(x => x.ClubId == transfer.ClubId && x.UserId == transfer.NewOwnerUserId && x.Status == ClubMembershipStatuses.Approved, ct);
+            if (current is null || current.ManagerUserId != transfer.CurrentOwnerUserId || member is null)
+                return ApiOperations.Error(409, "TRANSFER_SOURCE_CHANGED", "The current owner or candidate membership has changed.");
+            var profiles = http.RequestServices.GetService<CurrentUserProfileClient>();
+            if (profiles is null) return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "Current account authority is unavailable.");
+            var accounts = await profiles.GetAsync([transfer.NewOwnerUserId], ct);
+            if (!accounts.TryGetValue(transfer.NewOwnerUserId, out var account) || account is not { IsActive: true, IsLocked: false }
+                || transfer.Club.CampusCode != CampusCodes.Global && account.CampusCode != transfer.Club.CampusCode)
+                return ApiOperations.Error(409, "OWNER_CANDIDATE_INELIGIBLE", "The candidate must remain an active approved campus member.");
+            if (member.Role == ClubMemberRoles.Treasurer || (await ClubGovernancePolicy.GroupTreasurers(db, transfer.ClubId, http, ct)).Contains(member.UserId))
+                return ApiOperations.Error(409, "OWNER_TREASURER_CONFLICT", "Revoke the candidate's treasurer duty before ownership transfer.");
+            var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
+            current.IsActive = false; current.EndedAtUtc = now;
+            db.ClubManagerAssignments.Add(new ClubManagerAssignment { ClubId = transfer.ClubId, ManagerUserId = member.UserId, ManagerName = account.DisplayName, AssignedAtUtc = now, IsActive = true });
+            transfer.Status = ClubOwnershipTransferStatuses.Approved; transfer.AdminNote = request.AdminNote;
+            transfer.ReviewedByUserId = actor; transfer.ReviewedAtUtc = now; transfer.ExecutedAtUtc = now; transfer.Club.ConcurrencyToken = Guid.NewGuid();
+            var viceAppointments = await db.Set<ClubViceAppointment>().Where(x => x.ClubId == transfer.ClubId && x.UserId == member.UserId && x.Status == "APPROVED").ToArrayAsync(ct);
+            foreach (var vice in viceAppointments)
+            {
+                vice.Status = "SUPERSEDED"; vice.Version = Guid.NewGuid();
+                var payload = new { appointmentId = vice.Id, vice.MembershipId, vice.UserId, vice.Status, vice.From, vice.Until, ownershipTransferId = transfer.Id };
+                db.Add(new ClubGovernanceLeadershipEvent { AppointmentId = vice.Id, ActorId = actor, Action = "LEADERSHIP_SUPERSEDED", Reason = "Approved ownership transfer", At = now, SnapshotJson = System.Text.Json.JsonSerializer.Serialize(payload) });
+                ClubGovernanceAudit.Record(db, transfer.ClubId, "LEADERSHIP", "LEADERSHIP_SUPERSEDED", "Approved ownership transfer", payload, http, vice.MembershipId, vice.UserId);
+            }
+            ClubGovernanceAudit.Record(db, transfer.ClubId, "LEADERSHIP", "OWNER_TRANSFER_APPROVED", request.AdminNote?.Trim() ?? "", new
+            { transferId = transfer.Id, before = new { userId = current.ManagerUserId, displayName = current.ManagerName }, after = new { userId = member.UserId, displayName = account.DisplayName } }, http, member.Id, member.UserId);
+            db.AddOutboxMessage(new ClubAccessInvalidatedEvent(Guid.NewGuid(), now, transfer.ClubId, [transfer.CurrentOwnerUserId, transfer.NewOwnerUserId]), EventRoutingKeys.ClubAccessInvalidated);
             await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            return Results.Conflict(new { message = "Club manager assignment conflict: each club can only have one active manager and each manager can only manage one club." });
-        }
-
-        logger.LogInformation(
-            "Club {ClubId} ownership transferred from {OldOwner} to {NewOwner} by admin {AdminId}",
-            transferRequest.ClubId, transferRequest.CurrentOwnerUserId,
-            transferRequest.NewOwnerUserId, reviewerUserId);
-
-        return Results.Ok(ClubMappers.ToTransferRequestResponse(transferRequest, transferRequest.Club.Name));
+            logger.LogInformation("Club {ClubId} ownership transferred from {OldOwner} to {NewOwner} by admin {AdminId}", transfer.ClubId, transfer.CurrentOwnerUserId, transfer.NewOwnerUserId, actor);
+            return Results.Ok(ClubMappers.ToTransferRequestResponse(transfer, transfer.Club.Name));
+        }, ct, required: false);
     }
 
-
-    /// <summary>
-    /// Admin: Reject a transfer request.
-    /// </summary>
     private static async Task<IResult> RejectTransferRequest(
         int requestId,
         ApproveTransferRequest request,

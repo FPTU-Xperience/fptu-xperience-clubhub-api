@@ -63,9 +63,16 @@ public static class StudentActivityEndpoints
         { return ApiOperations.Error(503, "DISCOVERY_AUTHORITY_UNAVAILABLE", "Account or club visibility authority is unavailable."); }
         var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
         var campusIds = authority.Clubs.Where(x => x.CampusCode == user.CampusCode).Select(x => x.ClubId).ToArray();
-        var privateIds = authority.Clubs.Where(x => x.CanViewPrivate).Select(x => x.ClubId).ToArray();
-        var query = db.Activities.AsNoTracking().Where(x => (x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED")
-            && (privateIds.Contains(x.ClubId) || x.DiscoveryVisibility == "CAMPUS_PUBLIC" && campusIds.Contains(x.ClubId)));
+        var memberIds = authority.Clubs.Where(x => x.IsApprovedMember).Select(x => x.ClubId).ToArray();
+        // Application executions own their publication flag. Older records have
+        // no execution: preserve published discovery and member-only legacy reads.
+        // Legacy registration follows the existing write contract; recommendation/XP candidates stay excluded.
+        var query = db.Activities.AsNoTracking().Where(x =>
+            (db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id && e.IsPublished)
+                || !db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id)
+                    && (x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED"
+                        || !candidates && x.PublicationStatus == "LEGACY"))
+            && (x.IsInternal && memberIds.Contains(x.ClubId) || !x.IsInternal && campusIds.Contains(x.ClubId)));
         if (detailId.HasValue) query = query.Where(x => x.Id == detailId);
         else query = query.Where(x => x.Status != ActivityStatuses.Cancelled && x.Status != ActivityStatuses.Completed
             && (db.Sessions.Any(s => s.ActivityId == x.Id && s.Status == "SCHEDULED" && s.EndTimeUtc > now)
@@ -109,6 +116,8 @@ public static class StudentActivityEndpoints
             .OrderBy(x => x.StartTimeUtc).ThenBy(x => x.Id).ToListAsync(ct);
         var registered = await db.ActivityParticipants.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId))
             .Select(x => x.ActivityId).ToListAsync(ct);
+        var registrationVersions = await db.ActivityParticipants.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId)).ToDictionaryAsync(x => x.ActivityId, x => x.Version, ct);
+        var attendanceActivities = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId)).Select(x => x.ActivityId).Distinct().ToListAsync(ct);
         var checkedIn = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId
             && x.VerificationStatus == "VERIFIED" && ids.Contains(x.ActivityId)).Select(x => x.SessionId).ToListAsync(ct);
         var metadata = authority.Clubs.ToDictionary(x => x.ClubId);
@@ -116,10 +125,14 @@ public static class StudentActivityEndpoints
         {
             var session = sessions.FirstOrDefault(s => s.ActivityId == a.Id);
             var club = metadata[a.ClubId];
-            var eligible = a.Eligibility == "CAMPUS_PUBLIC" ? club.CampusCode == user.CampusCode
+            var eligible = !a.IsInternal ? club.CampusCode == user.CampusCode
                 : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;
-            var canRegister = eligible && !registered.Contains(a.Id) && a.PublicationStatus == "PUBLISHED"
-                && a.RegistrationOpensAt <= now && a.RegistrationClosesAt > now && (a.Capacity == null || a.RegisteredCount < a.Capacity);
+            var canRegister = eligible && !registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled
+                && (a.PublicationStatus == "LEGACY"
+                    || a.PublicationStatus == "PUBLISHED"
+                        && (a.RegistrationOpensAt == null || a.RegistrationOpensAt <= now)
+                        && (a.RegistrationClosesAt == null || a.RegistrationClosesAt > now)
+                        && (a.Capacity == null || a.RegisteredCount < a.Capacity));
             var start = session?.StartTimeUtc ?? a.StartTimeUtc; var end = session?.EndTimeUtc ?? a.EndTimeUtc;
             var action = canRegister ? "REGISTER" : eligible && registered.Contains(a.Id) && session is not null
                 && session.OpensAt <= now && session.ClosesAt >= now && !checkedIn.Contains(session.Id) ? "CHECK_IN" : "VIEW";
@@ -127,7 +140,20 @@ public static class StudentActivityEndpoints
                 a.CoverImageUrl, start, end, session?.Location ?? a.Location,
                 a.Status == ActivityStatuses.Cancelled ? "CANCELLED" : end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE",
                 action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,
-                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? []);
+                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])
+            {
+                IsInternal = a.IsInternal,
+                IsRegistered = registered.Contains(a.Id),
+                RegistrationVersion = registrationVersions.TryGetValue(a.Id, out var registrationVersion) ? registrationVersion : null,
+                CanCancelRegistration = registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled && a.StartTimeUtc > now && !attendanceActivities.Contains(a.Id),
+                // No required/optional flag exists yet. Treat every published session as
+                // required conservatively; never invent an attendable aggregate interval.
+                RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,
+                    Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{a.Version}:" +
+                        string.Join("|", sessions.Where(s => s.ActivityId == a.Id).Select(s => $"{s.Id}:{s.Version}"))))),
+                    sessions.Where(s => s.ActivityId == a.Id).Select(s => new RecommendationSession(s.Id,
+                        s.StartTimeUtc, s.EndTimeUtc, true)).ToArray()) : null
+            };
         }).ToArray();
         if (detailId.HasValue) return items.Length == 0 ? Results.NotFound() : Results.Ok(items[0]);
         return Results.Ok(new StudentActivityPage(items, page, size, total, (int)Math.Ceiling((decimal)total / size), now, authority.Version));
@@ -136,15 +162,15 @@ public static class StudentActivityEndpoints
     private static Expression<Func<ClubActivity, bool>> Eligibility(StudentClubScope scope, int[] campusIds)
     {
         var p = Expression.Parameter(typeof(ClubActivity), "activity");
-        var audience = Expression.Property(p, nameof(ClubActivity.Eligibility));
+        var audience = Expression.Property(p, nameof(ClubActivity.IsInternal));
         var clubId = Expression.Property(p, nameof(ClubActivity.ClubId));
-        Expression predicate = Expression.AndAlso(Expression.Equal(audience, Expression.Constant("CAMPUS_PUBLIC")),
+        Expression predicate = Expression.AndAlso(Expression.Not(audience),
             Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [typeof(int)], Expression.Constant(campusIds), clubId));
         foreach (var member in scope.Clubs.Where(x => x.IsApprovedMember && x.JoinedAt.HasValue))
         {
             var joined = Expression.AndAlso(Expression.Equal(clubId, Expression.Constant(member.ClubId)),
                 Expression.GreaterThanOrEqual(Expression.Property(p, nameof(ClubActivity.StartTimeUtc)), Expression.Constant(member.JoinedAt!.Value)));
-            predicate = Expression.OrElse(predicate, Expression.AndAlso(Expression.Equal(audience, Expression.Constant("CLUB_MEMBER")), joined));
+            predicate = Expression.OrElse(predicate, Expression.AndAlso(audience, joined));
         }
         return Expression.Lambda<Func<ClubActivity, bool>>(predicate, p);
     }

@@ -49,7 +49,7 @@ public static class ReportQueryEndpoints
         {
             var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
             var managedClubIds = access.Where(x => x.CanManage).Select(x => x.ClubId).ToHashSet();
-            financeVisibleClubIds = access.Where(x => x.CanManage || x.CanManageFinance).Select(x => x.ClubId).ToHashSet();
+            financeVisibleClubIds = access.Where(x => x.CanManage || x.CanManageFinance || x.HasCapability("club.finance.read")).Select(x => x.ClubId).ToHashSet();
             var visibleClubIds = access.Where(x => x.CanView).Select(x => x.ClubId).ToHashSet();
             var userId = user.GetUserId();
             baseQuery = baseQuery.Where(x =>

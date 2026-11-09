@@ -84,7 +84,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
                 Assert.NotNull(req.CompletedAtUtc);
                 Assert.NotNull(req.File);
 
-                var outboxMsg = await db.OutboxMessages.SingleOrDefaultAsync();
+                var outboxMsg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
                 Assert.NotNull(outboxMsg);
                 Assert.Equal(EventRoutingKeys.ExportCompleted, outboxMsg.EventType);
                 Assert.Equal(OutboxMessageStatus.Pending, outboxMsg.Status);
@@ -159,7 +159,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
                 Assert.NotNull(req.ErrorMessage);
 
                 // Crucial: No outbox event is created on failed generation
-                Assert.Empty(db.OutboxMessages);
+                Assert.Empty(db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed"));
             }
         }
         finally
@@ -211,7 +211,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ExportDbContext>();
-            var msg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var msg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(msg);
             Assert.Equal(EventRoutingKeys.ExportRequested, msg.EventType);
             Assert.Equal(OutboxMessageStatus.Pending, msg.Status);
@@ -266,7 +266,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
             var club = await db.Clubs.SingleOrDefaultAsync(x => x.Code == "CLUB01");
             Assert.NotNull(club);
 
-            var outboxMsg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var outboxMsg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(outboxMsg);
             Assert.Equal(EventRoutingKeys.ClubCreated, outboxMsg.EventType);
             Assert.Equal(OutboxMessageStatus.Pending, outboxMsg.Status);
@@ -341,7 +341,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            var outboxMsg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var outboxMsg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(outboxMsg);
             Assert.Equal(EventRoutingKeys.ClubCreated, outboxMsg.EventType);
 
@@ -406,7 +406,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            var msg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var msg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(msg);
             Assert.Equal(EventRoutingKeys.ClubAccessInvalidated, msg.EventType);
 
@@ -435,7 +435,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            Assert.Equal(2, await db.OutboxMessages.CountAsync());
+            Assert.Equal(2, await db.OutboxMessages.CountAsync(x => x.EventType != "recommendation.source.changed"));
         }
 
         // Test 3: Remove membership queues outbox
@@ -458,7 +458,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            Assert.Equal(3, await db.OutboxMessages.CountAsync());
+            Assert.Equal(3, await db.OutboxMessages.CountAsync(x => x.EventType != "recommendation.source.changed"));
         }
     }
 
@@ -507,7 +507,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
-            var msg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var msg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(msg);
             Assert.Equal(EventRoutingKeys.ClubAccessInvalidated, msg.EventType);
 
@@ -569,7 +569,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
             var activity = await db.Activities.SingleOrDefaultAsync();
             Assert.NotNull(activity);
 
-            var outboxMsg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var outboxMsg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(outboxMsg);
             Assert.Equal(EventRoutingKeys.ActivityCreated, outboxMsg.EventType);
             Assert.Equal(OutboxMessageStatus.Pending, outboxMsg.Status);
@@ -629,7 +629,7 @@ public sealed class CrossServiceOutboxAndDualWriteTests
         await using (var scope = sp.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>();
-            var msg = await db.OutboxMessages.SingleOrDefaultAsync();
+            var msg = await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").SingleOrDefaultAsync();
             Assert.NotNull(msg);
             Assert.Equal(EventRoutingKeys.ActivityCreated, msg.EventType);
 

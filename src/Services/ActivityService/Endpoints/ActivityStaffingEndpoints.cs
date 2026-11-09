@@ -28,6 +28,7 @@ public static class ActivityStaffingEndpoints
         group.MapPatch("/activities/{activityId:int}/recruitment", SaveRecruitment);
         group.MapPatch("/activities/{activityId:int}/recruitment/status", RecruitmentStatus);
         group.MapPost("/activities/{activityId:int}/recruitment/positions/{positionId:guid}/join", Join);
+        group.MapPost("/activities/{activityId:int}/recruitment/applications/{applicationId:guid}/review", ReviewApplication);
         group.MapGet("/clubs/{clubId:int}/activity-recruitments", Recruitments);
     }
     private sealed record Source(ActivityExecution Execution, ClubActivity Activity, Scope Scope, bool SemesterAvailable);
@@ -58,7 +59,7 @@ public static class ActivityStaffingEndpoints
         || http.User.IsInRole(AuthRoles.ClubManager) || http.User.IsInRole(AuthRoles.Treasurer);
     private static async Task<IResult> Publish(int activityId, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var source = await Load(activityId, http, db, ct); Manager(source.Scope);
+        var source = await Load(activityId, http, db, ct); Manager(source.Scope, "event.content.write");
         var input = await Body<ActivityPublicationInput>(http, ct);
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
@@ -93,22 +94,31 @@ public static class ActivityStaffingEndpoints
         var verify = await Verification(source, http, ct);
         var recruitment = await db.Set<ActivityRecruitment>().AsNoTracking().SingleOrDefaultAsync(x => x.ActivityId == activityId, ct);
         var privileged = source.Scope.Manager || source.Scope.Reviewer;
-        var publicAccess = source.Execution.IsPublished && Student(http) && recruitment?.Visibility == "PUBLIC";
-        Require(privileged || verify.Attendance || verify.Work || source.Execution.IsPublished && source.Scope.Club.IsApprovedMember || publicAccess,
+        var publicAccess = source.Execution.IsPublished && Student(http) && (!source.Activity.IsInternal || recruitment?.Visibility == "PUBLIC");
+        Require(privileged || source.Scope.Can("event.staff.assign") || verify.Attendance || verify.Work || source.Execution.IsPublished && source.Scope.Club.IsApprovedMember || publicAccess,
             404, "ACTION_ACTIVITY_NOT_FOUND", "Activity staffing is unavailable.");
         var rules = await db.Set<ActivityActionRule>().AsNoTracking().Where(x => x.ActivityId == activityId).OrderBy(x => x.Id).ToArrayAsync(ct);
         var assignments = await db.Set<ActivityStaffAssignment>().AsNoTracking().Where(x => x.ActivityId == activityId).ToArrayAsync(ct);
-        var visible = assignments.Where(x => privileged || verify.Attendance || verify.Work || x.UserId == source.Scope.Account.Id).ToArray();
+        var canReview = await CanReviewApplications(source, http, db, ct);
+        var applications = await db.Set<ActivityRecruitmentApplication>().AsNoTracking()
+            .Where(x => x.ActivityId == activityId && (canReview || x.UserId == source.Scope.Account.Id)).ToArrayAsync(ct);
+        var visible = assignments.Where(x => privileged || source.Scope.Can("event.staff.assign") || verify.Attendance || verify.Work || x.UserId == source.Scope.Account.Id).ToArray();
         var completions = await db.Set<ActivityActionCompletion>().AsNoTracking().Where(x => x.ActivityId == activityId).ToArrayAsync(ct);
+        var resources = await db.Set<ActivityResource>().AsNoTracking().Where(x => x.ActivityId == activityId && x.DetachedAtUtc == null
+            && (x.Visibility == "PUBLIC" || source.Scope.Club.IsApprovedMember || privileged || verify.Attendance || verify.Work)).ToArrayAsync(ct);
+        var completionIds = completions.Select(x => x.Id).ToArray();
+        var resourceLinks = await db.Set<ActivityCompletionResource>().AsNoTracking().Where(x => completionIds.Contains(x.CompletionId)).ToArrayAsync(ct);
         var eligible = new List<object>();
-        if (source.Scope.Manager && Operational(source, http))
+        if (source.Scope.Can("event.staff.assign") && Operational(source, http))
         {
-            var roster = await http.RequestServices.GetRequiredService<ClubMemberRosterClient>()
-                .GetAsync(source.Activity.ClubId, Now(http), null, 1, 100, http.GetBearerToken(), ct);
-            var profiles = await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync(roster.Items.Select(x => x.UserId), ct);
-            foreach (var member in roster.Items.Where(x => x.Status == "Approved"))
-                if (profiles.TryGetValue(member.UserId, out var profile) && profile.IsActive && !profile.IsLocked && profile.CampusCode == source.Scope.Club.CampusCode)
-                    eligible.Add(new { userId = profile.Id, displayName = profile.DisplayName });
+            var rosterClient = http.RequestServices.GetRequiredService<ClubMemberRosterClient>();
+            var ids = source.Scope.Manager
+                ? (await rosterClient.GetAsync(source.Activity.ClubId, Now(http), null, 1, 100, http.GetBearerToken(), ct)).Items.Where(x => x.Status == "Approved").Select(x => x.UserId).ToArray()
+                : (await rosterClient.GetAssignmentCandidatesAsync(source.Activity.ClubId, Now(http), http.GetBearerToken(), ct)).Select(x => x.UserId).ToArray();
+            foreach (var batch in ids.Chunk(100))
+                foreach (var profile in (await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync(batch, ct)).Values)
+                    if (profile.IsActive && !profile.IsLocked && profile.CampusCode == source.Scope.Club.CampusCode)
+                        eligible.Add(new { userId = profile.Id, displayName = profile.DisplayName });
         }
         var positions = recruitment is null ? [] : await db.Set<ActivityRecruitmentPosition>().AsNoTracking()
             .Where(x => x.RecruitmentId == recruitment.Id && !x.IsArchived).OrderBy(x => x.Id).ToArrayAsync(ct);
@@ -123,7 +133,24 @@ public static class ActivityStaffingEndpoints
             applicationStatus = "APPROVED",
             scoringStatus = ScoringStatus,
             canAwardPoints = false,
-            capabilities = new { canManageAssignments = source.Scope.Manager && Operational(source, http), canManageRecruitment = source.Scope.Manager && Operational(source, http), canVerify = verify.Attendance || verify.Work },
+            capabilities = new { canManageAssignments = source.Scope.Can("event.staff.assign") && Operational(source, http), canManageRecruitment = source.Scope.Can("event.staff.assign") && Operational(source, http), canReviewApplications = canReview && Operational(source, http), canVerify = verify.Attendance || verify.Work },
+            publicAssignments = source.Execution.IsPublished ? assignments.Where(x => x.Status != "REMOVED").Select(x => new
+            { x.Id, x.DisplayName, x.ActionRuleId, actionName = Definition(rules.Single(r => r.Id == x.ActionRuleId)).Name, x.AssignmentKind }) : [],
+            applications = applications.Select(x => new
+            {
+                x.Id,
+                x.PositionId,
+                x.UserId,
+                x.DisplayName,
+                x.Status,
+                x.Version,
+                x.SubmittedAt,
+                x.ReviewedAt,
+                x.Reason,
+                x.AssignmentId,
+                canReview = canReview && Operational(source, http) && x.Status == "PENDING" && x.UserId != source.Scope.Account.Id
+            }),
+            availableEvidenceResources = resources.Select(x => new { x.Id, x.Title, x.Kind }),
             actions = rules.Select(x =>
             {
                 var d = Definition(x); return new
@@ -152,7 +179,9 @@ public static class ActivityStaffingEndpoints
                     actionName = rule.Name,
                     x.AssignmentKind,
                     x.Status,
-                    canRemove = source.Scope.Manager && x.Status != "REMOVED" && Operational(source, http),
+                    canRemove = source.Scope.Can("event.staff.assign") && x.Status != "REMOVED" && Operational(source, http),
+                    canSubmit = x.UserId == source.Scope.Account.Id && source.Execution.IsPublished && x.Status != "REMOVED"
+                        && source.Activity.Status != ActivityStatuses.Cancelled && source.Activity.StartTimeUtc <= Now(http),
                     verifiedOccurrences = completions.Count(c => c.AssignmentId == x.Id && c.Status == "VERIFIED"),
                     pendingRawXp = (decimal?)null,
                     completions = completions.Where(c => c.AssignmentId == x.Id).Select(c => new
@@ -164,6 +193,8 @@ public static class ActivityStaffingEndpoints
                         verificationMethod = rule.VerificationMethod,
                         completionKind = rule.VerificationMethod == "ATTENDANCE" ? "MANUAL_ATTENDANCE_CLAIM" : "WORK_EVIDENCE",
                         evidence = mayVerify || x.UserId == source.Scope.Account.Id ? c.Evidence : null,
+                        resources = mayVerify || x.UserId == source.Scope.Account.Id
+                            ? resources.Where(r => resourceLinks.Any(l => l.CompletionId == c.Id && l.ResourceId == r.Id)).Select(r => new { r.Id, r.Title, r.Url }) : [],
                         canVerify = mayVerify && c.UserId != source.Scope.Account.Id && c.Status == "PENDING" && x.Status != "REMOVED"
                             && source.Activity.Status != ActivityStatuses.Cancelled
                     })
@@ -173,6 +204,7 @@ public static class ActivityStaffingEndpoints
             recruitment = !recruitmentVisible ? null : new
             {
                 recruitment!.Id,
+                applicationWorkflow = "APPROVAL_REQUIRED_V1",
                 recruitment.Title,
                 recruitment.Description,
                 recruitment.Visibility,
@@ -187,9 +219,12 @@ public static class ActivityStaffingEndpoints
                     p.AssignmentKind,
                     filledCount = assignments.Count(a => a.PositionId == p.Id && a.Status != "REMOVED"),
                     myAssignmentId = assignments.Where(a => a.PositionId == p.Id && a.UserId == source.Scope.Account.Id && a.Status != "REMOVED").Select(a => (Guid?)a.Id).SingleOrDefault(),
+                    myApplication = applications.Where(a => a.PositionId == p.Id && a.UserId == source.Scope.Account.Id)
+                        .Select(a => new { a.Id, a.Status, a.Version, a.Reason }).SingleOrDefault(),
                     canJoin = CanJoin(source, recruitment, http) && assignments.Count(a => a.PositionId == p.Id && a.Status != "REMOVED") < p.Capacity
                         && assignments.Count(a => a.ActionRuleId == p.ActionRuleId && a.Status != "REMOVED") < Definition(rules.Single(r => r.Id == p.ActionRuleId)).ExpectedPeople
-                        && !assignments.Any(a => a.ActionRuleId == p.ActionRuleId && a.UserId == source.Scope.Account.Id && a.Status != "REMOVED"),
+                        && !assignments.Any(a => a.ActionRuleId == p.ActionRuleId && a.UserId == source.Scope.Account.Id && a.Status != "REMOVED")
+                        && !applications.Any(a => a.PositionId == p.Id && a.UserId == source.Scope.Account.Id && a.Status == "PENDING"),
                     rawXpPerOccurrence = (decimal?)null
                 })
             }
@@ -197,13 +232,15 @@ public static class ActivityStaffingEndpoints
     }
     private static async Task<IResult> Assign(int activityId, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var source = await Load(activityId, http, db, ct); Manager(source.Scope);
+        var source = await Load(activityId, http, db, ct); Manager(source.Scope, "event.staff.assign");
         var input = await Body<StaffAssignmentInput>(http, ct);
         Require(input.UserId > 0 && input.AssignmentKind is "HOST" or "STAFF", 400, "INVALID_ASSIGNMENT", "Use an eligible user and HOST/STAFF.");
-        var members = await http.RequestServices.GetRequiredService<ClubMemberRosterClient>()
-            .ResolveByUserIdsAsync(source.Activity.ClubId, [input.UserId], http.GetBearerToken(), ct);
+        var approvedMember = source.Scope.Manager
+            ? (await http.RequestServices.GetRequiredService<ClubMemberRosterClient>().ResolveByUserIdsAsync(source.Activity.ClubId, [input.UserId], http.GetBearerToken(), ct))
+                .Any(x => x.UserId == input.UserId && x.Status == "Approved")
+            : (await http.RequestServices.GetRequiredService<ClubExperienceAuthorityClient>().GetAsync(source.Activity.ClubId, input.UserId, ct)) is { IsActive: true, IsApprovedMember: true };
         var account = (await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync([input.UserId], ct)).GetValueOrDefault(input.UserId);
-        Require(members.Any(x => x.UserId == input.UserId && x.Status == "Approved") && account is { IsActive: true, IsLocked: false }
+        Require(approvedMember && account is { IsActive: true, IsLocked: false }
             && account.CampusCode == source.Scope.Club.CampusCode, 409, "ASSIGNEE_INELIGIBLE", "Choose a current eligible club member.");
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
@@ -227,7 +264,7 @@ public static class ActivityStaffingEndpoints
     }
     private static async Task<IResult> Cancel(int activityId, Guid assignmentId, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var source = await Load(activityId, http, db, ct); Manager(source.Scope);
+        var source = await Load(activityId, http, db, ct); Manager(source.Scope, "event.staff.assign");
         var input = await Body<ActionVersionInput>(http, ct);
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
@@ -243,7 +280,7 @@ public static class ActivityStaffingEndpoints
     }
     private static async Task<IResult> SaveRecruitment(int activityId, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var source = await Load(activityId, http, db, ct); Manager(source.Scope);
+        var source = await Load(activityId, http, db, ct); Manager(source.Scope, "event.staff.assign");
         var input = await Body<RecruitmentInput>(http, ct);
         Require(!string.IsNullOrWhiteSpace(input.Title) && input.Title.Trim().Length <= 120 && (input.Description?.Length ?? 0) <= 2000
             && input.Visibility is "PUBLIC" or "PRIVATE" && input.Eligibility is "SCHOOL_STUDENTS" or "CLUB_MEMBERS"
@@ -263,12 +300,15 @@ public static class ActivityStaffingEndpoints
             Require(http.Request.Method == "POST" ? row is null : row is not null, 409, "RECRUITMENT_STATE_CONFLICT", "Create once; PATCH an existing recruitment.");
             var positions = row is null ? [] : await db.Set<ActivityRecruitmentPosition>().Where(x => x.RecruitmentId == row.Id && !x.IsArchived).ToArrayAsync(ct);
             var assignments = await db.Set<ActivityStaffAssignment>().Where(x => x.ActivityId == activityId && x.Status != "REMOVED").ToArrayAsync(ct);
+            var pending = await db.Set<ActivityRecruitmentApplication>().Where(x => x.ActivityId == activityId && x.Status == "PENDING").ToArrayAsync(ct);
             if (row is not null && (row.Visibility != input.Visibility || row.Eligibility != input.Eligibility))
-                Require(assignments.Length == 0, 409, "RECRUITMENT_IN_USE", "Scope cannot change while assignments are active.");
+                Require(assignments.Length == 0 && pending.Length == 0, 409, "RECRUITMENT_IN_USE", "Scope cannot change while assignments or applications are active.");
             foreach (var old in positions)
             {
                 var replacement = input.Positions.SingleOrDefault(x => x.ActionRuleId == old.ActionRuleId);
                 var filled = assignments.Count(x => x.PositionId == old.Id);
+                Require(!pending.Any(x => x.PositionId == old.Id) || replacement is not null && replacement.AssignmentKind == old.AssignmentKind,
+                    409, "POSITION_IN_USE", "Resolve pending applications before removing or changing the position kind.");
                 Require(filled == 0 || replacement is not null && replacement.Capacity >= filled && replacement.AssignmentKind == old.AssignmentKind,
                     409, "POSITION_IN_USE", "Filled positions cannot be removed, changed in kind or reduced below occupancy.");
                 if (replacement is null) old.IsArchived = true;
@@ -294,7 +334,7 @@ public static class ActivityStaffingEndpoints
     }
     private static async Task<IResult> RecruitmentStatus(int activityId, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
-        var source = await Load(activityId, http, db, ct); Manager(source.Scope);
+        var source = await Load(activityId, http, db, ct); Manager(source.Scope, "event.staff.assign");
         var input = await Body<RecruitmentStatusInput>(http, ct);
         Require(input.Status is "OPEN" or "CLOSED", 400, "INVALID_STATUS", "Use OPEN or CLOSED.");
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
@@ -331,19 +371,70 @@ public static class ActivityStaffingEndpoints
             await AssignmentAvailable(source, rule, source.Scope.Account.Id, db, ct);
             Require(await db.Set<ActivityStaffAssignment>().CountAsync(x => x.PositionId == positionId && x.Status != "REMOVED", ct) < position.Capacity,
                 409, "POSITION_FULL", "The last position was already filled.");
-            var row = new ActivityStaffAssignment
+            var row = await db.Set<ActivityRecruitmentApplication>().SingleOrDefaultAsync(x => x.PositionId == positionId && x.UserId == source.Scope.Account.Id, ct);
+            Require(row is null || row.Status != "PENDING", 409, "ALREADY_APPLIED", "Your application is already pending.");
+            if (row is null)
             {
-                ActivityId = activityId,
-                ActionRuleId = rule.Id,
-                PositionId = positionId,
-                UserId = source.Scope.Account.Id,
-                DisplayName = source.Scope.Account.DisplayName,
-                AssignmentKind = position.AssignmentKind,
-                CreatedBy = source.Scope.Account.Id,
-                CreatedAt = Now(http)
-            };
-            db.Add(row); source.Execution.Version++; Audit(db, source.Execution, http, "JOIN_POSITION", new { positionId, row.Id });
-            return Results.Ok(new { row.Id, assignmentId = row.Id, version = source.Execution.Version, row.Status });
+                row = new ActivityRecruitmentApplication { ActivityId = activityId, PositionId = positionId, UserId = source.Scope.Account.Id };
+                db.Add(row);
+            }
+            else row.Version++;
+            row.DisplayName = source.Scope.Account.DisplayName; row.Status = "PENDING"; row.SubmittedAt = Now(http);
+            row.ReviewedBy = null; row.ReviewedAt = null; row.Reason = null; row.AssignmentId = null;
+            source.Execution.Version++; Audit(db, source.Execution, http, "RECRUITMENT_APPLIED", new { positionId, row.Id, row.Version });
+            return Results.Ok(new { row.Id, applicationId = row.Id, applicationVersion = row.Version, version = source.Execution.Version, row.Status });
+        }, ct);
+    }
+    private static async Task<bool> CanReviewApplications(Source source, HttpContext http, ActivityDbContext db, CancellationToken ct)
+    {
+        if (source.Scope.Can("event.staff.assign")) return true;
+        var host = await db.Set<ActivityStaffAssignment>().AsNoTracking().FirstOrDefaultAsync(x => x.ActivityId == source.Activity.Id
+            && x.UserId == source.Scope.Account.Id && x.AssignmentKind == "HOST" && x.Status != "REMOVED", ct);
+        if (host is null) return false;
+        await AssigneeAuthority(source, host, http, ct);
+        return true;
+    }
+    private static async Task<IResult> ReviewApplication(int activityId, Guid applicationId, HttpContext http, ActivityDbContext db, CancellationToken ct)
+    {
+        var source = await Load(activityId, http, db, ct);
+        Require(await CanReviewApplications(source, http, db, ct), 403, "RECRUITMENT_REVIEW_REQUIRED", "Current event management or host assignment is required.");
+        var input = await Body<RecruitmentReviewInput>(http, ct);
+        Require(input.Decision is "APPROVED" or "REJECTED" && (input.Reason?.Length ?? 0) <= 2000
+            && (input.Decision != "REJECTED" || !string.IsNullOrWhiteSpace(input.Reason)), 400, "INVALID_REVIEW", "Use APPROVED or REJECTED and provide a rejection reason.");
+        var row = await db.Set<ActivityRecruitmentApplication>().SingleOrDefaultAsync(x => x.Id == applicationId && x.ActivityId == activityId, ct);
+        Require(row is not null, 404, "RECRUITMENT_APPLICATION_NOT_FOUND", "Application not found.");
+        Require(row!.UserId != source.Scope.Account.Id, 403, "SELF_REVIEW_DENIED", "Another authorized reviewer must review your application.");
+        return await ApiOperations.ExecuteAsync(http, db, input, async () =>
+        {
+            Expected(input.ExpectedVersion, source.Execution.Version); Expected(input.ApplicationVersion, row.Version);
+            Require(row.Status == "PENDING" && Operational(source, http), 409, "APPLICATION_LOCKED", "Only pending applications on an operational activity can be reviewed.");
+            if (input.Decision == "APPROVED")
+            {
+                var recruitment = await db.Set<ActivityRecruitment>().SingleAsync(x => x.ActivityId == activityId, ct);
+                Require(recruitment.Status == "OPEN" && source.Execution.IsPublished, 409, "RECRUITMENT_CLOSED", "Recruitment is unavailable.");
+                var position = await db.Set<ActivityRecruitmentPosition>().SingleOrDefaultAsync(x => x.Id == row.PositionId && x.RecruitmentId == recruitment.Id && !x.IsArchived, ct);
+                Require(position is not null, 409, "POSITION_UNAVAILABLE", "The position is no longer available.");
+                var assignment = new ActivityStaffAssignment
+                {
+                    ActivityId = activityId,
+                    PositionId = row.PositionId,
+                    ActionRuleId = position!.ActionRuleId,
+                    UserId = row.UserId,
+                    DisplayName = row.DisplayName,
+                    AssignmentKind = position.AssignmentKind,
+                    CreatedBy = source.Scope.Account.Id,
+                    CreatedAt = Now(http)
+                };
+                await AssigneeAuthority(source, assignment, http, ct);
+                var rule = await Rule(activityId, position.ActionRuleId, db, ct);
+                await AssignmentAvailable(source, rule, row.UserId, db, ct);
+                Require(await db.Set<ActivityStaffAssignment>().CountAsync(x => x.PositionId == row.PositionId && x.Status != "REMOVED", ct) < position.Capacity,
+                    409, "POSITION_FULL", "The last position was already filled.");
+                db.Add(assignment); row.AssignmentId = assignment.Id;
+            }
+            row.Status = input.Decision; row.Version++; row.ReviewedBy = source.Scope.Account.Id; row.ReviewedAt = Now(http); row.Reason = input.Reason?.Trim();
+            source.Execution.Version++; Audit(db, source.Execution, http, "RECRUITMENT_REVIEWED", new { row.Id, row.Status, row.Version, row.AssignmentId, row.Reason });
+            return Results.Ok(new { row.Id, row.Status, row.AssignmentId, applicationVersion = row.Version, version = source.Execution.Version });
         }, ct);
     }
     private static async Task<ActivityActionRule> Rule(int id, int ruleId, ActivityDbContext db, CancellationToken ct) =>
@@ -391,6 +482,13 @@ public static class ActivityStaffingEndpoints
                 Evidence = input.Evidence.Trim(),
                 SubmittedAt = Now(http)
             };
+            var resourceIds = input.ResourceIds ?? [];
+            Require(resourceIds.Count <= 10 && resourceIds.All(x => x != Guid.Empty) && resourceIds.Distinct().Count() == resourceIds.Count,
+                400, "INVALID_EVIDENCE_RESOURCES", "Select up to ten distinct resources.");
+            var resourceCount = await db.Set<ActivityResource>().CountAsync(x => resourceIds.Contains(x.Id) && x.ActivityId == activityId
+                && x.DetachedAtUtc == null && (x.Visibility == "PUBLIC" || source.Scope.Club.IsApprovedMember), ct);
+            Require(resourceCount == resourceIds.Count, 403, "EVIDENCE_RESOURCE_UNAVAILABLE", "Resources must belong to this activity and be visible to you.");
+            foreach (var resourceId in resourceIds) db.Add(new ActivityCompletionResource { CompletionId = row.Id, ResourceId = resourceId });
             db.Add(row); source.Execution.Version++; Audit(db, source.Execution, http, attendanceClaim ? "MANUAL_ATTENDANCE_CLAIM" : "COMPLETION_SUBMITTED", new { row.Id, assignmentId });
             return Results.Ok(new
             {

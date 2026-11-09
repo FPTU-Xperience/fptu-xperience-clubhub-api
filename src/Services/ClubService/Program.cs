@@ -133,6 +133,7 @@ app.MapApplicationEndpoints();      // Club creation applications
 app.MapMembershipEndpoints();       // Membership requests & management
 app.MapManagerEndpoints();          // Manager assignments
 app.MapMemberManagementEndpoints();  // Member listing & roster
+app.MapClubRoleEndpoints();
 app.MapDisbandEndpoints();          // Club disband workflow
 app.MapTransferEndpoints();         // Ownership transfer workflow
 

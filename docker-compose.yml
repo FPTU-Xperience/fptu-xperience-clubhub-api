@@ -89,7 +89,11 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
+      Redis__ConnectionString: "redis:6379"
+      Redis__StreamName: "${REDIS_STREAM_NAME:-clubreporthub-events}"
       Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
       Services__ClubService__BaseUrl: "http://club-service:8080/"
       Services__ActivityService__BaseUrl: "http://activity-service:8080/"
@@ -105,6 +109,7 @@ services:
       Cors__AllowedOrigins__2: "https://*.fptux-clubhub-ui.pages.dev"
       Cors__AllowedOrigins__3: "https://fptux-legacy-ui.pages.dev"
       Cors__AllowedOrigins__4: "https://*.fptux-legacy-ui.pages.dev"
+      Cors__AllowedOrigins__5: "https://fptux-admin-ui.pages.dev"
       Cors__AdditionalOrigins: "${CORS_ADDITIONAL_ORIGINS:-}"
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=ClubReportHub_Auth;User Id=sa;Password=${SQL_PASSWORD:?SQL_PASSWORD is required};TrustServerCertificate=True;"
       Jwt__Issuer: "ClubReportHub"
@@ -114,8 +119,10 @@ services:
       GoogleAuthentication__ClientId: "${GOOGLE_CLIENT_ID:-}"
       GoogleAuthentication__AllowedHostedDomain: "${GOOGLE_ALLOWED_HOSTED_DOMAIN:-}"
       GoogleAuthentication__AllowedEmailDomains: "${GOOGLE_ALLOWED_EMAIL_DOMAINS:-fpt.edu.vn, gmail.com}"
-      ENABLE_DEV_LOGIN: "${ENABLE_DEV_LOGIN:-true}"
-      Auth__EnableDevLogin: "${ENABLE_DEV_LOGIN:-true}"
+      Sso__AllowLocalOrigins: "${LOCAL_SSO_ENABLED:-true}"
+      Sso__ClubHubOrigin: "${CLUBHUB_ORIGIN:-https://fptux-clubhub-ui.pages.dev}"
+      Sso__AdminOrigin: "${ADMIN_ORIGIN:-https://fptux-admin-ui.pages.dev}"
+      BrowserSession__SameSite: "${BROWSER_SESSION_SAME_SITE:-None}"
     deploy:
       resources:
         limits:
@@ -375,6 +382,10 @@ services:
       sqlserver:
         condition: service_healthy
     environment:
+      Recommendation__Enabled: "${RECOMMENDATION_ENABLED:-false}"
+      Recommendation__BaseUrl: "http://recommendation-service:8080/"
+      Recommendation__Token: "${RECOMMENDATION_TOKEN:-}"
+      Recommendation__RefreshSeconds: "${RECOMMENDATION_REFRESH_SECONDS:-60}"
       Security__InternalWorkflowToken: "${INTERNAL_WORKFLOW_TOKEN:?INTERNAL_WORKFLOW_TOKEN is required}"
       Services__AuthService__BaseUrl: "http://auth-service:8080/"
       Services__ClubService__BaseUrl: "http://club-service:8080/"

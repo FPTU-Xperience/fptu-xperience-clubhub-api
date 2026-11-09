@@ -139,7 +139,7 @@ public static class DeadlineEndpoints
         CancellationToken cancellationToken)
     {
         var access = await clubAccess.GetMyAccessAsync(httpContext.GetBearerToken(), cancellationToken);
-        if (!access.Any(x => x.IsManager))
+        if (!access.Any(x => x.CanManage))
         {
             return Results.Forbid();
         }

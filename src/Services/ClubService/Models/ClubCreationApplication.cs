@@ -2,6 +2,10 @@ namespace ClubService.Models;
 
 public sealed class ClubCreationApplication
 {
+    [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
+    public Guid Version { get; set; } = Guid.NewGuid();
+    public int? ApprovedManagerUserId { get; set; }
+    public string? ApprovedManagerName { get; set; }
     public int Id { get; set; }
     public int RequesterUserId { get; set; }
     public string RequesterName { get; set; } = string.Empty;

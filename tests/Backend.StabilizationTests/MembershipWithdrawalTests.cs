@@ -205,10 +205,11 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         var migrations = db.Database.GetMigrations().ToArray();
         Assert.Contains(migrations, x => x.EndsWith("MembershipApplicationHistory", StringComparison.Ordinal));
         Assert.Contains(migrations, x => x.EndsWith("InvitationRosterValidation", StringComparison.Ordinal));
-        Assert.EndsWith("InvitationRosterAuditContext", migrations[^1]);
+        Assert.Contains(migrations, x => x.EndsWith("InvitationRosterAuditContext", StringComparison.Ordinal));
         // Materialize the real preceding schema with legacy data, then exercise its upgrade.
         await db.GetService<IMigrator>().MigrateAsync(migrations.TakeWhile(x => !x.EndsWith("MembershipApplicationHistory", StringComparison.Ordinal)).Last());
         db.ChangeTracker.Clear(); await db.Database.MigrateAsync();
+        Assert.Equal(migrations, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
         var upgraded = await db.ClubMemberships.SingleAsync(x => x.Id == id);
         Assert.Equal(version, upgraded.ConcurrencyToken);
         Assert.Equal("Historical answers remain unchanged", upgraded.Reason); Assert.Equal("Historical note", upgraded.ReviewNote);

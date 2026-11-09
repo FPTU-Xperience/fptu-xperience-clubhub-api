@@ -5,6 +5,7 @@ using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Rosters;
 using ClubService.Data;
 using ClubService.Models;
+using ClubService.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Endpoints;
@@ -30,11 +31,15 @@ public static class ClubWorkspaceCatalogEndpoints
         var admin = http.User.IsInRole(AuthRoles.Admin);
         if (!admin && club.CampusCode != CampusCodes.Global && http.User.GetCampus() != club.CampusCode) return Results.Forbid();
         var actor = http.User.GetUserId();
-        var manager = await db.ClubManagerAssignments.AsNoTracking().AnyAsync(x => x.ClubId == clubId && x.ManagerUserId == actor && x.IsActive, ct);
+        var manager = await ClubGovernancePolicy.HasLeadership(db, clubId, http, ct);
+        var canRecruit = manager || await ClubGovernancePolicy.CanPerform(db, clubId, "club.members.recruit", http, ct);
+        var canReadPolicy = manager || await ClubGovernancePolicy.CanPerform(db, clubId, "event.content.write", http, ct)
+            || await ClubGovernancePolicy.CanPerform(db, clubId, "event.registrations.manage", http, ct);
+        var writable = manager || await ClubGovernancePolicy.HasWritableSpecialization(db, clubId, http, ct);
         var backoffice = admin || http.User.IsInRole(AuthRoles.StudentAffairsAdmin);
         var member = projection == "workspace" && await db.ClubMemberships.AsNoTracking().AnyAsync(x => x.ClubId == clubId
             && x.UserId == actor && x.Status == ClubMembershipStatuses.Approved, ct);
-        if (!backoffice && !manager && !member) return Results.Forbid();
+        if (!backoffice && !manager && !member && !(projection == "invitation" && canRecruit) && !(projection == "policy" && canReadPolicy)) return Results.Forbid();
         if (projection == "policy" && (string.IsNullOrWhiteSpace(semesterId) || semesterId.Length > 40))
             return ApiOperations.Error(400, "SEMESTER_REQUIRED", "Select a canonical semester code or ID.");
         WorkspaceCatalog result;
@@ -75,8 +80,8 @@ public static class ClubWorkspaceCatalogEndpoints
                 x.Code,
                 x.Label,
                 x.IsCurrent,
-                editable = x.Editable && (manager || backoffice),
-                canInvite = projection == "invitation" && (manager || backoffice) && x.IsCurrent
+                editable = x.Editable && (writable || backoffice),
+                canInvite = projection == "invitation" && (canRecruit || backoffice) && x.IsCurrent
                     && rosterSummaries.Any(r => r.SemesterKey == x.Id && r.ActiveCount > 0),
                 invitationAvailability = rosterSummaries.Any(r => r.SemesterKey == x.Id)
                     ? rosterSummaries.Any(r => r.SemesterKey == x.Id && r.ActiveCount > 0) ? "AVAILABLE" : "EMPTY" : "ROSTER_UNAVAILABLE",

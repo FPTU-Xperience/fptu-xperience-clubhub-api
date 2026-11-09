@@ -14,5 +14,9 @@ public sealed class CanonicalUserProfile
     public string? Address { get; set; }
     public string? AvatarUrl { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string? DeclaredMajor { get; set; }
+    public int OnboardingVersion { get; set; }
+    public bool SyncTimetable { get; set; }
+    public DateTimeOffset? OnboardingCompletedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }

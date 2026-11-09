@@ -19,7 +19,7 @@ internal static class ActivityLifecycleEndpoints
     {
         var activity = await db.Activities.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (activity is null) return Results.NotFound();
-        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, cancellationToken, true)) return Results.Forbid();
+        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, cancellationToken, true, "event.content.write")) return Results.Forbid();
         if (await db.Set<ActivityExecution>().AnyAsync(x => x.ActivityId == id, cancellationToken))
             return ApiOperations.Error(409, "ACTION_WORKFLOW_PROTECTED", "Use the application/publication workflow. Action scoring is pending policy approval.");
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
@@ -54,6 +54,9 @@ internal static class ActivityLifecycleEndpoints
                 activity.RegistrationClosesAt = request.RegistrationClosesAt ?? activity.RegistrationClosesAt;
                 activity.Eligibility = request.Eligibility ?? activity.Eligibility;
                 activity.DiscoveryVisibility = request.DiscoveryVisibility ?? activity.DiscoveryVisibility;
+                activity.IsInternal = request.IsInternal ?? (request.DiscoveryVisibility is not null
+                    ? request.DiscoveryVisibility != "CAMPUS_PUBLIC" : activity.IsInternal);
+                activity.DiscoveryVisibility = activity.IsInternal ? "CLUB_ONLY" : "CAMPUS_PUBLIC";
                 activity.EvidenceRequirements = request.EvidenceRequirements?.Trim() ?? activity.EvidenceRequirements;
                 activity.PolicyVersion = request.PolicyVersion ?? activity.PolicyVersion;
                 if (request.PillarWeights is not null)

@@ -6,7 +6,7 @@ namespace ActivityService.Contracts;
 public sealed record ActivityApplicationInput(int ClubId, string? Period, string? Title, string? Description,
     string? Objective, string? Location, DateTimeOffset? StartTimeUtc, DateTimeOffset? EndTimeUtc,
     string? Scale, bool IndependentActionsConfirmed, IReadOnlyList<ActivityActionInput>? Actions,
-    ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null);
+    ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null, bool IsInternal = true);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ActivityActionInput(string ClientId, string? Name, decimal BasePoints,
@@ -35,6 +35,9 @@ public sealed record RecruitmentPositionInput(int ActionRuleId, int Capacity, st
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RecruitmentStatusInput(int ExpectedVersion, string Status);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ActionCompletionInput(int ExpectedVersion, string OccurrenceKey, string OccurrenceLabel, string Evidence);
+public sealed record ActionCompletionInput(int ExpectedVersion, string OccurrenceKey, string OccurrenceLabel, string Evidence,
+    IReadOnlyList<Guid>? ResourceIds = null);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RecruitmentReviewInput(int ExpectedVersion, int ApplicationVersion, string Decision, string? Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ActionVerificationInput(int ExpectedVersion, int CompletionVersion);

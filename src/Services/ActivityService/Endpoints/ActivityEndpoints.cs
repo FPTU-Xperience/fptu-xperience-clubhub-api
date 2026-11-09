@@ -21,6 +21,7 @@ public static class ActivityEndpoints
         var activities = app
             .MapGroup("/api/activities")
             .WithTags("Activities")
+            .AddEndpointFilter<ActivityTimelineReadFilter>()
             .AddEndpointFilter<ActivityResourceReadFilter>()
             .AddEndpointFilter<ActivityPublicationReadFilter>()
             .RequireAuthorization(AuthPolicies.BusinessAccess);
@@ -32,6 +33,7 @@ public static class ActivityEndpoints
         MapCreateFromApprovedReport(activities);
         activities.MapActivityWriteEndpoints();
         app.MapActivitySessionEndpoints();
+        app.MapActivityVisibilityEndpoints();
         app.MapActivityExperienceSourceEndpoints();
         app.MapActivityExperienceMetricsEndpoints();
         app.MapActivityCoverImageEndpoints();
@@ -233,7 +235,8 @@ public static class ActivityEndpoints
                 Location = request.Location.Trim(),
                 Status = ActivityStatuses.Scheduled,
                 PublicationStatus = "DRAFT",
-                DiscoveryVisibility = request.DiscoveryVisibility,
+                IsInternal = request.IsInternal ?? request.DiscoveryVisibility != "CAMPUS_PUBLIC",
+                DiscoveryVisibility = (request.IsInternal ?? request.DiscoveryVisibility != "CAMPUS_PUBLIC") ? "CLUB_ONLY" : "CAMPUS_PUBLIC",
                 CreatedByUserId = user.GetUserId(),
                 SemesterId = request.SemesterId,
                 EffortTier = request.EffortTier ?? "T1",

@@ -8,6 +8,7 @@ using ClubReportHub.Shared.Health;
 using ClubReportHub.Shared.Messaging;
 using ClubReportHub.Shared.Tracing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ActivityService.Extensions;
 
@@ -48,6 +49,9 @@ public static class ServiceCollectionExtensions
         }).AddCorrelationIdForwarding();
 
         services.AddScoped<MemberActivityStatisticsService>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<ActivityLifecycleSynchronizer>();
+        services.AddHostedService<ActivityLifecycleWorker>();
         services.AddHttpClient<SemesterCatalogClient>(client =>
         {
             client.BaseAddress = new Uri(configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");

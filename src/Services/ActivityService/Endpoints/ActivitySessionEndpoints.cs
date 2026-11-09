@@ -66,9 +66,44 @@ public static class ActivitySessionEndpoints
         if (activity is null) return Results.NotFound();
         var scopes = await access.GetMyAccessAsync(http.GetBearerToken(), cancellationToken, bypassCache: true);
         if (!CanReviewAllActivities(http.User) && !scopes.Any(x => x.ClubId == activity.ClubId && x.CanView)) return Results.Forbid();
+        var canManage = await CanManageClubOrReviewAllAsync(activity.ClubId, http.User, access, http, cancellationToken, true);
         var rows = await db.Sessions.AsNoTracking().Include(x => x.Activity).Where(x => x.ActivityId == activityId)
             .OrderBy(x => x.StartTimeUtc).ToListAsync(cancellationToken);
-        return Results.Ok(new { activityId, items = rows.Select(Response), total = rows.Count });
+        var recorded = await db.ActivityAttendances.AsNoTracking().Where(x => x.ActivityId == activityId && x.SessionId != null)
+            .Select(x => x.SessionId!.Value).Distinct().ToArrayAsync(cancellationToken);
+        var now = Now(http);
+        var block = CreationBlock(activity);
+        return Results.Ok(new
+        {
+            activityId,
+            activityVersion = activity.Version,
+            capabilities = new { canManage, canCreate = canManage && block is null },
+            creationBlockReason = block,
+            items = rows.Select(row => Response(row) with
+            {
+                Capabilities = new(canManage && row.Status == "SCHEDULED" && now < row.OpensAt && !recorded.Contains(row.Id),
+                    canManage && row.Status == "SCHEDULED", canManage && row.Status != "CANCELLED",
+                    canManage && AttendanceChallenge.Configured(http.RequestServices.GetRequiredService<IConfiguration>())
+                        && row.Status == "SCHEDULED" && activity.Status == ActivityStatuses.Scheduled
+                        && activity.PublicationStatus is "PUBLISHED" or "CLOSED" && now >= row.OpensAt && now < row.ClosesAt)
+            }),
+            total = rows.Count
+        });
+    }
+
+    private static string? CreationBlock(ClubActivity activity)
+    {
+        if (activity.Status != ActivityStatuses.Scheduled) return "ACTIVITY_LOCKED";
+        if (activity.PublicationStatus != "PUBLISHED" || activity.ScoringSnapshotJson is null) return "APPROVED_SCORING_SOURCE_REQUIRED";
+        try
+        {
+            var source = JsonSerializer.Deserialize<ExperienceSourceSnapshot>(activity.ScoringSnapshotJson, JsonOptions);
+            return source is not null && source.ActivityId == activity.Id && source.ClubId == activity.ClubId
+                && source.SemesterId == activity.SemesterId && source.Policy is { ApprovalStatus: "APPROVED" }
+                && source.Policy.SemesterId == source.SemesterId && VerifiedExperienceRules.Validate(source.Attributes) is null
+                ? null : "APPROVED_SCORING_SOURCE_REQUIRED";
+        }
+        catch (JsonException) { return "APPROVED_SCORING_SOURCE_REQUIRED"; }
     }
 
     private static async Task<IResult> CreateAsync(int activityId, CreateActivitySessionsRequest request,
@@ -82,8 +117,8 @@ public static class ActivitySessionEndpoints
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
             if (request.ExpectedVersion != activity.Version) return ApiOperations.Error(409, "STALE_VERSION", "Reload the activity.");
-            if (activity.PublicationStatus != "PUBLISHED" || activity.ScoringSnapshotJson is null)
-                return ApiOperations.Error(409, "ACTIVITY_NOT_PUBLISHED", "Publish with an approved scoring policy first.");
+            if (CreationBlock(activity) is not null)
+                return ApiOperations.Error(409, "ACTIVITY_NOT_PUBLISHED", "A scheduled activity published with an approved scoring source is required.");
             List<(DateTimeOffset Start, DateTimeOffset End)> occurrences = [];
             if (request.StartAt.HasValue && request.EndAt.HasValue)
             {
@@ -109,7 +144,7 @@ public static class ActivitySessionEndpoints
             if (occurrences.Count == 0 || occurrences.Count > configuration.GetValue("Activities:MaxSessionsPerRequest", 100))
                 return ApiOperations.Error(400, "SESSION_LIMIT", "The request must produce a permitted number of sessions.");
             var series = Guid.NewGuid();
-            var blueprint = JsonSerializer.Deserialize<ExperienceSourceSnapshot>(activity.ScoringSnapshotJson, JsonOptions)!;
+            var blueprint = JsonSerializer.Deserialize<ExperienceSourceSnapshot>(activity.ScoringSnapshotJson!, JsonOptions)!;
             var rows = new List<ActivitySession>();
             var firstStart = occurrences[0].Start;
             foreach (var occurrence in occurrences)
@@ -133,7 +168,7 @@ public static class ActivitySessionEndpoints
                     CreatedAtUtc = Now(http),
                     UpdatedAtUtc = Now(http),
                     CreatedByUserId = http.User.GetUserId(),
-                    ScoringSnapshotJson = activity.ScoringSnapshotJson
+                    ScoringSnapshotJson = activity.ScoringSnapshotJson!
                 };
                 if (row.Location.Length > 200) return ApiOperations.Error(400, "INVALID_LOCATION", "Location is too long.");
                 ApplyPolicy(row, policy);

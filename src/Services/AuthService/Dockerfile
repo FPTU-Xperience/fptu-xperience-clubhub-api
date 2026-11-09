@@ -16,7 +16,7 @@ WORKDIR "/src/src/Services/AuthService"
 RUN dotnet build "AuthService.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "AuthService.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "AuthService.csproj" -c Release -r linux-x64 --self-contained false -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

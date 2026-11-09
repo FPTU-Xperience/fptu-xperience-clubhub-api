@@ -62,6 +62,24 @@ internal static class ActivityActionConfiguration
             e.Property(x => x.Status).HasMaxLength(20);
             e.HasIndex(x => new { x.ActivityId, x.ActionRuleId, x.UserId }).IsUnique().HasFilter("[Status] <> 'REMOVED'");
         });
+        model.Entity<ActivityRecruitmentApplication>(e =>
+        {
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.DisplayName).HasMaxLength(200);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.Reason).HasMaxLength(2000);
+            e.HasOne<ActivityExecution>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ActivityRecruitmentPosition>().WithMany().HasForeignKey(x => x.PositionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ActivityStaffAssignment>().WithMany().HasForeignKey(x => x.AssignmentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.PositionId, x.UserId }).IsUnique();
+            e.HasIndex(x => new { x.ActivityId, x.Status });
+        });
+        model.Entity<ActivityCompletionResource>(e =>
+        {
+            e.HasKey(x => new { x.CompletionId, x.ResourceId });
+            e.HasOne<ActivityActionCompletion>().WithMany().HasForeignKey(x => x.CompletionId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ActivityResource>().WithMany().HasForeignKey(x => x.ResourceId).OnDelete(DeleteBehavior.Restrict);
+        });
         model.Entity<ActivityActionCompletion>(e =>
         {
             e.Property(x => x.Version).IsConcurrencyToken();

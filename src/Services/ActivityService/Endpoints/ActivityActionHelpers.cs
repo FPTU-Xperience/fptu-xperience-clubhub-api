@@ -83,7 +83,10 @@ internal static class ActivityActionHelpers
     internal static DateTimeOffset Now(HttpContext http) =>
         http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
 
-    internal sealed record Scope(InternalUserProfile Account, ClubExperienceAuthority Club, bool Manager, bool Reviewer);
+    internal sealed record Scope(InternalUserProfile Account, ClubExperienceAuthority Club, bool Manager, bool Reviewer, ClubAccessSnapshot? Access = null)
+    {
+        internal bool Can(string permission) => Manager || Access?.HasCapability(permission) == true;
+    }
     internal static async Task<Scope> Authorize(int clubId, HttpContext http, CancellationToken ct)
     {
         var actor = http.User.GetUserId();
@@ -97,9 +100,9 @@ internal static class ActivityActionHelpers
             .GetMyAccessAsync(http.GetBearerToken(), ct, true);
         var manager = scopes.Any(x => x.ClubId == clubId && x.CanManage);
         return new(account!, club!, manager,
-            http.User.IsInRole(AuthRoles.Admin) || http.User.IsInRole(AuthRoles.StudentAffairsAdmin));
+            http.User.IsInRole(AuthRoles.Admin) || http.User.IsInRole(AuthRoles.StudentAffairsAdmin), scopes.SingleOrDefault(x => x.ClubId == clubId));
     }
-    internal static void Manager(Scope scope) => Require(scope.Manager, 403, "MANAGEMENT_REQUIRED", "Current club management is required.");
+    internal static void Manager(Scope scope, string? permission = null) => Require(scope.Manager || permission is not null && scope.Can(permission), 403, "MANAGEMENT_REQUIRED", "Current scoped club authority is required.");
     internal static bool Mutable(ClubActivity activity, HttpContext http) =>
         activity.Status == ActivityStatuses.Scheduled && activity.EndTimeUtc > Now(http);
     internal static void Expected(int expected, int actual) =>
@@ -210,6 +213,7 @@ internal static class ActivityActionHelpers
             content.StartTimeUtc,
             content.EndTimeUtc,
             content.Scale,
+            content.IsInternal,
             content.IndependentActionsConfirmed,
             content.Actions,
             content.Recruitment,
@@ -217,7 +221,7 @@ internal static class ActivityActionHelpers
             expectedRawXp = (decimal?)null,
             scoringStatus = ScoringStatus,
             canAwardPoints = false,
-            capabilities = new { canEdit = scope.Manager && row.Status is "DRAFT" or "REVISION_REQUESTED", canSubmit = scope.Manager && row.Status is "DRAFT" or "REVISION_REQUESTED", canReview = scope.Reviewer && row.CreatedBy != scope.Account.Id && row.Status == "SUBMITTED" },
+            capabilities = new { canEdit = scope.Can("event.registrations.manage") && row.Status is "DRAFT" or "REVISION_REQUESTED", canSubmit = scope.Can("event.registrations.manage") && row.Status is "DRAFT" or "REVISION_REQUESTED", canReview = scope.Reviewer && row.CreatedBy != scope.Account.Id && row.Status == "SUBMITTED" },
             row.CreatedAt,
             row.UpdatedAt
         };

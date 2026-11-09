@@ -21,6 +21,7 @@ internal static class ActivityWriteEndpoints
         activities.MapPut("/{id:int}", UpdateActivity);
         activities.MapDelete("/{id:int}", CancelActivity);
         activities.MapPost("/{id:int}/participants", RegisterParticipant);
+        activities.MapPost("/{id:int}/registration/cancel", ActivityRegistrationCancellation.CancelAsync);
         activities.MapPost("/{id:int}/check-in", CheckIn);
         activities.MapGet("/{id:int}/my-attendance", GetMyAttendance);
         activities.MapMethods("/{id:int}/complete", ["PATCH"], CompleteActivity);
@@ -81,7 +82,7 @@ internal static class ActivityWriteEndpoints
             return await ActivityLifecycleEndpoints.UpdateAsync(id, request, db, httpContext, clubAccess, authority,
                 httpContext.RequestServices.GetRequiredService<IConfiguration>(), cancellationToken);
         }
-        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess, httpContext, cancellationToken, bypassCache: true))
+        if (!await CanManageClubOrReviewAllAsync(activity.ClubId, user, clubAccess, httpContext, cancellationToken, bypassCache: true, capability: "event.content.write"))
             return Results.Forbid();
         if (activity.Status != ActivityStatuses.Scheduled || activity.SourceReportId.HasValue)
             return Results.Conflict(new { message = "Only scheduled standalone activities can be edited here." });
@@ -122,6 +123,10 @@ internal static class ActivityWriteEndpoints
                 .SetProperty(x => x.StartTimeUtc, start)
                 .SetProperty(x => x.EndTimeUtc, end)
                 .SetProperty(x => x.MeetingDaysCsv, meetingDays)
+                .SetProperty(x => x.IsInternal, request.IsInternal ?? (request.DiscoveryVisibility != null
+                    ? request.DiscoveryVisibility != "CAMPUS_PUBLIC" : activity.IsInternal))
+                .SetProperty(x => x.DiscoveryVisibility, (request.IsInternal ?? (request.DiscoveryVisibility != null
+                    ? request.DiscoveryVisibility != "CAMPUS_PUBLIC" : activity.IsInternal)) ? "CLUB_ONLY" : "CAMPUS_PUBLIC")
                 .SetProperty(x => x.UpdatedAtUtc, now), cancellationToken);
         if (changed == 0) return Results.Conflict(new { message = "Activity changed while it was being edited." });
 
@@ -155,7 +160,7 @@ internal static class ActivityWriteEndpoints
         DateTimeOffset joinedAt;
         try
         {
-            if (activity.PublicationStatus != "LEGACY" && activity.Eligibility == "CAMPUS_PUBLIC")
+            if (!activity.IsInternal)
             {
                 if (targetUserId != actorId) return Results.Forbid();
                 var account = await ActivityEligibility.ResolveAsync(activity, actorId, activity.StartTimeUtc,
@@ -203,8 +208,10 @@ internal static class ActivityWriteEndpoints
                 if (current.Capacity.HasValue && current.RegisteredCount >= current.Capacity)
                     return ApiOperations.Error(409, "ACTIVITY_FULL", "The activity has no available seats.");
                 current.RegisteredCount++; current.Version = Guid.NewGuid();
-                var participant = new ActivityParticipant { ActivityId = id, UserId = targetUserId, FullName = fullName };
-                db.ActivityParticipants.Add(participant); await db.SaveChangesAsync(cancellationToken);
+                var participant = await db.ActivityParticipants.IgnoreQueryFilters().SingleOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
+                if (participant is null) { participant = new ActivityParticipant { ActivityId = id, UserId = targetUserId }; db.ActivityParticipants.Add(participant); }
+                participant.FullName = fullName; participant.CancelledAtUtc = null; participant.RegisteredAtUtc = now; participant.Version = Guid.NewGuid();
+                await db.SaveChangesAsync(cancellationToken);
                 return Results.Ok(new { success = true, participant = ToParticipantResponse(participant) });
             }, cancellationToken);
         }
@@ -212,8 +219,9 @@ internal static class ActivityWriteEndpoints
             .FirstOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
         if (existing is not null) return Results.Ok(new { success = true, participant = ToParticipantResponse(existing) });
 
-        var row = new ActivityParticipant { ActivityId = id, UserId = targetUserId, FullName = fullName };
-        db.ActivityParticipants.Add(row);
+        var row = await db.ActivityParticipants.IgnoreQueryFilters().SingleOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
+        if (row is null) { row = new ActivityParticipant { ActivityId = id, UserId = targetUserId }; db.ActivityParticipants.Add(row); }
+        row.FullName = fullName; row.CancelledAtUtc = null; row.RegisteredAtUtc = DateTimeOffset.UtcNow; row.Version = Guid.NewGuid();
         try
         {
             await db.SaveChangesAsync(cancellationToken);
