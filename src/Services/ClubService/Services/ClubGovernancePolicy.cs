@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Services;
 
-public sealed record GovernanceAssignment(Guid Id, int MembershipId, int UserId, string DisplayName);
+public sealed record GovernanceAssignment(Guid Id, int MembershipId, int UserId, string DisplayName, bool IsGroupLead = false);
 public sealed record GovernanceGroup(Guid Id, string Name, string Description, string PresetCode, string? DutyCode,
     bool Protected, string[] PermissionCodes, GovernanceAssignment[] Assignments, bool Archived = false);
 public sealed record GovernanceConfiguration(Guid SemesterId, string SemesterCode, DateTimeOffset StartsAt, DateTimeOffset EndsAt,

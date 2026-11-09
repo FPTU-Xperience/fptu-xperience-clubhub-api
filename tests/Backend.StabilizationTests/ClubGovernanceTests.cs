@@ -83,6 +83,48 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
     }
 
     [Fact]
+    public async Task Governance_GroupLeadManagesOnlyOwnAssignmentsAndCannotChangePermissions()
+    {
+        await using var app = await GovernanceApp(new GovernanceState());
+        using var owner = FormationClient(app, 100, AuthRoles.ClubMember, "HAN");
+        using var lead = FormationClient(app, 104, AuthRoles.ClubMember, "HAN");
+        await InitializeGovernance(owner);
+        var term = await owner.GetFromJsonAsync<JsonElement>(GovernanceUrl);
+        var groups = term.GetProperty("configuration").GetProperty("groups").EnumerateArray().ToArray();
+        var group = groups.Single(x => x.GetProperty("presetCode").GetString() == "EVENT");
+        var groupId = group.GetProperty("id").GetGuid();
+        var otherGroup = groups.Single(x => x.GetProperty("presetCode").GetString() == "CONTENT").GetProperty("id").GetGuid();
+        var permissions = group.GetProperty("permissionCodes").GetRawText();
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
+        var memberships = await db.ClubMemberships.ToDictionaryAsync(x => x.UserId, x => x.Id);
+        var path = GovernanceUrl + "/assignment-changes";
+        GovernanceAssignmentInput Input(string operation, Guid target, int userId, int? replacement = null) =>
+            new(term.GetProperty("version").GetGuid(), "Verify group lead authority", operation, target, [memberships[userId]], ReplaceMembershipId: replacement);
+
+        term = await GovernanceWrite(owner, path, Input("ADD", groupId, 104));
+        await GovernanceWrite(lead, path, Input("ADD", groupId, 105), HttpStatusCode.Forbidden);
+        term = await GovernanceWrite(owner, path, Input("SET_LEAD", groupId, 104));
+        var view = await lead.GetFromJsonAsync<JsonElement>(GovernanceUrl);
+        Assert.False(view.GetProperty("capabilities").GetProperty("canConfigure").GetBoolean());
+        Assert.Equal(groupId, Assert.Single(view.GetProperty("capabilities").GetProperty("manageableGroupIds").EnumerateArray()).GetGuid());
+        Assert.Equal(HttpStatusCode.OK, (await lead.GetAsync($"{GovernanceUrl}/eligible-members?groupId={groupId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await lead.GetAsync($"{GovernanceUrl}/eligible-members?groupId={otherGroup}")).StatusCode);
+        await GovernanceWrite(lead, GovernanceUrl + $"/groups/{groupId}", new GovernanceGroupInput(term.GetProperty("version").GetGuid(), "Reject permission change", PermissionCodes: []), HttpStatusCode.Forbidden, "PATCH");
+        await GovernanceWrite(lead, path, Input("ADD", otherGroup, 105), HttpStatusCode.Forbidden);
+        await GovernanceWrite(lead, path, Input("REMOVE", groupId, 104), HttpStatusCode.Forbidden);
+        term = await GovernanceWrite(lead, path, Input("ADD", groupId, 105));
+        await GovernanceWrite(lead, path, Input("SET_LEAD", groupId, 105), HttpStatusCode.Forbidden);
+        term = await GovernanceWrite(lead, path, Input("REPLACE", groupId, 106, memberships[105]));
+        var updated = term.GetProperty("configuration").GetProperty("groups").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == groupId);
+        Assert.Equal(permissions, updated.GetProperty("permissionCodes").GetRawText());
+        Assert.Equal(new[] { 104, 106 }, updated.GetProperty("assignments").EnumerateArray().Select(x => x.GetProperty("userId").GetInt32()));
+        term = await GovernanceWrite(lead, path, Input("REMOVE", groupId, 106));
+        term = await GovernanceWrite(owner, path, Input("CLEAR_LEAD", groupId, 104));
+        await GovernanceWrite(lead, path, Input("ADD", groupId, 105), HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Governance_MultipleGroupsUnionAndImmutableReportDoNotActivateOrRetainRevokedPermissions()
     {
         var state = new GovernanceState(); await using var app = await GovernanceApp(state);

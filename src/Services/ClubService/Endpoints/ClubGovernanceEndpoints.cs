@@ -24,7 +24,7 @@ public sealed record GovernanceGroupInput(Guid ExpectedVersion, string Reason, s
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record GovernanceDecisionInput(Guid ExpectedVersion, string Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record GovernanceAssignmentInput(Guid ExpectedVersion, string Reason, string Operation, Guid GroupId, int[] MembershipIds, Guid? FromGroupId = null);
+public sealed record GovernanceAssignmentInput(Guid ExpectedVersion, string Reason, string Operation, Guid GroupId, int[] MembershipIds, Guid? FromGroupId = null, int? ReplaceMembershipId = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record GovernanceReportInput(Guid ExpectedVersion, string Reason, Guid SourceRevisionId, string ExpectedLeadershipDigest, Guid ExpectedClubVersion);
 
@@ -127,6 +127,9 @@ public static class ClubGovernanceEndpoints
         var legacyChanged = latest is not null && (!JsonSerializer.Deserialize<JsonElement>(latest.SnapshotJson).TryGetProperty("legacyTreasurers", out var capturedLegacy)
             || capturedLegacy.GetRawText() != JsonSerializer.Serialize(legacyTreasurers, ClubGovernancePolicy.Json));
         var configuration = revision is null ? null : ClubGovernancePolicy.Parse(revision);
+        var manageableGroupIds = configuration is not null && ClubGovernancePolicy.Active(period, Now(http))
+            ? await ManageableGroupIds(configuration, clubId, db, http, ct)
+            : [];
         var leadershipJson = JsonSerializer.SerializeToElement(leadership, ClubGovernancePolicy.Json);
         var visibleUserIds = (configuration?.Groups.SelectMany(group => group.Assignments).Select(member => member.UserId) ?? [])
             .Concat(leadershipJson.GetProperty("owners").EnumerateArray().Select(member => member.GetProperty("userId").GetInt32()))
@@ -156,17 +159,44 @@ public static class ClubGovernanceEndpoints
             capabilities = new
             {
                 canConfigure = canManage && ClubGovernancePolicy.Active(period, Now(http)),
+                manageableGroupIds,
                 canReadHistory = true,
                 canSubmitReport = canManage && term is not null && ClubGovernancePolicy.Active(period, Now(http))
             }
         });
     }
-    private static async Task<IResult> EligibleMembers(int clubId, Guid? semesterId, string? search, int? page, int? pageSize, ClubDbContext db, HttpContext http, CancellationToken ct)
+    private static async Task<Guid[]> ManageableGroupIds(GovernanceConfiguration config, int clubId, ClubDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var userId = http.User.GetUserId();
+        var groups = config.Groups.Where(group => !group.Protected && !group.Archived &&
+            group.Assignments.Any(member => member.IsGroupLead && member.UserId == userId)).ToArray();
+        if (groups.Length == 0) return [];
+        var approvedIds = await db.ClubMemberships.Where(member => member.ClubId == clubId && member.UserId == userId &&
+            member.Status == ClubMembershipStatuses.Approved).Select(member => member.Id).ToArrayAsync(ct);
+        return groups.Where(group => group.Assignments.Any(member => member.IsGroupLead && member.UserId == userId &&
+            approvedIds.Contains(member.MembershipId))).Select(group => group.Id).ToArray();
+    }
+    private static async Task<GovernanceConfiguration?> CurrentConfiguration(int clubId, Guid semesterId, ClubDbContext db, CancellationToken ct)
+    {
+        var revision = await (from term in db.Set<ClubGovernanceTerm>().AsNoTracking()
+                              join row in db.Set<ClubGovernanceRevision>().AsNoTracking() on term.RevisionId equals row.Id
+                              where term.ClubId == clubId && term.SemesterId == semesterId && row.TermId == term.Id
+                              select row).SingleOrDefaultAsync(ct);
+        return revision is null ? null : ClubGovernancePolicy.Parse(revision);
+    }
+    private static async Task<IResult> EligibleMembers(int clubId, Guid? semesterId, Guid? groupId, string? search, int? page, int? pageSize, ClubDbContext db, HttpContext http, CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store";
-        if (await Visible(clubId, db, http, ct) is null || !await Manage(clubId, db, http, ct)) return Results.Forbid();
-        if (semesterId.HasValue && await Period(semesterId.Value, http, ct) is null) return Results.NotFound();
-        var club = await db.Clubs.AsNoTracking().SingleAsync(x => x.Id == clubId, ct);
+        var club = await Visible(clubId, db, http, ct);
+        if (club is null) return Results.Forbid();
+        if (!await Manage(clubId, db, http, ct))
+        {
+            if (semesterId is not Guid termId || groupId is not Guid targetId ||
+                await Period(termId, http, ct) is not { } period || !ClubGovernancePolicy.Active(period, Now(http)) ||
+                await CurrentConfiguration(clubId, termId, db, ct) is not { } config ||
+                !(await ManageableGroupIds(config, clubId, db, http, ct)).Contains(targetId)) return Results.Forbid();
+        }
+        else if (semesterId.HasValue && await Period(semesterId.Value, http, ct) is null) return Results.NotFound();
         var memberships = await db.ClubMemberships.AsNoTracking().Where(x => x.ClubId == clubId && x.Status == ClubMembershipStatuses.Approved).ToArrayAsync(ct);
         var profiles = await ClubGovernancePolicy.Profiles(memberships.Select(x => x.UserId), http, ct);
         var eligible = memberships.Where(m => profiles.TryGetValue(m.UserId, out var p) && p is { IsActive: true, IsLocked: false }
@@ -258,19 +288,25 @@ public static class ClubGovernanceEndpoints
     { public int Status { get; } = status; public string Code { get; } = code; }
     private static void Reject(int status, string code, string message) => throw new MutationRejected(status, code, message);
     private static async Task<IResult> Mutate(int clubId, Guid semesterId, Guid expectedVersion, string reason, object input, string action,
-        Func<GovernanceConfiguration, Task<GovernanceConfiguration>> change, ClubDbContext db, HttpContext http, CancellationToken ct)
+        Func<GovernanceConfiguration, Task<GovernanceConfiguration>> change, ClubDbContext db, HttpContext http, CancellationToken ct,
+        Func<GovernanceConfiguration, Task<bool>>? scopedAuthority = null)
     {
-        if (!await Manage(clubId, db, http, ct)) return Results.Forbid();
+        if (!await Manage(clubId, db, http, ct) && (scopedAuthority is null ||
+            await Visible(clubId, db, http, ct) is null ||
+            await Period(semesterId, http, ct) is not { } activePeriod || !ClubGovernancePolicy.Active(activePeriod, Now(http)) ||
+            await CurrentConfiguration(clubId, semesterId, db, ct) is not { } current || !await scopedAuthority(current))) return Results.Forbid();
         if (!Reason(reason)) return Error(400, "REASON_REQUIRED", "Provide a reason up to 500 characters.");
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
             var club = await Visible(clubId, db, http, ct); var period = await Period(semesterId, http, ct);
-            if (club is null || !await Manage(clubId, db, http, ct)) return Error(403, "GOVERNANCE_AUTHORITY_REQUIRED", "Current leadership is required.");
+            var canConfigure = club is not null && await Manage(clubId, db, http, ct);
+            if (club is null || (!canConfigure && scopedAuthority is null)) return Error(403, "GOVERNANCE_AUTHORITY_REQUIRED", "Current leadership is required.");
             if (period is null || !ClubGovernancePolicy.Active(period, Now(http))) return Error(409, "TERM_NOT_CONFIGURABLE", "Only the authoritative current semester can grant rights.");
             var term = await db.Set<ClubGovernanceTerm>().SingleOrDefaultAsync(x => x.ClubId == clubId && x.SemesterId == semesterId, ct);
             if (term is null || term.Version != expectedVersion) return Error(409, "STALE_GOVERNANCE", "Reload the current term revision.");
             var revision = await db.Set<ClubGovernanceRevision>().AsNoTracking().SingleAsync(x => x.Id == term.RevisionId && x.TermId == term.Id, ct);
             var before = ClubGovernancePolicy.Parse(revision);
+            if (!canConfigure && !await scopedAuthority!(before)) return Error(403, "GOVERNANCE_AUTHORITY_REQUIRED", "You can only manage members of your own group.");
             GovernanceConfiguration after;
             try
             {
@@ -336,7 +372,33 @@ public static class ClubGovernanceEndpoints
         {
             var target = EditableGroup(config, input.GroupId);
             if (input.MembershipIds is null || input.MembershipIds.Length is < 1 or > 100 || input.MembershipIds.Distinct().Count() != input.MembershipIds.Length
-                || input.Operation is not ("ADD" or "REMOVE" or "TRANSFER")) Reject(400, "INVALID_ASSIGNMENT_CHANGE", "Use an explicit operation and unique membership IDs.");
+                || input.Operation is not ("ADD" or "REMOVE" or "TRANSFER" or "REPLACE" or "SET_LEAD" or "CLEAR_LEAD")) Reject(400, "INVALID_ASSIGNMENT_CHANGE", "Use an explicit operation and unique membership IDs.");
+            if (input.Operation is "SET_LEAD" or "CLEAR_LEAD")
+            {
+                if (input.MembershipIds!.Length != 1 || !target.Assignments.Any(a => a.MembershipId == input.MembershipIds[0] &&
+                    (input.Operation == "SET_LEAD" || a.IsGroupLead)))
+                    Reject(409, "ASSIGNMENT_CHANGED", "Select a current group member.");
+                var selected = input.MembershipIds![0];
+                if (input.Operation == "SET_LEAD")
+                {
+                    var assignment = target.Assignments.Single(a => a.MembershipId == selected);
+                    if (!await db.ClubMemberships.AnyAsync(m => m.Id == selected && m.ClubId == clubId &&
+                        m.UserId == assignment.UserId && m.Status == ClubMembershipStatuses.Approved, ct))
+                        Reject(409, "MEMBERSHIP_CHANGED", "Select an approved club member.");
+                    var leadProfiles = await ClubGovernancePolicy.Profiles([assignment.UserId], http, ct);
+                    var leadCampus = await db.Clubs.Where(x => x.Id == clubId).Select(x => x.CampusCode).SingleAsync(ct);
+                    if (!leadProfiles.TryGetValue(assignment.UserId, out var profile) || profile is not { IsActive: true, IsLocked: false } ||
+                        (leadCampus != CampusCodes.Global && profile.CampusCode != leadCampus))
+                        Reject(409, "MEMBERSHIP_CHANGED", "Select an active eligible club member.");
+                }
+                return config with { Groups = config.Groups.Select(g => g.Id == target.Id ? g with
+                {
+                    Assignments = g.Assignments.Select(a => a with { IsGroupLead = input.Operation == "SET_LEAD" && a.MembershipId == selected }).ToArray()
+                } : g).ToArray() };
+            }
+            if (input.Operation == "REPLACE" && (input.MembershipIds!.Length != 1 ||
+                !target.Assignments.Any(a => a.MembershipId == input.ReplaceMembershipId && !a.IsGroupLead)))
+                Reject(409, "ASSIGNMENT_CHANGED", "Select a current group member who is not the group lead.");
             var source = input.Operation == "TRANSFER" ? EditableGroup(config, input.FromGroupId ?? Guid.Empty) : target;
             if (input.Operation == "REMOVE")
             {
@@ -351,18 +413,22 @@ public static class ClubGovernanceEndpoints
                 || (campus != CampusCodes.Global && p.CampusCode != campus))) Reject(409, "MEMBERSHIP_CHANGED", "Select active eligible club members.");
             if (input.Operation == "TRANSFER" && source.Id == target.Id) Reject(400, "INVALID_TRANSFER", "Choose a different source group.");
             if (input.Operation is "REMOVE" or "TRANSFER" && members.Any(m => !source.Assignments.Any(a => a.MembershipId == m.Id))) Reject(409, "ASSIGNMENT_CHANGED", "Reload the source assignments.");
-            if (input.Operation is "ADD" or "TRANSFER" && members.Any(m => target.Assignments.Any(a => a.MembershipId == m.Id))) Reject(409, "ASSIGNMENT_EXISTS", "This membership already belongs to the target group.");
+            if (input.Operation is "ADD" or "TRANSFER" or "REPLACE" && members.Any(m => target.Assignments.Any(a => a.MembershipId == m.Id))) Reject(409, "ASSIGNMENT_EXISTS", "This membership already belongs to the target group.");
             return config with
             {
                 Groups = config.Groups.Select(g =>
             {
                 var assignments = g.Assignments;
                 if (g.Id == source.Id && input.Operation is "REMOVE" or "TRANSFER") assignments = assignments.Where(a => !input.MembershipIds.Contains(a.MembershipId)).ToArray();
-                if (g.Id == target.Id && input.Operation is "ADD" or "TRANSFER") assignments = [.. assignments, .. members.Select(m => new GovernanceAssignment(Guid.NewGuid(), m.Id, m.UserId, m.FullName))];
+                if (g.Id == target.Id && input.Operation == "REPLACE") assignments = assignments.Where(a => a.MembershipId != input.ReplaceMembershipId).ToArray();
+                if (g.Id == target.Id && input.Operation is "ADD" or "TRANSFER" or "REPLACE") assignments = [.. assignments, .. members.Select(m => new GovernanceAssignment(Guid.NewGuid(), m.Id, m.UserId, m.FullName))];
                 return g with { Assignments = assignments };
             }).ToArray()
             };
-        }, db, http, ct);
+        }, db, http, ct, input.Operation is "ADD" or "REMOVE" or "REPLACE" ? async config =>
+            (await ManageableGroupIds(config, clubId, db, http, ct)).Contains(input.GroupId) &&
+            (input.Operation != "REMOVE" || !config.Groups.Single(g => g.Id == input.GroupId).Assignments
+                .Any(member => member.IsGroupLead && input.MembershipIds?.Contains(member.MembershipId) == true)) : null);
     private static async Task<IResult> Revisions(int clubId, Guid semesterId, int? page, int? pageSize, ClubDbContext db, HttpContext http, CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store"; if (await Visible(clubId, db, http, ct) is null) return Results.Forbid();
