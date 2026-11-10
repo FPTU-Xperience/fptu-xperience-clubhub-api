@@ -45,6 +45,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     {
         ActivityActionConfiguration.Configure(modelBuilder);
         ActivityResourceConfiguration.Configure(modelBuilder);
+        ActivityBookingConfiguration.Configure(modelBuilder);
         modelBuilder.Entity<ClubActivity>(entity =>
         {
             entity.Property(x => x.Version).IsConcurrencyToken();

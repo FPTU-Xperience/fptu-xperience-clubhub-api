@@ -119,7 +119,8 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         Assert.True(radar!.IsAuthoritative); Assert.Equal(78m, radar.Pillars.Sum(x => x.RawPointsSum));
     }
 
-    internal static async Task<WebApplication> CreateManagerSessionAppAsync(string? connection = null, bool register = true, bool uiRoster = false, bool outside = false)
+    internal static async Task<WebApplication> CreateManagerSessionAppAsync(string? connection = null, bool register = true,
+        bool uiRoster = false, bool outside = false, bool booking = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" }); builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -130,21 +131,33 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             ["Security:InternalWorkflowToken"] = TestInternalWorkflowToken,
             ["Attendance:SigningKey"] = "TEST-ONLY-ATTENDANCE-KEY-AT-LEAST-32-CHARS"
         });
-        var name = Guid.NewGuid().ToString(); builder.Services.AddDbContext<ActivityDbContext>(o => { if (connection is null) o.UseInMemoryDatabase(name); else o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()); });
+        var name = Guid.NewGuid().ToString();
+        builder.Services.AddDbContext<ActivityDbContext>(options =>
+        {
+            if (connection is null)
+            {
+                options.UseInMemoryDatabase(name);
+                if (booking) options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
+            }
+            else options.UseSqlServer(connection, sql => { if (!booking) sql.EnableRetryOnFailure(); });
+        });
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment); builder.Services.AddAuthorization(o => o.AddPolicy(AuthPolicies.BusinessAccess, p => p.RequireAuthenticatedUser()));
         builder.Services.AddScoped<MemberActivityStatisticsService>();
         builder.Services.AddSingleton(new ReportVerificationClient(CreateFakeHttpClient(_ => new(HttpStatusCode.NotFound)), NullLogger<ReportVerificationClient>.Instance));
         var clock = new ManagerClock(new(2026, 10, 12, 9, 0, 0, TimeSpan.Zero)); builder.Services.AddSingleton<TimeProvider>(clock);
+        var campus = booking ? CampusCodes.Hanoi : "HN";
         builder.Services.AddSingleton(new CurrentUserProfileClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(new[] {
-            new InternalUserProfile(104, "Student A", "student-a@example.invalid", "HN", true, false, null),
-            new InternalUserProfile(105, "Student B", "student-b@example.invalid", "HN", true, false, null),
+            new InternalUserProfile(100, "Manager", "manager@example.invalid", campus, true, false, null),
+            new InternalUserProfile(102, "Reviewer", "reviewer@example.invalid", campus, true, false, null),
+            new InternalUserProfile(104, "Student A", "student-a@example.invalid", campus, true, false, null),
+            new InternalUserProfile(105, "Student B", "student-b@example.invalid", campus, true, false, null),
             new InternalUserProfile(106, "Other campus", "other@example.invalid", "HCM", true, false, null) })
         }), builder.Configuration));
         builder.Services.AddSingleton(new ClubExperienceAuthorityClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
         {
-            Content = JsonContent.Create(new ClubExperienceAuthority(1, "Club 1", "HN", true, !outside, clock.Current.AddMonths(-1)))
+            Content = JsonContent.Create(new ClubExperienceAuthority(1, "Club 1", campus, true, !outside, clock.Current.AddMonths(-1)))
         }), builder.Configuration));
         builder.Services.AddSingleton(new ClubAccessClient(CreateFakeHttpClient(request =>
         {
@@ -180,6 +193,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             };
         })));
         var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization(); app.MapActivityEndpoints();
+        if (booking) app.MapActivityBookingEndpoints();
         if (uiRoster) app.MapAttendanceManagementEndpoints();
         await using (var scope = app.Services.CreateAsyncScope())
         {

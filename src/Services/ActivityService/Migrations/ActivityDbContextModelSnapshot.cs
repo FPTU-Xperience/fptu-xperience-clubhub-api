@@ -303,6 +303,106 @@ namespace ActivityService.Migrations
                     b.ToTable("ActivityAttendances");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityBooking", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<int?>("ConfirmedVenueId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("CutoffAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("EndsAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("OriginalLocation")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("ProcessedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("ProcessedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("RequestedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RequestedVenueId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestedVenueType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("StartsAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedVenueId");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("CampusCode", "StartsAtUtc");
+
+                    b.HasIndex("ConfirmedVenueId", "StartsAtUtc", "EndsAtUtc");
+
+                    b.ToTable("ActivityBooking", t =>
+                        {
+                            t.HasCheckConstraint("CK_ActivityBooking_Window", "EndsAtUtc > StartsAtUtc");
+                        });
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityBookingEquipment", b =>
+                {
+                    b.Property<int>("BookingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EquipmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ConfirmedQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestedQuantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("BookingId", "EquipmentId");
+
+                    b.HasIndex("EquipmentId");
+
+                    b.ToTable("ActivityBookingEquipment", t =>
+                        {
+                            t.HasCheckConstraint("CK_ActivityBookingEquipment_Quantity", "RequestedQuantity > 0 AND ConfirmedQuantity BETWEEN 0 AND RequestedQuantity");
+                        });
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityCertificate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1307,6 +1407,154 @@ namespace ActivityService.Migrations
                     b.ToTable("CampusActivityDuty");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.CampusBookingLayout", b =>
+                {
+                    b.Property<string>("CampusCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<string>("Building")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Floor")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<int?>("PlanX")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PlanY")
+                        .HasColumnType("int");
+
+                    b.HasKey("CampusCode", "Building", "Floor");
+
+                    b.ToTable("CampusBookingLayout");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.CampusBookingPolicy", b =>
+                {
+                    b.Property<string>("CampusCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<int>("CutoffDay")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("CutoffTime")
+                        .HasColumnType("time");
+
+                    b.HasKey("CampusCode");
+
+                    b.ToTable("CampusBookingPolicy", t =>
+                        {
+                            t.HasCheckConstraint("CK_CampusBookingPolicy_Day", "CutoffDay BETWEEN 1 AND 7");
+                        });
+                });
+
+            modelBuilder.Entity("ActivityService.Models.CampusEquipment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("IsBookable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampusCode", "Code")
+                        .IsUnique();
+
+                    b.ToTable("CampusEquipment", t =>
+                        {
+                            t.HasCheckConstraint("CK_CampusEquipment_Quantity", "Quantity >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ActivityService.Models.CampusVenue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Building")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Floor")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("IsBookable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<int?>("PlanX")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PlanY")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VenueType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampusCode", "Code")
+                        .IsUnique();
+
+                    b.ToTable("CampusVenue", t =>
+                        {
+                            t.HasCheckConstraint("CK_CampusVenue_Capacity", "Capacity >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ActivityService.Models.ClubActivity", b =>
                 {
                     b.Property<int>("Id")
@@ -1641,6 +1889,42 @@ namespace ActivityService.Migrations
                     b.Navigation("Activity");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityBooking", b =>
+                {
+                    b.HasOne("ActivityService.Models.CampusVenue", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedVenueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ActivityService.Models.CampusVenue", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedVenueId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ActivityService.Models.ActivitySession", "Session")
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityBookingEquipment", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityBooking", null)
+                        .WithMany("Equipment")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.CampusEquipment", null)
+                        .WithMany()
+                        .HasForeignKey("EquipmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityCertificate", b =>
                 {
                     b.HasOne("ActivityService.Models.ActivityCertificateDefinition", "Definition")
@@ -1865,6 +2149,11 @@ namespace ActivityService.Migrations
                         .HasForeignKey("ActivityId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityBooking", b =>
+                {
+                    b.Navigation("Equipment");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ClubActivity", b =>

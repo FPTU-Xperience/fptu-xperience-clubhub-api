@@ -135,6 +135,12 @@
           "Path": "/api/clubs/{clubId}/activities/{**catch-all}"
         }
       },
+      "activity-bookings": {
+        "ClusterId": "activity-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": { "Path": "/api/activity-bookings/{**catch-all}" }
+      },
       "activity-applications": {
         "Order": -30,
         "ClusterId": "activity-service",
