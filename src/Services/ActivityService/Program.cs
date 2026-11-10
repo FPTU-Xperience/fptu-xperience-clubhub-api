@@ -16,6 +16,7 @@ app.UseActivityServicePipeline();
 // Đăng ký các nhóm endpoint.
 app.MapSystemEndpoints();
 app.MapActivityEndpoints();
+app.MapActivityBookingEndpoints();
 app.MapActivityApplicationEndpoints();
 app.MapActivityStaffingEndpoints();
 app.MapStudentActivityEndpoints();

@@ -203,6 +203,20 @@ public static class ActivitySessionEndpoints
             var error = ValidatePolicy(policy, start, end, configuration);
             if (error is not null || start < session.Activity.StartTimeUtc || end > session.Activity.EndTimeUtc || request.Location?.Length > 200)
                 return ApiOperations.Error(400, "INVALID_SESSION", error ?? "The session must fit the activity range.");
+            var windowChanged = start != session.StartTimeUtc || end != session.EndTimeUtc || policy.Mode != session.Mode;
+            if (windowChanged || request.Location is not null && request.Location.Trim() != session.Location)
+            {
+                var bookings = await db.Set<ActivityBooking>().Where(x => x.SessionId == sessionId
+                    && (x.Status == "PENDING" || x.Status == "CONFIRMED")).ToListAsync(cancellationToken);
+                if (bookings.Any(x => x.Status == "CONFIRMED"))
+                    return ApiOperations.Error(409, "BOOKING_LOCKS_SESSION", "Cancel the confirmed booking before changing the time, mode or venue.");
+                if (windowChanged)
+                    foreach (var booking in bookings)
+                    {
+                        booking.Status = "SESSION_CHANGED";
+                        booking.Version = Guid.NewGuid();
+                    }
+            }
             session.StartTimeUtc = start; session.EndTimeUtc = end;
             session.Location = request.Location?.Trim() ?? session.Location;
             ApplyPolicy(session, policy);
