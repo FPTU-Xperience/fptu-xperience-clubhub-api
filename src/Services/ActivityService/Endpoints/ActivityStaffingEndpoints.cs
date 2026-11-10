@@ -65,7 +65,20 @@ public static class ActivityStaffingEndpoints
         {
             Expected(input.ExpectedVersion, source.Execution.PublicationVersion);
             Require(Operational(source, http), 409, "ACTIVITY_LOCKED", "Only a scheduled, unexpired activity in an active semester can change publication.");
-            if (!input.IsPublished)
+            var now = Now(http);
+            var publishAt = input.PublishAtUtc;
+            Require(!publishAt.HasValue || input.IsPublished && !source.Execution.IsPublished && publishAt > now,
+                400, "INVALID_PUBLICATION_TIME", "Scheduled publication must be in the future for an unpublished activity.");
+            if (publishAt.HasValue || input.RegistrationOpensAt.HasValue || input.RegistrationClosesAt.HasValue)
+            {
+                Require(input.IsPublished && !source.Execution.IsPublished
+                    && input.RegistrationOpensAt is { } opens && input.RegistrationClosesAt is { } closes
+                    && (publishAt ?? now) <= opens && opens < closes && closes <= source.Activity.StartTimeUtc,
+                    400, "INVALID_REGISTRATION_WINDOW", "Registration must open at or after publication and close by the activity start.");
+                source.Activity.RegistrationOpensAt = input.RegistrationOpensAt;
+                source.Activity.RegistrationClosesAt = input.RegistrationClosesAt;
+            }
+            if (!input.IsPublished && source.Execution.IsPublished)
             {
                 Require(!await db.ActivityParticipants.AnyAsync(x => x.ActivityId == activityId, ct)
                     && !await db.Set<ActivityStaffAssignment>().AnyAsync(x => x.ActivityId == activityId && x.Status != "REMOVED", ct),
@@ -73,15 +86,18 @@ public static class ActivityStaffingEndpoints
                 var recruitment = await db.Set<ActivityRecruitment>().SingleOrDefaultAsync(x => x.ActivityId == activityId, ct);
                 if (recruitment is not null) recruitment.Status = "CLOSED";
             }
-            source.Execution.IsPublished = input.IsPublished; source.Execution.PublicationVersion++; source.Execution.Version++;
-            source.Activity.PublicationStatus = input.IsPublished ? "PUBLISHED" : "DRAFT";
-            source.Activity.Version = Guid.NewGuid(); source.Activity.UpdatedAtUtc = Now(http);
+            source.Execution.IsPublished = input.IsPublished && !publishAt.HasValue;
+            source.Execution.PublishAtUtc = publishAt;
+            source.Execution.PublicationVersion++; source.Execution.Version++;
+            source.Activity.PublicationStatus = source.Execution.IsPublished ? "PUBLISHED" : "DRAFT";
+            source.Activity.Version = Guid.NewGuid(); source.Activity.UpdatedAtUtc = now;
             // No policy/snapshot/effect is fabricated for the deferred scoring contract.
             Audit(db, source.Execution, http, "PUBLICATION", input);
             return Results.Ok(new
             {
                 id = activityId,
-                input.IsPublished,
+                source.Execution.IsPublished,
+                source.Execution.PublishAtUtc,
                 publicationVersion = source.Execution.PublicationVersion,
                 version = source.Execution.Version,
                 scoringStatus = ScoringStatus

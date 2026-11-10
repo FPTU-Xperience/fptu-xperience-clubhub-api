@@ -26,6 +26,7 @@ public sealed record ActivityResponse(
     public string? PublicationStatus { get; init; } = "LEGACY";
     public bool? IsPublished { get; init; }
     public int? PublicationVersion { get; init; }
+    public DateTimeOffset? PublishAtUtc { get; init; }
     public int? SourceApplicationId { get; init; }
     public ActivityPublicationCapabilities PublicationCapabilities { get; init; } = new(false);
     public string DiscoveryVisibility { get; init; } = "CLUB_ONLY";
@@ -49,10 +50,12 @@ public sealed record ActivityResponse(
 
 public sealed record ActivityPublicationCapabilities(bool CanManage);
 
-// Time phase is separate from workflow status (Scheduled remains editable according
-// to the existing lifecycle rules). Session dates take precedence over parent dates.
+// Time phase and the next session are separate from the activity's approved dates.
 public sealed record ActivityTimeline(string Status, DateTimeOffset StartTimeUtc,
-    DateTimeOffset EndTimeUtc, DateTimeOffset AsOf);
+    DateTimeOffset EndTimeUtc, DateTimeOffset AsOf)
+{
+    public DateTimeOffset? NextSessionStartTimeUtc { get; init; }
+}
 
 public sealed record ActivityParticipantResponse(
     int Id,

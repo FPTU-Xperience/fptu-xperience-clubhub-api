@@ -74,10 +74,16 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             await db.SaveChangesAsync();
         }
         using var client = CreateAdminContractClient(app, 104, AuthRoles.ClubMember);
-        var response = await client.GetFromJsonAsync<JsonElement>("/api/v2/activities/feed?status=UPCOMING");
+        var response = await client.GetFromJsonAsync<JsonElement>("/api/v2/activities/feed?status=LIVE");
         Assert.Equal(1, response.GetProperty("items").GetArrayLength());
-        Assert.NotEqual(JsonValueKind.Null, response.GetProperty("items")[0].GetProperty("nextSessionId").ValueKind);
-        Assert.True(response.GetProperty("items")[0].GetProperty("startTime").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+        var item = response.GetProperty("items")[0];
+        Assert.Equal("LIVE", item.GetProperty("status").GetString());
+        Assert.False(item.GetProperty("canRegister").GetBoolean());
+        Assert.NotEqual(JsonValueKind.Null, item.GetProperty("nextSessionId").ValueKind);
+        Assert.True(item.GetProperty("startTime").GetDateTimeOffset() < DateTimeOffset.UtcNow);
+        Assert.True(item.GetProperty("nextSessionStartTimeUtc").GetDateTimeOffset() > DateTimeOffset.UtcNow);
+        var upcoming = await client.GetFromJsonAsync<JsonElement>("/api/v2/activities/feed?status=UPCOMING");
+        Assert.Empty(upcoming.GetProperty("items").EnumerateArray());
     }
 
     [Fact]

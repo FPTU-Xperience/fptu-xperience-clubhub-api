@@ -203,6 +203,7 @@ internal static class ActivityWriteEndpoints
                 var registered = await db.ActivityParticipants.SingleOrDefaultAsync(x => x.ActivityId == id && x.UserId == targetUserId, cancellationToken);
                 if (registered is not null) return Results.Ok(new { success = true, participant = ToParticipantResponse(registered) });
                 if (current.PublicationStatus != "PUBLISHED" || current.Status != ActivityStatuses.Scheduled
+                    || now >= current.StartTimeUtc
                     || now < current.RegistrationOpensAt || now >= current.RegistrationClosesAt)
                     return ApiOperations.Error(409, "REGISTRATION_CLOSED", "Registration is not open.");
                 if (current.Capacity.HasValue && current.RegisteredCount >= current.Capacity)

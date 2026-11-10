@@ -10,6 +10,8 @@ using ActivityService.Endpoints;
 using ActivityService.Infrastructure;
 using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Events;
 using ClubReportHub.Shared.Experience;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -31,7 +33,272 @@ namespace Backend.StabilizationTests;
 public sealed class ActivityActionContractTests
 {
     private const string SigningKey = "ActivityActionTests-Only-Long-Signing-Key-2026-Not-Production";
+    private const string TransparentPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==";
+    private static readonly Guid CampusPolicyVersion = Guid.Parse("04040404-0404-0404-0404-040404040404");
     private static readonly DateTimeOffset Instant = new(2026, 10, 22, 8, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task ClosingReportReleasesAttendanceXpOnlyForConfirmedOutsideParticipants()
+    {
+        await using var f = await Fixture.Create();
+        var (_, id) = await f.Approved();
+        using var manager = f.Client(200);
+        using var reviewer = f.Client(202);
+        var ids = new Dictionary<int, Guid>();
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.UpdatedAtUtc = Instant;
+            var session = new ActivitySession { ActivityId = id, SemesterId = "FA2026", SeriesId = Guid.NewGuid() };
+            db.Sessions.Add(session);
+            await db.SaveChangesAsync();
+            foreach (var userId in new[] { 100, 101, 102, 103 })
+            {
+                var attendance = new ActivityAttendance
+                {
+                    ActivityId = id, SessionId = session.Id, UserId = userId, FullName = $"Student {userId}",
+                    AttendanceDate = DateOnly.FromDateTime(Instant.UtcDateTime), VerificationStatus = "VERIFIED"
+                };
+                db.ActivityAttendances.Add(attendance);
+                if (userId != 103) db.Add(new ActivityFinalRole
+                {
+                    ActivityId = id, UserId = userId, Role = userId == 102 ? "HOST" : "PARTICIPANT",
+                    Version = Guid.NewGuid(), ConfirmedAtUtc = Instant, DisplayName = attendance.FullName
+                });
+                await db.SaveChangesAsync();
+                var source = new ExperienceSourceSnapshot(id, 1, session.Id, "FA2026", "Workshop",
+                    Instant.AddHours(-2), Instant.AddHours(-1), activity.Version, session.Version, "CLOSED", false,
+                    new ContributionAttributes("T1", "Participant", "Club", "None", []),
+                    new ExperiencePolicyReference(Guid.NewGuid(), "V1", "FA2026", null, null, "APPROVED", "PROJECT", 2, "REVERSE"));
+                var eventId = Guid.NewGuid();
+                ids.Add(userId, eventId);
+                db.AddOutboxMessage(new AttendanceVerifiedEvent(eventId, Instant.AddHours(-1), userId, attendance.Id, "ROTATING_QR", null, source),
+                    ExperienceRoutingKeys.AttendanceVerified);
+            }
+            await db.SaveChangesAsync();
+            Assert.Equal(4, await db.OutboxMessages.CountAsync(x => x.Status == "AwaitingClosingReport"));
+        });
+        var path = $"/api/activities/{id}/closing-report";
+        var submitted = await Send(manager, HttpMethod.Post, path, new { summary = "Completed" }, "xp-report");
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        var version = (await Json(submitted)).GetProperty("version").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, $"{path}/approve",
+            new { expectedVersion = version }, "approve-xp-report")).StatusCode);
+        await f.WithDb(async db =>
+        {
+            var rows = await db.OutboxMessages.Where(x => x.EventType == ExperienceRoutingKeys.AttendanceVerified).ToDictionaryAsync(x => x.Id);
+            Assert.Equal(OutboxMessageStatus.Pending, rows[ids[100]].Status);
+            Assert.Equal("PARTICIPANT", JsonDocument.Parse(rows[ids[100]].Payload).RootElement.GetProperty("closingReportReviewRole").GetString());
+            Assert.Equal(OutboxMessageStatus.Pending, rows[ids[101]].Status);
+            Assert.Equal(OutboxMessageStatus.Pending, rows[ids[102]].Status);
+            Assert.Equal("HOST", JsonDocument.Parse(rows[ids[102]].Payload).RootElement.GetProperty("closingReportReviewRole").GetString());
+            Assert.Equal("ClosingReportIneligible", rows[ids[103]].Status);
+        });
+    }
+
+    [Theory]
+    [InlineData("ACCEPTED", 1)]
+    [InlineData("REJECTED", 0)]
+    public async Task CampusHandoverTransfersOwnershipOnlyOnAcceptance(string decision, int ownerClub)
+    {
+        await using var f = await Fixture.Create();
+        using var reviewer = f.Client(202);
+        using var manager = f.Client(200);
+        using var outsider = f.Client(203);
+        const string campus = "/api/activities/campus";
+        var draft = await CreateCampusDraft(reviewer);
+        var id = draft.GetProperty("id").GetInt32();
+        var version = draft.GetProperty("version").GetGuid();
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(outsider, HttpMethod.Post, $"{campus}/{id}/handover",
+            new { expectedVersion = version, clubId = 1 }, "cross-campus-offer")).StatusCode);
+        var offered = await Send(reviewer, HttpMethod.Post, $"{campus}/{id}/handover",
+            new { expectedVersion = version, clubId = 1 }, "offer-campus-activity");
+        Assert.Equal(HttpStatusCode.OK, offered.StatusCode);
+        var pending = await Json(offered);
+        Assert.Equal(0, pending.GetProperty("clubId").GetInt32());
+        var decided = await Send(manager, HttpMethod.Post, $"/api/activities/handover/club/1/{id}/decision",
+            new { expectedVersion = pending.GetProperty("handover").GetProperty("version").GetGuid(), decision }, "decide-campus-offer");
+        Assert.Equal(HttpStatusCode.OK, decided.StatusCode);
+        Assert.Equal(ownerClub, (await Json(decided)).GetProperty("clubId").GetInt32());
+    }
+
+    [Fact]
+    public async Task CampusFinalizationClosesRecapAndIssuesAllCertificatesForTheConfirmedRole()
+    {
+        await using var f = await Fixture.Create();
+        using var reviewer = f.Client(202);
+        using var student = f.Client(100);
+        using var otherStudent = f.Client(101);
+        var draft = await CreateCampusDraft(reviewer);
+        var id = draft.GetProperty("id").GetInt32();
+        var path = $"/api/activities/campus/{id}";
+        var start = Instant.AddDays(3);
+        var configured = await Send(reviewer, HttpMethod.Put, $"{path}/xp-policy", new
+        {
+            expectedVersion = draft.GetProperty("version").GetGuid(), policyVersion = CampusPolicyVersion,
+            tier = "T2", pillarWeights = new[] { new { pillar = "Academic", weight = 1 } }
+        }, "configure-campus-xp");
+        Assert.Equal(HttpStatusCode.OK, configured.StatusCode);
+        var assignment = await Send(reviewer, HttpMethod.Post, $"{path}/duties",
+            new { userId = 101, role = "HOST", responsibility = "Host the workshop" }, "campus-host");
+        Assert.Equal(HttpStatusCode.OK, assignment.StatusCode);
+        var duty = await Json(assignment);
+        var session = await Send(reviewer, HttpMethod.Post, $"{path}/sessions", new
+        {
+            expectedVersion = (await Json(configured)).GetProperty("version").GetGuid(), location = "Hall",
+            startTimeUtc = start, endTimeUtc = start.AddHours(1), opensAt = start, closesAt = start.AddHours(1)
+        }, "campus-session");
+        Assert.Equal(HttpStatusCode.OK, session.StatusCode);
+        var savedSession = await Json(session);
+        var sessionId = savedSession.GetProperty("id").GetInt32();
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, $"{path}/publish", new
+        {
+            expectedVersion = savedSession.GetProperty("activityVersion").GetGuid(),
+            registrationOpensAt = Instant.AddHours(1), registrationClosesAt = start
+        }, "publish-campus-activity")).StatusCode);
+        f.Clock.Utc = Instant.AddHours(2);
+        Assert.Equal(HttpStatusCode.OK, (await Send(student, HttpMethod.Post, $"/api/activities/{id}/participants",
+            new { }, "register-campus")).StatusCode);
+        var attendancePath = $"{path}/sessions/{sessionId}/attendance";
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(reviewer, HttpMethod.Post, attendancePath,
+            new { userId = 100 }, "early-campus-attendance")).StatusCode);
+        f.Clock.Utc = start;
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, attendancePath,
+            new { userId = 100 }, "verify-campus-attendance")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post,
+            $"{path}/duties/{duty.GetProperty("id").GetGuid()}/confirm",
+            new { expectedVersion = duty.GetProperty("version").GetGuid() }, "confirm-campus-host")).StatusCode);
+        await f.WithDb(async db => Assert.Single(await db.OutboxMessages.Where(x => x.Status == "AwaitingClosingReport").ToListAsync()));
+        var certificates = $"/api/activities/{id}/certificate-definitions";
+        for (var i = 1; i <= 2; i++)
+            Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, certificates,
+                new { role = "PARTICIPANT", title = $"Certificate {i}", badgePng = TransparentPng, framePng = TransparentPng }, $"define-{i}")).StatusCode);
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.UpdatedAtUtc = start.AddHours(2);
+            await db.SaveChangesAsync();
+        });
+        f.Clock.Utc = start.AddHours(2);
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Put, $"/api/activities/{id}/final-roles/100",
+            new { role = "PARTICIPANT" }, "campus-final-role")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Put, $"/api/activities/{id}/final-roles/101",
+            new { role = "HOST" }, "campus-host-final-role")).StatusCode);
+        var recap = $"/api/activities/{id}/recap";
+        Assert.True((await student.GetFromJsonAsync<JsonElement>(recap)).GetProperty("canSubmit").GetBoolean());
+        var reportPath = $"/api/activities/campus/{id}/report";
+        var created = await Send(reviewer, HttpMethod.Post, reportPath, new { summary = "Campus activity completed" }, "campus-report");
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var report = await Json(created);
+        Assert.Empty((await student.GetFromJsonAsync<JsonElement>("/api/activities/certificates/me")).GetProperty("items").EnumerateArray());
+        var version = report.GetProperty("version").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, $"{reportPath}/finalize", new { expectedVersion = version }, "finalize-campus-report")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(reviewer, HttpMethod.Post, $"{reportPath}/finalize", new { expectedVersion = version }, "finalize-again")).StatusCode);
+        Guid activityVersion = default, sessionVersion = default;
+        await f.WithDb(async db =>
+        {
+            activityVersion = (await db.Activities.SingleAsync()).Version;
+            sessionVersion = (await db.Sessions.SingleAsync()).Version;
+        });
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(reviewer, HttpMethod.Delete, $"/api/activities/{id}",
+            new { expectedVersion = activityVersion, reason = "Try to cancel finalized activity" }, "cancel-finalized-activity")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(reviewer, HttpMethod.Post, $"/api/activities/{id}/sessions/{sessionId}/cancel",
+            new { expectedVersion = sessionVersion, reason = "Try to cancel finalized session" }, "cancel-finalized-session")).StatusCode);
+        Assert.False((await student.GetFromJsonAsync<JsonElement>(recap)).GetProperty("canSubmit").GetBoolean());
+        await f.WithDb(async db =>
+        {
+            var attendanceXp = await db.OutboxMessages.SingleAsync(x => x.EventType == ExperienceRoutingKeys.AttendanceVerified);
+            Assert.Equal(OutboxMessageStatus.Pending, attendanceXp.Status);
+            var dutyXp = await db.OutboxMessages.SingleAsync(x => x.EventType == ExperienceRoutingKeys.ClosingDutyXp);
+            Assert.Equal(101, JsonDocument.Parse(dutyXp.Payload).RootElement.GetProperty("userId").GetInt32());
+        });
+        var issued = (await student.GetFromJsonAsync<JsonElement>("/api/activities/certificates/me")).GetProperty("items");
+        Assert.Equal(2, issued.GetArrayLength());
+        var certificateId = issued[0].GetProperty("id").GetGuid();
+        const string displayPath = "/api/activities/certificates/me/display";
+        var selection = new { expectedVersion = Guid.Empty, badgeId = certificateId, frameId = certificateId, badgeX = 50, badgeY = 50, badgeSize = 15 };
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(otherStudent, HttpMethod.Put, displayPath, selection, "equip-unowned")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(student, HttpMethod.Put, displayPath, selection, "equip-owned")).StatusCode);
+        Assert.Equal(TransparentPng, (await student.GetFromJsonAsync<JsonElement>(displayPath)).GetProperty("framePng").GetString());
+        Assert.Empty((await otherStudent.GetFromJsonAsync<JsonElement>("/api/activities/certificates/me")).GetProperty("items").EnumerateArray());
+    }
+
+    private static async Task<JsonElement> CreateCampusDraft(HttpClient reviewer)
+    {
+        var created = await Send(reviewer, HttpMethod.Post, "/api/activities/campus", new
+        {
+            title = "Campus workshop", description = "Workshop for students", location = "Hall",
+            semesterId = "FA2026", startTimeUtc = Instant.AddDays(3), endTimeUtc = Instant.AddDays(3).AddHours(2)
+        }, "campus-draft");
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        return await Json(created);
+    }
+
+    [Fact]
+    public async Task CampusDraftStaysPrivateWhenPublicationIsScheduledAndCanBeCancelled()
+    {
+        await using var f = await Fixture.Create();
+        using var reviewer = f.Client(202);
+        var draft = await CreateCampusDraft(reviewer);
+        var id = draft.GetProperty("id").GetInt32();
+        var path = $"/api/activities/campus/{id}";
+        var publishAt = Instant.AddHours(1);
+        var scheduled = await Send(reviewer, HttpMethod.Post, $"{path}/publish", new
+        {
+            expectedVersion = draft.GetProperty("version").GetGuid(), publishAtUtc = publishAt,
+            registrationOpensAt = publishAt.AddHours(1), registrationClosesAt = Instant.AddDays(3)
+        }, "schedule-campus");
+        Assert.Equal(HttpStatusCode.OK, scheduled.StatusCode);
+        var view = await Json(scheduled);
+        Assert.Equal("DRAFT", view.GetProperty("publicationStatus").GetString());
+        Assert.Equal(publishAt, view.GetProperty("publishAtUtc").GetDateTimeOffset());
+        var cancelled = await Send(reviewer, HttpMethod.Post, $"{path}/cancel-publication",
+            new { expectedVersion = view.GetProperty("version").GetGuid() }, "cancel-campus");
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await Json(cancelled)).GetProperty("publishAtUtc").ValueKind);
+    }
+
+    [Fact]
+    public async Task CampusDutyMakesHostEligibleOnlyAfterIndependentConfirmation()
+    {
+        await using var f = await Fixture.Create();
+        using var reviewer = f.Client(202);
+        using var outsider = f.Client(203);
+        var draft = await CreateCampusDraft(reviewer);
+        var id = draft.GetProperty("id").GetInt32();
+        var path = $"/api/activities/campus/{id}";
+        var assigned = await Send(reviewer, HttpMethod.Post, $"{path}/duties",
+            new { userId = 100, role = "HOST", responsibility = "Introduce speakers" }, "assign-campus-host");
+        Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);
+        var duty = await Json(assigned);
+        var confirm = $"{path}/duties/{duty.GetProperty("id").GetGuid()}/confirm";
+        var input = new { expectedVersion = duty.GetProperty("version").GetGuid() };
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(outsider, HttpMethod.Post, confirm, input, "foreign-campus-confirm")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(reviewer, HttpMethod.Post, confirm, input, "early-duty-confirm")).StatusCode);
+        var published = await Send(reviewer, HttpMethod.Post, $"{path}/publish", new
+        {
+            expectedVersion = draft.GetProperty("version").GetGuid(),
+            registrationOpensAt = Instant.AddHours(1), registrationClosesAt = Instant.AddDays(3)
+        }, "publish-campus-duty");
+        Assert.Equal(HttpStatusCode.OK, published.StatusCode);
+        f.Clock.Utc = Instant.AddDays(3).AddHours(2);
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.PublicationStatus = "COMPLETED";
+            activity.UpdatedAtUtc = f.Clock.Utc;
+            await db.SaveChangesAsync();
+        });
+        var roles = $"/api/activities/{id}/final-roles";
+        var before = await reviewer.GetFromJsonAsync<JsonElement>(roles);
+        Assert.Empty(before.GetProperty("items")[0].GetProperty("eligibleRoles").EnumerateArray());
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, confirm, input, "confirm-campus-host")).StatusCode);
+        var after = await reviewer.GetFromJsonAsync<JsonElement>(roles);
+        Assert.Equal("HOST", after.GetProperty("items")[0].GetProperty("eligibleRoles")[0].GetString());
+    }
 
     [Fact]
     public async Task Application_DraftSubmitRevisionReviewPreservesHistoryAndCreatesOneUnpublishedActivityWithoutPoints()
@@ -341,6 +608,235 @@ public sealed class ActivityActionContractTests
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
         var activity = (await Json(approved)).GetProperty("activityId").GetInt32();
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(manager, HttpMethod.Patch, $"/api/activities/{activity}/publication", new { expectedVersion = 1 }, "missing-flag")).StatusCode);
+        var path = $"/api/activities/{activity}/publication";
+        var opens = Instant.AddHours(1);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(manager, HttpMethod.Patch, path,
+            new { isPublished = true, expectedVersion = 1, registrationOpensAt = opens, registrationClosesAt = Instant.AddDays(2) },
+            "late-registration-close")).StatusCode);
+        var closes = Instant.AddDays(1);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Patch, path,
+            new { isPublished = true, expectedVersion = 1, registrationOpensAt = opens, registrationClosesAt = closes },
+            "valid-registration-window")).StatusCode);
+        var published = await manager.GetFromJsonAsync<JsonElement>($"/api/activities/{activity}");
+        Assert.Equal(opens, published.GetProperty("registrationOpensAt").GetDateTimeOffset());
+        Assert.Equal(closes, published.GetProperty("registrationClosesAt").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task SchedulingPublicationKeepsTheActivityPrivate()
+    {
+        await using var f = await Fixture.Create();
+        var (_, activityId) = await f.Approved();
+        using var manager = f.Client(200);
+        var publishAt = Instant.AddHours(1);
+        var response = await Send(manager, HttpMethod.Patch, $"/api/activities/{activityId}/publication",
+            new { isPublished = true, expectedVersion = 1, publishAtUtc = publishAt,
+                registrationOpensAt = publishAt.AddHours(1), registrationClosesAt = Instant.AddDays(1) },
+            "schedule-publication");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var scheduled = await Json(response);
+        Assert.False(scheduled.GetProperty("isPublished").GetBoolean());
+        Assert.Equal(publishAt, scheduled.GetProperty("publishAtUtc").GetDateTimeOffset());
+
+        await f.WithDb(async db =>
+        {
+            var execution = await db.Set<ActivityExecution>().SingleAsync();
+            Assert.False(execution.IsPublished);
+            Assert.Equal(publishAt, execution.PublishAtUtc);
+            Assert.Equal("DRAFT", (await db.Activities.SingleAsync()).PublicationStatus);
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RescheduleKeepsTheApprovedDatesUntilReviewAndExpiresAtFortyEightHours(bool expired)
+    {
+        await using var f = await Fixture.Create();
+        var (_, id) = await f.Approved();
+        var originalStart = Instant.AddDays(3);
+        Guid version = default;
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.StartTimeUtc = originalStart;
+            activity.EndTimeUtc = originalStart.AddHours(2);
+            version = activity.Version;
+            await db.SaveChangesAsync();
+        });
+        using var manager = f.Client(200);
+        using var reviewer = f.Client(202);
+        var path = $"/api/activities/{id}/reschedule-requests";
+        var newStart = originalStart.AddDays(1);
+        var created = await Send(manager, HttpMethod.Post, path,
+            new { expectedActivityVersion = version, startTimeUtc = newStart, endTimeUtc = newStart.AddHours(2), reason = "Venue change" },
+            "request-new-dates");
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var request = await Json(created);
+        var deadline = originalStart.AddDays(-2);
+        Assert.Equal(deadline, request.GetProperty("reviewDeadlineUtc").GetDateTimeOffset());
+        await f.WithDb(async db => Assert.Equal(originalStart, (await db.Activities.SingleAsync()).StartTimeUtc));
+
+        f.Clock.Utc = expired ? deadline : deadline.AddSeconds(-1);
+        var listing = await reviewer.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal(expired ? "EXPIRED" : "PENDING", listing.GetProperty("items")[0].GetProperty("status").GetString());
+        var reviewed = await Send(reviewer, HttpMethod.Post, $"{path}/{request.GetProperty("id").GetGuid()}/review",
+            new { expectedVersion = request.GetProperty("version").GetGuid(), decision = "APPROVED" }, "review-new-dates");
+        Assert.Equal(expired ? HttpStatusCode.Conflict : HttpStatusCode.OK, reviewed.StatusCode);
+        await f.WithDb(async db => Assert.Equal(expired ? originalStart : newStart, (await db.Activities.SingleAsync()).StartTimeUtc));
+    }
+
+    [Fact]
+    public async Task RecapOpensOnCompletionAndMembersOnlyReadTheirOwnFeedback()
+    {
+        await using var f = await Fixture.Create();
+        var (_, id) = await f.Approved();
+        using var manager = f.Client(200);
+        using var member = f.Client(100);
+        using var outsider = f.Client(101);
+        var path = $"/api/activities/{id}/recap";
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(member, HttpMethod.Put, $"{path}/my-feedback",
+            new { strengths = "Too early" }, "recap-too-early")).StatusCode);
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.PublicationStatus = "COMPLETED";
+            await db.SaveChangesAsync();
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.GetAsync(path)).StatusCode);
+        var saved = await Send(member, HttpMethod.Put, $"{path}/my-feedback",
+            new { strengths = "Good facilitation" }, "member-recap");
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var version = (await Json(saved)).GetProperty("version").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Put, $"{path}/my-feedback",
+            new { weaknesses = "Manager-only example" }, "manager-recap")).StatusCode);
+        var own = await member.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal("Good facilitation", own.GetProperty("myFeedback").GetProperty("strengths").GetString());
+        Assert.Empty(own.GetProperty("items").EnumerateArray());
+        Assert.DoesNotContain("Manager-only example", own.GetRawText());
+        Assert.Equal(2, (await manager.GetFromJsonAsync<JsonElement>(path)).GetProperty("items").GetArrayLength());
+        Assert.Equal(HttpStatusCode.OK, (await Send(member, HttpMethod.Put, $"{path}/my-feedback",
+            new { expectedVersion = version, suggestions = "Add a break" }, "member-recap-edit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(member, HttpMethod.Put, $"{path}/my-feedback",
+            new { expectedVersion = version, suggestions = "Stale edit" }, "member-recap-stale")).StatusCode);
+    }
+
+    [Fact]
+    public async Task ClosingReportUsesTheCampusPolicyAtCompletionAndApprovalClosesRecap()
+    {
+        await using var f = await Fixture.Create();
+        var (_, id) = await f.Approved();
+        using var manager = f.Client(200);
+        using var reviewer = f.Client(202);
+        using var member = f.Client(100);
+        const string policyPath = "/api/activities/closing-policy/1";
+        var reportPath = $"/api/activities/{id}/closing-report";
+        var recapPath = $"/api/activities/{id}/recap";
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync(policyPath)).StatusCode);
+        var policy = await Send(reviewer, HttpMethod.Put, policyPath, new { reportDays = 4, expectedVersion = 0 }, "set-report-days");
+        Assert.Equal(HttpStatusCode.OK, policy.StatusCode);
+        var policyVersion = (await Json(policy)).GetProperty("version").GetInt64();
+        f.Clock.Utc = new DateTimeOffset(2026, 11, 10, 14, 0, 0, TimeSpan.FromHours(7)).ToUniversalTime();
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.PublicationStatus = "COMPLETED";
+            activity.UpdatedAtUtc = f.Clock.Utc;
+            await db.SaveChangesAsync();
+        });
+        var expectedDeadline = new DateTimeOffset(2026, 11, 15, 0, 0, 0, TimeSpan.FromHours(7)).ToUniversalTime();
+        f.Clock.Utc = f.Clock.Utc.AddDays(1);
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Put, policyPath,
+            new { reportDays = 1, expectedVersion = policyVersion }, "change-report-days")).StatusCode);
+        var state = await manager.GetFromJsonAsync<JsonElement>(reportPath);
+        Assert.Equal(expectedDeadline, state.GetProperty("deadlineUtc").GetDateTimeOffset());
+        Assert.Equal(HttpStatusCode.OK, (await Send(member, HttpMethod.Put, $"{recapPath}/my-feedback",
+            new { strengths = "A useful workshop" }, "recap-before-approval")).StatusCode);
+        var submitted = await Send(manager, HttpMethod.Post, reportPath, new { summary = "Workshop completed" }, "submit-closing-report");
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        var version = (await Json(submitted)).GetProperty("version").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, $"{reportPath}/approve",
+            new { expectedVersion = version }, "approve-closing-report")).StatusCode);
+        Assert.False((await member.GetFromJsonAsync<JsonElement>(recapPath)).GetProperty("canSubmit").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(member, HttpMethod.Put, $"{recapPath}/my-feedback",
+            new { strengths = "Too late" }, "recap-after-approval")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(reviewer, HttpMethod.Post, $"{reportPath}/approve",
+            new { expectedVersion = version }, "approve-again")).StatusCode);
+    }
+
+    [Fact]
+    public async Task FinalRoleRequiresVerificationAndRemainsLockedAfterTheReportDeadline()
+    {
+        await using var f = await Fixture.Create();
+        var (_, id) = await f.Approved();
+        using var manager = f.Client(200);
+        using var reviewer = f.Client(202);
+        var path = $"/api/activities/{id}/final-roles";
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.UpdatedAtUtc = Instant;
+            db.ActivityParticipants.Add(new ActivityParticipant { ActivityId = id, UserId = 100, FullName = "Student 100" });
+            await db.SaveChangesAsync();
+        });
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(manager, HttpMethod.Put, $"{path}/100",
+            new { role = "PARTICIPANT" }, "unverified-role")).StatusCode);
+        await f.WithDb(async db =>
+        {
+            db.ActivityAttendances.Add(new ActivityAttendance
+            {
+                ActivityId = id, UserId = 100, FullName = "Student 100", VerificationStatus = "VERIFIED",
+                AttendanceDate = DateOnly.FromDateTime(Instant.Date)
+            });
+            await db.SaveChangesAsync();
+        });
+        var candidates = await manager.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal("PARTICIPANT", candidates.GetProperty("items")[0].GetProperty("eligibleRoles")[0].GetString());
+        var confirmed = await Send(manager, HttpMethod.Put, $"{path}/100", new { role = "PARTICIPANT" }, "verified-role");
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        var roleVersion = (await Json(confirmed)).GetProperty("version").GetGuid();
+        f.Clock.Utc = new DateTimeOffset(2026, 10, 26, 0, 0, 0, TimeSpan.FromHours(7)).ToUniversalTime();
+        var locked = await reviewer.GetFromJsonAsync<JsonElement>(path);
+        Assert.True(locked.GetProperty("locked").GetBoolean());
+        Assert.Equal("PARTICIPANT", locked.GetProperty("items")[0].GetProperty("role").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(manager, HttpMethod.Put, $"{path}/100",
+            new { role = "PARTICIPANT", expectedVersion = roleVersion }, "late-role")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(0, false)]
+    [InlineData(1, false)]
+    public async Task ClosingReportApprovalDependsOnSubmissionTimeEvenWhenReviewedAfterDeadline(int secondsFromDeadline, bool canApprove)
+    {
+        await using var f = await Fixture.Create();
+        var (_, id) = await f.Approved();
+        using var manager = f.Client(200);
+        using var reviewer = f.Client(202);
+        var path = $"/api/activities/{id}/closing-report";
+        await f.WithDb(async db =>
+        {
+            var activity = await db.Activities.SingleAsync();
+            activity.Status = ActivityStatuses.Completed;
+            activity.UpdatedAtUtc = Instant;
+            await db.SaveChangesAsync();
+        });
+        var state = await manager.GetFromJsonAsync<JsonElement>(path);
+        var deadline = state.GetProperty("deadlineUtc").GetDateTimeOffset();
+        f.Clock.Utc = deadline.AddSeconds(secondsFromDeadline);
+        var submission = await Send(manager, HttpMethod.Post, path, new { summary = "Workshop completed" }, "deadline-submission");
+        Assert.Equal(HttpStatusCode.OK, submission.StatusCode);
+        var version = (await Json(submission)).GetProperty("version").GetGuid();
+        f.Clock.Utc = deadline.AddHours(1);
+        var reviewState = await reviewer.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal(canApprove, reviewState.GetProperty("canApprove").GetBoolean());
+        Assert.Equal(!canApprove, reviewState.GetProperty("isOverdue").GetBoolean());
+        var approval = await Send(reviewer, HttpMethod.Post, $"{path}/approve",
+            new { expectedVersion = version }, "deadline-approval");
+        Assert.Equal(canApprove ? HttpStatusCode.OK : HttpStatusCode.Conflict, approval.StatusCode);
     }
 
     [Theory]
@@ -479,6 +975,14 @@ public sealed class ActivityActionContractTests
                     var ids = (await r.Content!.ReadFromJsonAsync<int[]>())!;
                     result = ids.Select(id => new InternalUserProfile(id, "User " + id, id + "@example.test", id == 203 ? "HCM" : "HN", id != 101 || f.ApplicantEligible, false, null)).ToArray();
                 }
+                else if (path == "/api/internal/experience/clubs/1/manager-ids")
+                    result = new[] { 200 };
+                else if (path == "/api/internal/experience/clubs/1/members-at")
+                {
+                    var membership = await r.Content!.ReadFromJsonAsync<ClubMembersAtRequest>();
+                    Assert.Equal(Instant.AddDays(1), membership!.AtUtc);
+                    result = new[] { 100 };
+                }
                 else if (path.StartsWith("/api/internal/experience/clubs/", StringComparison.Ordinal))
                 {
                     var subject = int.Parse(r.RequestUri.Query.Split('=').Last());
@@ -488,6 +992,9 @@ public sealed class ActivityActionContractTests
                     result = actor == 200 && f.ManagerEnabled ? new[] { new ClubAccessSnapshot(1, "Club One", true, false, true, [200], [100, 200]) } : Array.Empty<ClubAccessSnapshot>();
                 else if (path.StartsWith("/api/internal/experience/semesters/FA2026", StringComparison.Ordinal))
                     result = new SemesterReference(Guid.Parse("11111111-1111-1111-1111-111111111111"), "FA2026", Instant.AddDays(-30), Instant.AddDays(60), f.SemesterActive);
+                else if (path == $"/api/internal/experience/policies/{CampusPolicyVersion}")
+                    result = new ExperiencePolicyReference(CampusPolicyVersion, "V1", "FA2026", Instant.AddDays(-30),
+                        Instant.AddDays(60), "APPROVED", "PROJECT", 2, "REVERSE_SOURCE_INVALIDATION");
                 else if (path == "/api/internal/experience/capabilities")
                     result = new VerificationCapabilityResponse(actor == 300 && f.VerifierEnabled && (!r.RequestUri.Query.Contains("attendance.verify", StringComparison.Ordinal) || f.AttendanceVerification));
                 else if (path.EndsWith("/member-roster/resolve", StringComparison.Ordinal))

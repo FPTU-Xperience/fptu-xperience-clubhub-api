@@ -23,6 +23,8 @@ public sealed class ClubActivity
     public int? SourceReportId { get; set; }
     public int? SourceReportDetailId { get; set; }
     public int ClubId { get; set; }
+    public string? OrganizerCampusCode { get; set; }
+    public DateTimeOffset? CampusPublishAtUtc { get; set; }
     public string ClubName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

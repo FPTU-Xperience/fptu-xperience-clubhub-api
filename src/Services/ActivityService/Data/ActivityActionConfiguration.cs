@@ -29,12 +29,102 @@ internal static class ActivityActionConfiguration
             e.HasOne<ActivityApplication>().WithOne().HasForeignKey<ActivityExecution>(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Version).IsConcurrencyToken();
             e.Property(x => x.PublicationVersion).IsConcurrencyToken();
+            e.HasIndex(x => x.PublishAtUtc).HasFilter("[PublishAtUtc] IS NOT NULL");
         });
         model.Entity<ActivityActionRule>(e =>
         {
             e.HasOne<ActivityExecution>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.ClientId).HasMaxLength(80);
             e.HasIndex(x => new { x.ActivityId, x.ClientId }).IsUnique();
+        });
+        model.Entity<ActivityRescheduleRequest>(e =>
+        {
+            e.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.Status).HasMaxLength(16);
+            e.Property(x => x.Reason).HasMaxLength(2000);
+            e.Property(x => x.ReviewNote).HasMaxLength(2000);
+            e.HasIndex(x => x.ActivityId).IsUnique().HasFilter("[Status] = 'PENDING'");
+        });
+        model.Entity<ActivityRecapFeedback>(e =>
+        {
+            e.HasKey(x => new { x.ActivityId, x.UserId });
+            e.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.Strengths).HasMaxLength(2000);
+            e.Property(x => x.Weaknesses).HasMaxLength(2000);
+            e.Property(x => x.Suggestions).HasMaxLength(2000);
+        });
+        model.Entity<ClubActivity>().Property(x => x.OrganizerCampusCode).HasMaxLength(30);
+        model.Entity<ClubActivity>().HasIndex(x => x.CampusPublishAtUtc).HasFilter("[CampusPublishAtUtc] IS NOT NULL");
+        model.Entity<ActivityHeldXp>(e =>
+        {
+            e.HasKey(x => x.EventId);
+            e.HasOne<ClubReportHub.Shared.Data.OutboxMessage>().WithOne().HasForeignKey<ActivityHeldXp>(x => x.EventId);
+            e.HasIndex(x => x.ActivityId);
+        });
+        model.Entity<CampusActivityDuty>(e =>
+        {
+            e.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.Role).HasMaxLength(16);
+            e.Property(x => x.DisplayName).HasMaxLength(200);
+            e.Property(x => x.Responsibility).HasMaxLength(500);
+            e.HasIndex(x => new { x.ActivityId, x.UserId, x.Role }).IsUnique();
+        });
+        model.Entity<ActivityHandover>(e =>
+        {
+            e.HasKey(x => x.ActivityId);
+            e.HasOne<ClubActivity>().WithOne().HasForeignKey<ActivityHandover>(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.ClubName).HasMaxLength(200);
+            e.Property(x => x.Status).HasMaxLength(16);
+            e.HasIndex(x => new { x.ClubId, x.Status });
+        });
+        model.Entity<ActivityCertificateDefinition>(e =>
+        {
+            e.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Role).HasMaxLength(16);
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.HasIndex(x => new { x.ActivityId, x.Role });
+        });
+        model.Entity<ActivityCertificate>(e =>
+        {
+            e.HasOne(x => x.Definition).WithMany().HasForeignKey(x => x.DefinitionId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RecipientKind).HasMaxLength(8);
+            e.Property(x => x.RecipientName).HasMaxLength(200);
+            e.Property(x => x.ActivityTitle).HasMaxLength(200);
+            e.Property(x => x.IssuerName).HasMaxLength(200);
+            e.HasIndex(x => new { x.ActivityId, x.RecipientKind, x.RecipientId, x.DefinitionId }).IsUnique();
+            e.HasIndex(x => new { x.RecipientKind, x.RecipientId, x.IssuedAtUtc });
+        });
+        model.Entity<ActivityCertificateDisplay>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.Version).IsConcurrencyToken();
+        });
+        model.Entity<ActivityClosingReport>(e =>
+        {
+            e.HasKey(x => x.ActivityId);
+            e.HasOne<ClubActivity>().WithOne().HasForeignKey<ActivityClosingReport>(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.Summary).HasMaxLength(4000);
+            e.Property(x => x.Improvements).HasMaxLength(4000);
+            e.Property(x => x.ReviewNote).HasMaxLength(2000);
+        });
+        model.Entity<ActivityClosingPolicy>(e =>
+        {
+            e.Property(x => x.CampusCode).HasMaxLength(30);
+            e.HasIndex(x => new { x.CampusCode, x.Id });
+        });
+        model.Entity<ActivityFinalRole>(e =>
+        {
+            e.HasKey(x => new { x.ActivityId, x.UserId });
+            e.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.Role).HasMaxLength(16);
+            e.Property(x => x.DisplayName).HasMaxLength(200);
         });
         model.Entity<ActivityRecruitment>(e =>
         {

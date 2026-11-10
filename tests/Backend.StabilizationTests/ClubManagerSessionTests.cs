@@ -184,6 +184,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         await using (var scope = app.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>(); if (connection is not null) await db.Database.MigrateAsync();
+            var sessionStart = register ? clock.Current.AddMinutes(-5) : clock.Current.AddHours(2);
             var source = ManagerSource(); var activity = new ClubActivity
             {
                 ClubId = 1,
@@ -192,7 +193,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
                 IsInternal = !outside,
                 Description = "Real activity",
                 Location = "Campus",
-                StartTimeUtc = clock.Current.AddDays(-1),
+                StartTimeUtc = register ? clock.Current.AddDays(-1) : sessionStart,
                 EndTimeUtc = clock.Current.AddDays(30),
                 PublicationStatus = "PUBLISHED",
                 SemesterId = source.SemesterId,
@@ -207,10 +208,10 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
             {
                 ActivityId = activity.Id,
                 SemesterId = source.SemesterId,
-                StartTimeUtc = clock.Current.AddMinutes(-5),
-                EndTimeUtc = clock.Current.AddMinutes(55),
-                OpensAt = clock.Current.AddMinutes(-5),
-                ClosesAt = clock.Current.AddMinutes(25),
+                StartTimeUtc = sessionStart,
+                EndTimeUtc = sessionStart.AddHours(1),
+                OpensAt = sessionStart,
+                ClosesAt = sessionStart.AddMinutes(30),
                 Latitude = 10,
                 Longitude = 106,
                 RadiusMeters = 100,

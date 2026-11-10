@@ -9,6 +9,8 @@ public static class ActivityEligibility
         CurrentUserProfileClient users, ClubExperienceAuthorityClient clubs, CancellationToken ct)
     {
         var user = (await users.GetAsync([userId], ct)).GetValueOrDefault(userId);
+        if (activity.ClubId == 0 && activity.OrganizerCampusCode is { } campus)
+            return user is { IsActive: true, IsLocked: false } && user.CampusCode == campus ? user : null;
         var club = await clubs.GetAsync(activity.ClubId, userId, ct);
         if (user is null || !user.IsActive || user.IsLocked || club is null || !club.IsActive) return null;
         return !activity.IsInternal ? user.CampusCode == club.CampusCode ? user : null

@@ -22,6 +22,7 @@ public sealed record StudentActivityItem(int Id, int ClubId, string ClubCode, st
     string? SemesterId, int? NextSessionId, Guid Version, Guid? SessionVersion, Guid? PolicyVersion,
     IReadOnlyList<PillarWeight> PillarWeights)
 {
+    public DateTimeOffset? NextSessionStartTimeUtc { get; init; }
     public RecommendationActivitySource? RecommendationSource { get; init; }
     public bool IsInternal { get; init; } = true;
     public bool IsRegistered { get; init; }

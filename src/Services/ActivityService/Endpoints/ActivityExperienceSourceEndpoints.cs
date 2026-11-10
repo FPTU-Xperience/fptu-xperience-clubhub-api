@@ -16,7 +16,12 @@ public static class ActivityExperienceSourceEndpoints
         {
             if (!VerifiedExperienceRules.InternalRequest(http, configuration)) return Results.Forbid();
             var row = await db.Activities.AsNoTracking().Where(x => x.Id == activityId)
-                .Select(x => new ActivityExperienceScope(x.Id, x.ClubId)).SingleOrDefaultAsync(ct);
+                .Select(x => new ActivityExperienceScope(x.Id, x.ClubId)
+                {
+                    OrganizerCampusCode = x.OrganizerCampusCode,
+                    ClosingReportReady = x.Status == ActivityStatuses.Completed && db.Set<ActivityClosingReport>().Any(r =>
+                        r.ActivityId == x.Id && (r.Status == "APPROVED" || r.Status == "FINALIZED"))
+                }).SingleOrDefaultAsync(ct);
             return row is null ? Results.NotFound() : Results.Ok(row);
         }).AllowAnonymous().ExcludeFromDescription();
         app.MapGet("/api/internal/experience/activities/{activityId:int}/sessions/{sessionId:int}", async (
@@ -27,7 +32,10 @@ public static class ActivityExperienceSourceEndpoints
             var session = await db.Sessions.AsNoTracking().Include(x => x.Activity).SingleOrDefaultAsync(
                 x => x.Id == sessionId && x.ActivityId == activityId, cancellationToken);
             if (session is null) return Results.NotFound();
-            var source = ActivitySessionEndpoints.Source(session);
+            if (string.IsNullOrEmpty(session.ScoringSnapshotJson))
+                session.ScoringSnapshotJson = session.Activity.ScoringSnapshotJson ?? "";
+            if (string.IsNullOrEmpty(session.ScoringSnapshotJson)) return Results.NotFound();
+            var source = ActivitySessionEndpoints.Source(session) with { ClubId = session.Activity.ClubId };
             if (session.Activity.PublicationStatus is "CANCELLED" or "DRAFT" || session.Activity.Status == ActivityStatuses.Cancelled)
                 source = source with { Status = "CANCELLED" };
             var registered = await db.ActivityParticipants.AnyAsync(x => x.ActivityId == activityId && x.UserId == userId, cancellationToken);
@@ -39,7 +47,15 @@ public static class ActivityExperienceSourceEndpoints
             catch (HttpRequestException) { return ApiOperations.Error(503, "ELIGIBILITY_AUTHORITY_UNAVAILABLE", "Current source eligibility is unavailable."); }
             var verified = await db.ActivityAttendances.AnyAsync(x => x.SessionId == sessionId && x.UserId == userId
                 && x.VerificationStatus == "VERIFIED", cancellationToken);
-            return Results.Ok(new ActivitySourceContext(source, registered, verified));
+            var closingReportReady = await db.Set<ActivityClosingReport>().AnyAsync(x => x.ActivityId == activityId
+                && (x.Status == "APPROVED" || x.Status == "FINALIZED"), cancellationToken);
+            var role = closingReportReady ? await db.Set<ActivityFinalRole>().AsNoTracking()
+                .Where(x => x.ActivityId == activityId && x.UserId == userId).Select(x => x.Role).SingleOrDefaultAsync(cancellationToken) : null;
+            return Results.Ok(new ActivitySourceContext(source, registered, verified)
+            {
+                ClosingReportReady = closingReportReady, ClosingReportRole = role,
+                UsesClosingDutyXp = role is "STAFF" or "HOST" && !string.IsNullOrWhiteSpace(session.Activity.ScoringSnapshotJson)
+            });
         }).AllowAnonymous().ExcludeFromDescription();
     }
 }

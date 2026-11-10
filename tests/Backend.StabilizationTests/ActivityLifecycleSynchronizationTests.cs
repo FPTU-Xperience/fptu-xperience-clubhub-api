@@ -13,16 +13,20 @@ public sealed class ActivityLifecycleSynchronizationTests
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-29T03:00:00Z");
 
     [Fact]
-    public void TimelineUsesNextSessionEvenWhenParentDatesAreStaleAndPreservesCancelledState()
+    public void TimelinePreservesParentDatesAndStaysLiveBetweenSessions()
     {
         var future = Session(1, Now.AddDays(1));
         var timeline = ActivityTimelineReadFilter.Resolve("Scheduled", Now.AddDays(-3), Now.AddDays(-2), [future], Now);
-        Assert.Equal("UPCOMING", timeline.Status);
-        Assert.Equal(future.StartTimeUtc, timeline.StartTimeUtc);
+        Assert.Equal("LIVE", timeline.Status);
+        Assert.Equal(Now.AddDays(-3), timeline.StartTimeUtc);
+        Assert.Equal(Now.AddDays(-2), timeline.EndTimeUtc);
+        Assert.Equal(future.StartTimeUtc, timeline.NextSessionStartTimeUtc);
         future.StartTimeUtc = Now.AddMinutes(-1);
         Assert.Equal("LIVE", ActivityTimelineReadFilter.Resolve("Scheduled", Now.AddDays(-3), Now.AddDays(-2), [future], Now).Status);
         Assert.Equal("CANCELLED", ActivityTimelineReadFilter.Resolve("Cancelled", Now.AddDays(-3), Now.AddDays(-2), [future], Now).Status);
         Assert.Equal("COMPLETED", ActivityTimelineReadFilter.Resolve("Scheduled", Now.AddDays(-3), Now, [], Now).Status);
+        Assert.Equal("LIVE", ActivityTimelineReadFilter.Resolve("Scheduled", Now.AddDays(-3), Now, [future], Now).Status);
+        Assert.Equal("UPCOMING", ActivityTimelineReadFilter.Resolve("Scheduled", Now.AddHours(1), Now.AddHours(2), [], Now).Status);
     }
 
     [SkippableFact]
@@ -43,6 +47,58 @@ public sealed class ActivityLifecycleSynchronizationTests
         Assert.Equal(2, await db.OutboxMessages.CountAsync(e => e.EventType == ActivityLifecycleChangedEvent.RoutingKey));
         Assert.Equal(2, await db.SessionAudits.CountAsync());
         Assert.Equal(ActivityStatuses.Completed, (await db.Activities.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task ScheduledPublicationBecomesPublicOnceAtItsDueTime()
+    {
+        await using var db = Database();
+        var activity = new ClubActivity
+        {
+            ClubId = 1, Title = "Future activity", PublicationStatus = "DRAFT",
+            StartTimeUtc = Now.AddHours(3), EndTimeUtc = Now.AddHours(4),
+            RegistrationOpensAt = Now.AddHours(1), RegistrationClosesAt = Now.AddHours(2)
+        };
+        db.Activities.Add(activity);
+        await db.SaveChangesAsync();
+        db.Add(new ActivityExecution { ActivityId = activity.Id, PublishAtUtc = Now });
+        await db.SaveChangesAsync();
+        var worker = new ActivityLifecycleSynchronizer(db);
+        Assert.Equal(0, await worker.SynchronizeAsync(Now.AddSeconds(-1)));
+        Assert.Equal(1, await worker.SynchronizeAsync(Now));
+        Assert.Equal(0, await worker.SynchronizeAsync(Now.AddSeconds(30)));
+        var execution = await db.Set<ActivityExecution>().SingleAsync();
+        Assert.True(execution.IsPublished);
+        Assert.Null(execution.PublishAtUtc);
+        Assert.Equal("PUBLISHED", (await db.Activities.SingleAsync()).PublicationStatus);
+        Assert.Single(await db.Set<ActivityExecutionAudit>().Where(a => a.Action == "AUTO_PUBLISH").ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task CampusPublicationPublishesOnlyEligibleDraftsAtTheirDueTime()
+    {
+        await using var db = Database();
+        var eligible = Activity("DRAFT");
+        eligible.OrganizerCampusCode = "HCM";
+        eligible.CampusPublishAtUtc = Now;
+        eligible.StartTimeUtc = Now.AddHours(2);
+        eligible.EndTimeUtc = Now.AddHours(3);
+        eligible.RegistrationClosesAt = Now.AddHours(1);
+        var expired = Activity("DRAFT");
+        expired.OrganizerCampusCode = "HCM";
+        expired.CampusPublishAtUtc = Now;
+        expired.RegistrationClosesAt = Now;
+        db.Activities.AddRange(eligible, expired);
+        await db.SaveChangesAsync();
+
+        var worker = new ActivityLifecycleSynchronizer(db);
+        Assert.Equal(0, await worker.SynchronizeAsync(Now.AddSeconds(-1)));
+        Assert.Equal(2, await worker.SynchronizeAsync(Now));
+        Assert.Equal(0, await worker.SynchronizeAsync(Now.AddSeconds(30)));
+        var rows = await db.Activities.OrderBy(x => x.Id).ToListAsync();
+        Assert.Equal("PUBLISHED", rows[0].PublicationStatus);
+        Assert.Equal("DRAFT", rows[1].PublicationStatus);
+        Assert.All(rows, x => Assert.Null(x.CampusPublishAtUtc));
     }
 
     [Fact]

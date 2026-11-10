@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using ClubReportHub.Shared.Experience;
 using ClubService.Data;
+using ClubService.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClubService.Endpoints;
@@ -10,6 +11,32 @@ public static class ClubExperienceAuthorityEndpoints
 {
     public static void MapClubExperienceAuthorityEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapPost("/api/internal/experience/clubs/{clubId:int}/members-at", async (int clubId, ClubMembersAtRequest input,
+            ClubDbContext db, HttpContext http, IConfiguration configuration, CancellationToken ct) =>
+        {
+            if (!VerifiedExperienceRules.InternalRequest(http, configuration)) return Results.Forbid();
+            if (clubId <= 0 || input.AtUtc == default || input.UserIds is not { Length: > 0 and <= 200 }
+                || input.UserIds.Any(id => id <= 0)) return Results.BadRequest();
+            var ids = await db.ClubMemberships.IgnoreQueryFilters().AsNoTracking()
+                .Where(x => x.ClubId == clubId && input.UserIds.Contains(x.UserId)
+                    && (x.Status == ClubMembershipStatuses.Approved
+                        || x.Status == ClubMembershipStatuses.Withdrawn && x.ReviewedAtUtc.HasValue)
+                    && (x.ReviewedAtUtc ?? x.RequestedAtUtc) <= input.AtUtc
+                    && (!x.IsDeleted || x.DeletedAtUtc > input.AtUtc)
+                    && (x.WithdrawnAtUtc == null || x.WithdrawnAtUtc > input.AtUtc))
+                .Select(x => x.UserId).Distinct().ToArrayAsync(ct);
+            return Results.Ok(ids);
+        }).AllowAnonymous().ExcludeFromDescription();
+
+        app.MapGet("/api/internal/experience/clubs/{clubId:int}/manager-ids", async (int clubId, ClubDbContext db,
+            HttpContext http, IConfiguration configuration, CancellationToken ct) =>
+        {
+            if (!VerifiedExperienceRules.InternalRequest(http, configuration)) return Results.Forbid();
+            var ids = await db.ClubManagerAssignments.AsNoTracking().Where(x => x.ClubId == clubId && x.IsActive)
+                .Select(x => x.ManagerUserId).Distinct().ToArrayAsync(ct);
+            return Results.Ok(ids);
+        }).AllowAnonymous().ExcludeFromDescription();
+
         app.MapGet("/api/internal/experience/clubs/{clubId:int}", async (int clubId, int? userId, ClubDbContext db,
             HttpContext http, IConfiguration configuration, CancellationToken ct) =>
         {

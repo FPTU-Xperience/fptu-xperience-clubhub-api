@@ -21,6 +21,7 @@ public static class ActivityEndpoints
         var activities = app
             .MapGroup("/api/activities")
             .WithTags("Activities")
+            .AddEndpointFilter<CampusActivityBoundaryFilter>()
             .AddEndpointFilter<ActivityTimelineReadFilter>()
             .AddEndpointFilter<ActivityResourceReadFilter>()
             .AddEndpointFilter<ActivityPublicationReadFilter>()
@@ -32,6 +33,12 @@ public static class ActivityEndpoints
         MapCreateActivity(activities);
         MapCreateFromApprovedReport(activities);
         activities.MapActivityWriteEndpoints();
+        app.MapActivityRescheduleEndpoints();
+        app.MapActivityRecapEndpoints();
+        app.MapActivityClosingReportEndpoints();
+        app.MapActivityFinalRoleEndpoints();
+        app.MapCampusActivityEndpoints();
+        app.MapActivityCertificateEndpoints();
         app.MapActivitySessionEndpoints();
         app.MapActivityVisibilityEndpoints();
         app.MapActivityExperienceSourceEndpoints();
@@ -61,6 +68,8 @@ public static class ActivityEndpoints
                 .AsQueryable();
 
             var managedClubIds = new HashSet<int>();
+            if (CanReviewAllActivities(user))
+                query = query.Where(x => x.OrganizerCampusCode == null);
             if (!CanReviewAllActivities(user))
             {
                 var access = await clubAccess.GetMyAccessAsync(

@@ -19,6 +19,7 @@ public static class VerifiedContributionEndpoints
             .RequireAuthorization(AdminPolicies.AnyActor).WithTags("Verified club contributions");
         activities.MapPost("/", SubmitAsync);
         activities.MapGet("/", ListActivityAsync);
+        activities.MapClosingDutyXpEndpoints();
         var contributions = app.MapGroup("/api/contributions").RequireAuthorization(AdminPolicies.AnyActor)
             .WithTags("Verified club contributions");
         contributions.MapGet("/{id:guid}", GetAsync);
@@ -220,8 +221,18 @@ public static class VerifiedContributionEndpoints
                     try { live = await sources.GetAsync(row.ActivityId!.Value, row.SessionId!.Value, row.UserId, cancellationToken); }
                     catch (HttpRequestException) { return ApiOperations.Error(503, "ACTIVITY_SERVICE_UNAVAILABLE", "Activity source is unavailable."); }
                     var saved = Read<ExperienceSourceSnapshot>(row.SourceSnapshotJson);
-                    if (live is null || live.Source.Status == "CANCELLED" || !live.IsRegistered
-                        || live.Source.SessionVersion != saved.SessionVersion || live.Source.Policy.PolicyVersion != saved.Policy.PolicyVersion
+                    if (live?.ClosingReportReady == false)
+                        return ApiOperations.Error(409, "CLOSING_REPORT_REQUIRED", "Approve or finalize the activity closing report before recording XP.");
+                    if (live?.ClosingReportReady == true && live.ClosingReportRole is null)
+                        return ApiOperations.Error(409, "CLOSING_RESULT_REQUIRED", "Only a confirmed closing result can receive XP.");
+                    if (live?.UsesClosingDutyXp == true)
+                        return ApiOperations.Error(409, "CLOSING_DUTY_REVIEW_REQUIRED", "Review this Staff or Host result in the activity closing report.");
+                    if (live is null || live.Source.Status == "CANCELLED"
+                        || !live.IsRegistered && live.ClosingReportReady != true
+                        || live.Source.SessionVersion != saved.SessionVersion && !(live.ClosingReportReady == true
+                            && live.Source.Status == "CLOSED" && live.Source.StartTimeUtc == saved.StartTimeUtc
+                            && live.Source.EndTimeUtc == saved.EndTimeUtc && SameBlueprint(live.Source.Attributes, saved.Attributes))
+                        || live.Source.Policy.PolicyVersion != saved.Policy.PolicyVersion
                         || !SameBlueprint(request.VerifiedAttributes, saved.Attributes))
                         return ApiOperations.Error(409, "STALE_ACTIVITY_SOURCE", "The source changed or is no longer valid.");
                     policy = await PolicyAsync(db, saved.Policy.PolicyVersion, row.SemesterId,
@@ -259,8 +270,18 @@ public static class VerifiedContributionEndpoints
                 CreatedAtUtc = DateTimeOffset.UtcNow
             };
             db.ContributionDecisions.Add(decision); row.Status = status;
-            if (policy is not null) await AppendEffectAsync(db, row, revision, null, attributes, policy,
-                "AWARD", decision.Id, actor, "ASSIGNED_REVIEW", request.Reason.Trim(), null, cancellationToken);
+            if (policy is not null)
+            {
+                await AppendEffectAsync(db, row, revision, null, attributes, policy,
+                    "AWARD", decision.Id, actor, "ASSIGNED_REVIEW", request.Reason.Trim(), null, cancellationToken);
+                if (row.AttendanceId is { } attendanceId && row.SessionId is { } sessionId)
+                {
+                    var manual = await db.ManualAttendanceRequests.Where(x => x.SessionId == sessionId && x.UserId == row.UserId
+                        && x.Status == "APPROVED_PENDING").Select(x => (Guid?)x.Id).SingleOrDefaultAsync(cancellationToken);
+                    db.AddOutboxMessage(new AttendanceRecognitionEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, attendanceId,
+                        row.Id, manual, "RECORDED", null), ExperienceRoutingKeys.AttendanceRecognition);
+                }
+            }
             await DeclarationExperienceBridge.SyncAsync(db, row, cancellationToken);
             Notify(db, row, "REVIEW_RESULT", "Kết quả xác minh đóng góp");
             ExperienceAuthorization.Audit(db, http.User, "CONTRIBUTION_REVIEWED", "Contribution", id.ToString(), new { request.Decision, decision.Id });
