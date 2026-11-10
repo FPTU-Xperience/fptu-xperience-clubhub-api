@@ -108,6 +108,104 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
     }
 
     [Fact]
+    public async Task ClosingReportXpReviewCreatesOnePendingContributionWithoutCreditingTheLedger()
+    {
+        await using var db = new AdminDbContext(new DbContextOptionsBuilder<AdminDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var source = ManagerSource();
+        await SeedManagerPolicyAsync(db, source);
+        var handler = new AdminExperienceEventHandler(db, new ConfigurationBuilder().Build());
+        var message = new AttendanceVerifiedEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, 104, 10, "ROTATING_QR", null, source)
+        {
+            ClosingReportReviewRole = "HOST"
+        };
+        await handler.ProcessAsync(message.EventId, ExperienceRoutingKeys.AttendanceVerified,
+            JsonSerializer.SerializeToElement(message, ExperienceJson), default);
+        await handler.ProcessAsync(message.EventId, ExperienceRoutingKeys.AttendanceVerified,
+            JsonSerializer.SerializeToElement(message, ExperienceJson), default);
+        var row = await db.Contributions.SingleAsync();
+        Assert.Equal("SUBMITTED", row.Status);
+        Assert.Contains("HOST", row.Message);
+        Assert.Equal(10, row.AttendanceId);
+        Assert.Empty(await db.ExperienceLedgerEffects.ToListAsync());
+        Assert.Single(await db.ContributionRevisions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task ClosingDutyXpCanOnlyBeAwardedBySameCampusStudentAffairsAfterFinalization()
+    {
+        var source = ManagerSource() with { ClubId = 0, SessionId = 0, Status = "CLOSED" };
+        var ready = false;
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        { ["Security:InternalWorkflowToken"] = TestInternalWorkflowToken }).Build();
+        await using var app = await CreateManagerExperienceAppAsync(source, services =>
+        {
+            services.AddSingleton(new ActivitySourceClient(CreateFakeHttpClient(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new ActivityExperienceScope(source.ActivityId, 0)
+                    { OrganizerCampusCode = "HN", ClosingReportReady = ready })
+            }), config));
+            services.AddSingleton(new CurrentUserProfileClient(CreateFakeHttpClient(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new[]
+                {
+                    new InternalUserProfile(200, "Reviewer", "", "HN", true, false, null),
+                    new InternalUserProfile(201, "Other campus", "", "HCM", true, false, null)
+                })
+            }), config));
+        });
+        Guid rowId, version;
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+            var handler = new AdminExperienceEventHandler(db, config);
+            var duty = new ClosingDutyXpEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, 104, "HOST", source);
+            await handler.ProcessAsync(duty.EventId, ExperienceRoutingKeys.ClosingDutyXp, JsonSerializer.SerializeToElement(duty, ExperienceJson), default);
+            await handler.ProcessAsync(duty.EventId, ExperienceRoutingKeys.ClosingDutyXp, JsonSerializer.SerializeToElement(duty, ExperienceJson), default);
+            var row = await db.Contributions.SingleAsync();
+            Assert.Equal("SUBMITTED", row.Status);
+            Assert.Empty(await db.ExperienceLedgerEffects.ToListAsync());
+            (rowId, version) = (row.Id, row.Version);
+        }
+        using var reviewer = CreateAdminContractClient(app, 200, AuthRoles.StudentAffairsAdmin);
+        using var outsider = CreateAdminContractClient(app, 201, AuthRoles.StudentAffairsAdmin);
+        reviewer.DefaultRequestHeaders.Add("Idempotency-Key", "close-duty-award");
+        outsider.DefaultRequestHeaders.Add("Idempotency-Key", "close-duty-outsider");
+        var path = $"/api/activities/{source.ActivityId}/contributions/closing-duties/{rowId}/review";
+        var input = new { expectedVersion = version, decision = "APPROVE", role = "Organizer", reason = "Confirmed host duties" };
+        Assert.Equal(HttpStatusCode.Forbidden, (await outsider.PostAsJsonAsync(path, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await reviewer.PostAsJsonAsync(path, input)).StatusCode);
+        ready = true;
+        Assert.Equal(HttpStatusCode.OK, (await reviewer.PostAsJsonAsync(path, input)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await reviewer.PostAsJsonAsync(path, input)).StatusCode);
+        await using var finalScope = app.Services.CreateAsyncScope();
+        var finalDb = finalScope.ServiceProvider.GetRequiredService<AdminDbContext>();
+        Assert.Single(await finalDb.ExperienceLedgerEffects.ToListAsync());
+        Assert.Equal("APPROVED", (await finalDb.Contributions.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task CampusOrganizerAttendanceCannotCreditXpWithoutClosingReportAuthorization()
+    {
+        await using var db = new AdminDbContext(new DbContextOptionsBuilder<AdminDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var source = ManagerSource() with { ClubId = 0 };
+        await SeedManagerPolicyAsync(db, source);
+        var handler = new AdminExperienceEventHandler(db, new ConfigurationBuilder().Build());
+        var attendance = new AttendanceVerifiedEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, 104, 10,
+            "CAMPUS_ORGANIZER", 200, source);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.ProcessAsync(attendance.EventId,
+            ExperienceRoutingKeys.AttendanceVerified, JsonSerializer.SerializeToElement(attendance, ExperienceJson), default));
+        Assert.Empty(await db.ExperienceLedgerEffects.ToListAsync());
+        var released = attendance with { ClosingReportAuthorized = true };
+        for (var attempt = 0; attempt < 2; attempt++)
+            await handler.ProcessAsync(released.EventId, ExperienceRoutingKeys.AttendanceVerified,
+                JsonSerializer.SerializeToElement(released, ExperienceJson), default);
+        Assert.Single(await db.ExperienceLedgerEffects.ToListAsync());
+        Assert.Equal("APPROVED", (await db.Contributions.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task ClubManager_ContributionReviewsRequireAssignmentAndNoSelfThenUpgradeRecordsOnlyDelta()
     {
         var source = ManagerSource(); await using var app = await CreateManagerExperienceAppAsync(source);

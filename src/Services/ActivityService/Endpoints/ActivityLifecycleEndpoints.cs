@@ -74,9 +74,12 @@ internal static class ActivityLifecycleEndpoints
                     return ApiOperations.Error(400, "INVALID_ACTIVITY", "Check activity content, times, capacity and eligibility.");
                 if (operation == "PUBLISH")
                 {
+                    var now = ActivitySessionEndpoints.Now(http);
                     if (string.IsNullOrWhiteSpace(activity.SemesterId) || !activity.PolicyVersion.HasValue
                         || !activity.RegistrationOpensAt.HasValue || !activity.RegistrationClosesAt.HasValue
-                        || activity.RegistrationOpensAt >= activity.RegistrationClosesAt || activity.RegistrationClosesAt > activity.EndTimeUtc)
+                        || activity.RegistrationOpensAt < now
+                        || activity.RegistrationOpensAt >= activity.RegistrationClosesAt
+                        || activity.RegistrationClosesAt > activity.StartTimeUtc)
                         return ApiOperations.Error(400, "PUBLICATION_REQUIREMENTS", "Provide a semester, policy version and valid registration window.");
                     var attributes = new ContributionAttributes(activity.EffortTier, ContributionRoles.Participant, activity.Scale,
                         BonusResults.None, JsonSerializer.Deserialize<List<PillarWeight>>(activity.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? []);

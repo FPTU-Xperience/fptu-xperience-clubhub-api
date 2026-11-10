@@ -24,7 +24,12 @@ public sealed record ActionVersionInput(int ExpectedVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ApplicationReviewInput(int ExpectedVersion, string Decision, string? Reason);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ActivityPublicationInput(bool IsPublished, int ExpectedVersion);
+public sealed record ActivityPublicationInput(bool IsPublished, int ExpectedVersion)
+{
+    public DateTimeOffset? PublishAtUtc { get; init; }
+    public DateTimeOffset? RegistrationOpensAt { get; init; }
+    public DateTimeOffset? RegistrationClosesAt { get; init; }
+}
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record StaffAssignmentInput(int ExpectedVersion, int UserId, int ActionRuleId, string AssignmentKind);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

@@ -36,6 +36,7 @@ public sealed class ActivityExecution
     public int Version { get; set; } = 1;
     public int PublicationVersion { get; set; } = 1;
     public bool IsPublished { get; set; }
+    public DateTimeOffset? PublishAtUtc { get; set; }
 }
 
 public sealed class ActivityActionRule

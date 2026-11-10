@@ -44,6 +44,7 @@ public sealed class ActivityPublicationReadFilter : IEndpointFilter
                     PublicationStatus = null,
                     IsPublished = execution.IsPublished,
                     PublicationVersion = execution.PublicationVersion,
+                    PublishAtUtc = execution.PublishAtUtc,
                     SourceApplicationId = execution.ApplicationId,
                     PublicationCapabilities = new(allowed)
                 };

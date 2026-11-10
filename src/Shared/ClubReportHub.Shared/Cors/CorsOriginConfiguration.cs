@@ -27,7 +27,7 @@ public static class CorsOriginConfiguration
             .GetSection("Cors:AllowedOrigins")
             .Get<string[]>() ?? [];
         var additionalOrigins = (configuration["Cors:AdditionalOrigins"] ?? string.Empty)
-            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries);
+            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
 
         IEnumerable<string> origins = configuredOrigins.Concat(additionalOrigins);
         if (!environment.IsProduction())

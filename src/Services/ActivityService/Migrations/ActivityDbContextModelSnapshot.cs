@@ -303,6 +303,198 @@ namespace ActivityService.Migrations
                     b.ToTable("ActivityAttendances");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityCertificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ActivityTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("DefinitionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("IssuedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("IssuerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("RecipientId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecipientKind")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<string>("RecipientName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefinitionId");
+
+                    b.HasIndex("RecipientKind", "RecipientId", "IssuedAtUtc");
+
+                    b.HasIndex("ActivityId", "RecipientKind", "RecipientId", "DefinitionId")
+                        .IsUnique();
+
+                    b.ToTable("ActivityCertificate");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityCertificateDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BadgePng")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("FramePng")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId", "Role");
+
+                    b.ToTable("ActivityCertificateDefinition");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityCertificateDisplay", b =>
+                {
+                    b.Property<int>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserId"));
+
+                    b.Property<Guid?>("BadgeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("BadgeSize")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BadgeX")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BadgeY")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("FrameId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("ActivityCertificateDisplay");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityClosingPolicy", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTimeOffset>("EffectiveAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("ReportDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampusCode", "Id");
+
+                    b.ToTable("ActivityClosingPolicy");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityClosingReport", b =>
+                {
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Improvements")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("SubmittedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("SubmittedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("ActivityId");
+
+                    b.ToTable("ActivityClosingReport");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityCompletionResource", b =>
                 {
                     b.Property<Guid>("CompletionId")
@@ -333,6 +525,9 @@ namespace ActivityService.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("int");
 
+                    b.Property<DateTimeOffset?>("PublishAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("int");
@@ -341,6 +536,9 @@ namespace ActivityService.Migrations
 
                     b.HasIndex("ApplicationId")
                         .IsUnique();
+
+                    b.HasIndex("PublishAtUtc")
+                        .HasFilter("[PublishAtUtc] IS NOT NULL");
 
                     b.ToTable("ActivityExecution");
                 });
@@ -396,6 +594,95 @@ namespace ActivityService.Migrations
                     b.ToTable("ExperienceInbox");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityFinalRole", b =>
+                {
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("ConfirmedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("ConfirmedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("ActivityId", "UserId");
+
+                    b.ToTable("ActivityFinalRole");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityHandover", b =>
+                {
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ClubName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("DecidedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("DecidedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("OfferedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("OfferedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("ActivityId");
+
+                    b.HasIndex("ClubId", "Status");
+
+                    b.ToTable("ActivityHandover");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityHeldXp", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("ActivityId");
+
+                    b.ToTable("ActivityHeldXp");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityParticipant", b =>
                 {
                     b.Property<int>("Id")
@@ -440,6 +727,41 @@ namespace ActivityService.Migrations
                         .IsUnique();
 
                     b.ToTable("ActivityParticipants");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecapFeedback", b =>
+                {
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Strengths")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Suggestions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Weaknesses")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("ActivityId", "UserId");
+
+                    b.ToTable("ActivityRecapFeedback");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivityRecruitment", b =>
@@ -573,6 +895,69 @@ namespace ActivityService.Migrations
                         .HasFilter("[IsArchived] = 0");
 
                     b.ToTable("ActivityRecruitmentPosition");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRescheduleRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("EndTimeUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("OriginalEndTimeUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("OriginalStartTimeUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset>("RequestedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("RequestedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("ReviewDeadlineUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("StartTimeUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'PENDING'");
+
+                    b.ToTable("ActivityRescheduleRequest");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivityResource", b =>
@@ -871,6 +1256,57 @@ namespace ActivityService.Migrations
                     b.ToTable("ActivityStaffAssignment");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.CampusActivityDuty", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("AssignedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("AssignedBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("ConfirmedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Responsibility")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId", "UserId", "Role")
+                        .IsUnique();
+
+                    b.ToTable("CampusActivityDuty");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ClubActivity", b =>
                 {
                     b.Property<int>("Id")
@@ -878,6 +1314,9 @@ namespace ActivityService.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset?>("CampusPublishAtUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int?>("Capacity")
                         .HasColumnType("int");
@@ -948,6 +1387,10 @@ namespace ActivityService.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<string>("OrganizerCampusCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<string>("PillarWeightsJson")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1014,6 +1457,9 @@ namespace ActivityService.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CampusPublishAtUtc")
+                        .HasFilter("[CampusPublishAtUtc] IS NOT NULL");
 
                     b.HasIndex("SourceReportId")
                         .IsUnique()
@@ -1195,6 +1641,35 @@ namespace ActivityService.Migrations
                     b.Navigation("Activity");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityCertificate", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityCertificateDefinition", "Definition")
+                        .WithMany()
+                        .HasForeignKey("DefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Definition");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityCertificateDefinition", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityClosingReport", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityClosingReport", "ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityCompletionResource", b =>
                 {
                     b.HasOne("ActivityService.Models.ActivityActionCompletion", null)
@@ -1234,6 +1709,33 @@ namespace ActivityService.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityFinalRole", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityHandover", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityHandover", "ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityHeldXp", b =>
+                {
+                    b.HasOne("ClubReportHub.Shared.Data.OutboxMessage", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityHeldXp", "EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityParticipant", b =>
                 {
                     b.HasOne("ActivityService.Models.ClubActivity", "Activity")
@@ -1243,6 +1745,15 @@ namespace ActivityService.Migrations
                         .IsRequired();
 
                     b.Navigation("Activity");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRecapFeedback", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivityRecruitment", b =>
@@ -1285,6 +1796,15 @@ namespace ActivityService.Migrations
                     b.HasOne("ActivityService.Models.ActivityRecruitment", null)
                         .WithMany()
                         .HasForeignKey("RecruitmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityRescheduleRequest", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -1336,6 +1856,15 @@ namespace ActivityService.Migrations
                         .WithMany()
                         .HasForeignKey("PositionId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ActivityService.Models.CampusActivityDuty", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ActivityService.Models.ClubActivity", b =>

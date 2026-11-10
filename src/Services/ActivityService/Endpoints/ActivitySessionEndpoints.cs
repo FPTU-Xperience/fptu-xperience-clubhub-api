@@ -233,6 +233,9 @@ public static class ActivitySessionEndpoints
             if (request.ExpectedVersion != session.Version) return ApiOperations.Error(409, "STALE_VERSION", "Reload the session.");
             if (session.Status == "CANCELLED" || (!cancel && session.Status != "SCHEDULED"))
                 return ApiOperations.Error(409, "INVALID_SESSION_STATE", "This transition is not allowed.");
+            if (cancel && await db.Set<ActivityClosingReport>().AnyAsync(x => x.ActivityId == activityId
+                && (x.Status == "APPROVED" || x.Status == "FINALIZED"), cancellationToken))
+                return ApiOperations.Error(409, "CLOSING_REPORT_LOCKED", "A session with a finalized report cannot be cancelled.");
             session.Status = cancel ? "CANCELLED" : "CLOSED";
             session.Version = Guid.NewGuid(); session.UpdatedAtUtc = Now(http);
             Audit(db, session, http, cancel ? "CANCEL" : "CLOSE", request.Reason.Trim());

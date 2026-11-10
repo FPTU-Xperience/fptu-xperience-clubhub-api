@@ -27,13 +27,16 @@ public sealed class ActivityTimelineReadFilter : IEndpointFilter
     public static ActivityTimeline Resolve(string workflowStatus, DateTimeOffset start, DateTimeOffset end,
         IEnumerable<ActivitySession> sessions, DateTimeOffset now)
     {
-        var rows = sessions.ToArray();
-        var next = rows.Where(s => s.Status == "SCHEDULED" && s.EndTimeUtc > now)
-            .OrderBy(s => s.StartTimeUtc).ThenBy(s => s.Id).FirstOrDefault();
-        if (next is not null) { start = next.StartTimeUtc; end = next.EndTimeUtc; }
         var phase = workflowStatus.ToUpperInvariant();
-        if (phase == "SCHEDULED")
-            phase = rows.Length > 0 && next is null || end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE";
-        return new ActivityTimeline(phase, start, end, now);
+        if (phase != "SCHEDULED") return new ActivityTimeline(phase, start, end, now);
+
+        var rows = sessions.Where(s => s.Status != "CANCELLED").ToArray();
+        var hasOpenWindow = rows.Any(s => s.EndTimeUtc > now || s.ClosesAt > now);
+        phase = start > now ? "UPCOMING" : end <= now && !hasOpenWindow ? "COMPLETED" : "LIVE";
+        return new ActivityTimeline(phase, start, end, now)
+        {
+            NextSessionStartTimeUtc = rows.Where(s => s.Status == "SCHEDULED" && s.StartTimeUtc > now)
+                .Select(s => (DateTimeOffset?)s.StartTimeUtc).Min()
+        };
     }
 }

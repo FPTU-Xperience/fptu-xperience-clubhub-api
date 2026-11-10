@@ -11,7 +11,8 @@ namespace AdminService.Services;
 
 public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguration configuration) : IExperienceEventHandler
 {
-    public bool Handles(string route) => route is ExperienceRoutingKeys.AttendanceVerified or ExperienceRoutingKeys.SourceCancelled or ExperienceRoutingKeys.AttendanceRecognition;
+    public bool Handles(string route) => route is ExperienceRoutingKeys.AttendanceVerified or ExperienceRoutingKeys.SourceCancelled
+        or ExperienceRoutingKeys.AttendanceRecognition or ExperienceRoutingKeys.ClosingDutyXp;
 
     public async Task ProcessAsync(Guid eventId, string route, JsonElement payload, CancellationToken ct)
     {
@@ -22,6 +23,8 @@ public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguratio
             if (await db.ExperienceInbox.AnyAsync(x => x.EventId == eventId, ct)) return;
             if (route == ExperienceRoutingKeys.AttendanceVerified)
                 await AttendanceAsync(payload.Deserialize<AttendanceVerifiedEvent>(ExperienceAuthorization.JsonOptions)!, ct);
+            else if (route == ExperienceRoutingKeys.ClosingDutyXp)
+                await ClosingDutyAsync(payload.Deserialize<ClosingDutyXpEvent>(ExperienceAuthorization.JsonOptions)!, ct);
             else if (route == ExperienceRoutingKeys.SourceCancelled)
                 await CancelAsync(payload.Deserialize<ExperienceSourceCancelledEvent>(ExperienceAuthorization.JsonOptions)!, ct);
             else
@@ -45,8 +48,10 @@ public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguratio
     private async Task AttendanceAsync(AttendanceVerifiedEvent message, CancellationToken ct)
     {
         var source = message.Source;
-        if (message.VerificationMethod is not ("ROTATING_QR" or "MANUAL_REVIEW")
-            || message.VerificationMethod == "MANUAL_REVIEW" && (message.VerifiedByUserId is null || message.VerifiedByUserId == message.UserId))
+        if (message.VerificationMethod is not ("ROTATING_QR" or "MANUAL_REVIEW" or "CAMPUS_ORGANIZER")
+            || message.VerificationMethod is "MANUAL_REVIEW" or "CAMPUS_ORGANIZER"
+                && (message.VerifiedByUserId is null || message.VerifiedByUserId == message.UserId)
+            || message.VerificationMethod == "CAMPUS_ORGANIZER" && !message.ClosingReportAuthorized)
             throw new InvalidOperationException("Attendance has no valid verification authority.");
         var manual = await db.ManualAttendanceRequests.SingleOrDefaultAsync(x => x.SessionId == source.SessionId && x.UserId == message.UserId && x.Status == "APPROVED_PENDING", ct);
         // Direct manual attendance writes cannot mint points on a role check or
@@ -69,6 +74,7 @@ public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguratio
         { Receipt(message, row.Id, row.Status == "REVOKED" ? "REVOKED" : "RECORDED", null, manual?.Id); return; }
         var attributes = source.Attributes with { Role = ContributionRoles.Participant, Result = BonusResults.None };
         if (VerifiedExperienceRules.Validate(attributes) is not null) throw new InvalidOperationException("Invalid published scoring source.");
+        var created = row is null;
         if (row is null)
         {
             row = new VerifiedContribution
@@ -88,12 +94,45 @@ public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguratio
             };
             db.Contributions.Add(row);
         }
+        if (message.ClosingReportReviewRole is { } role)
+        {
+            if (created)
+            {
+                row.Message = $"Closing report confirmed {role}. Review XP under the approved policy.";
+                Revision(db, row, "SUBMITTED", attributes, message.VerifiedByUserId, "Closing report requires independent XP review.");
+            }
+            if (row.Status is "SUBMITTED" or "REVISION_REQUESTED")
+                row.AttendanceId ??= message.AttendanceId;
+            return;
+        }
         var revision = Revision(db, row, "APPROVED", attributes, message.VerifiedByUserId, "Verified attendance.");
         row.AttendanceId = message.AttendanceId;
         await AppendEffectAsync(db, row, revision, null, attributes, policy, "AWARD", message.EventId,
             message.VerifiedByUserId, message.VerificationMethod, "Verified attendance.", message.EventId, ct);
         Receipt(message, row.Id, "RECORDED", null, manual?.Id);
         Notify(db, row, "EXPERIENCE_RECORDED", "Điểm trải nghiệm đã được ghi nhận");
+    }
+
+    private async Task ClosingDutyAsync(ClosingDutyXpEvent message, CancellationToken ct)
+    {
+        var source = message.Source;
+        if (message.UserId <= 0 || source.ActivityId <= 0 || source.SessionId != 0 || source.Status != "CLOSED"
+            || message.Role is not ("STAFF" or "HOST") || VerifiedExperienceRules.Validate(source.Attributes) is not null)
+            throw new InvalidOperationException("Invalid closing duty XP evidence.");
+        var key = $"closing-duty:{source.ActivityId}";
+        if (await db.Contributions.AnyAsync(x => x.UserId == message.UserId && x.SourceKey == key, ct)
+            || await db.InvalidatedExperienceSources.AnyAsync(x => x.ActivityId == source.ActivityId && x.SessionId == null, ct))
+            return;
+        var row = new VerifiedContribution
+        {
+            UserId = message.UserId, ClubId = source.ClubId > 0 ? source.ClubId : null,
+            ActivityId = source.ActivityId, SourceType = "CLOSING_DUTY", SourceKey = key, SourceId = message.Role,
+            SemesterId = source.SemesterId, Title = source.Title, Message = $"Closing report confirmed {message.Role}.",
+            ProposedAttributesJson = Json(source.Attributes), SourceSnapshotJson = Json(source),
+            OccurredAt = source.StartTimeUtc, CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+        db.Contributions.Add(row);
+        Revision(db, row, "SUBMITTED", source.Attributes, null, "Closing report requires student affairs XP review.");
     }
 
     private void Receipt(AttendanceVerifiedEvent source, Guid? contribution, string status, string? failure, Guid? manual) =>

@@ -27,6 +27,9 @@ internal static class ActivityTransitionEndpoints
         {
             if (row.Version != input.ExpectedVersion || row.Status == ActivityStatuses.Cancelled)
                 return ApiOperations.Error(409, "STALE_ACTIVITY", "Reload the activity.");
+            if (cancel && await db.Set<ActivityClosingReport>().AnyAsync(x => x.ActivityId == id
+                && (x.Status == "APPROVED" || x.Status == "FINALIZED"), ct))
+                return ApiOperations.Error(409, "CLOSING_REPORT_LOCKED", "An activity with a finalized report cannot be cancelled.");
             var sessions = await db.Sessions.Where(x => x.ActivityId == id).ToListAsync(ct);
             if (!cancel && (row.Status != ActivityStatuses.Scheduled || row.PublicationStatus is not ("PUBLISHED" or "CLOSED")
                 || row.EndTimeUtc > ActivitySessionEndpoints.Now(http) || sessions.Any(x => x.Status == "SCHEDULED")))

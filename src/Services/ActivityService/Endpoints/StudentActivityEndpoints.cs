@@ -71,12 +71,18 @@ public static class StudentActivityEndpoints
             (db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id && e.IsPublished)
                 || !db.Set<ActivityExecution>().Any(e => e.ActivityId == x.Id)
                     && (x.PublicationStatus == "PUBLISHED" || x.PublicationStatus == "CLOSED"
+                        || detailId.HasValue && x.PublicationStatus == "COMPLETED"
+                            && (memberIds.Contains(x.ClubId) || x.ClubId == 0 && x.OrganizerCampusCode == user.CampusCode)
                         || !candidates && x.PublicationStatus == "LEGACY"))
-            && (x.IsInternal && memberIds.Contains(x.ClubId) || !x.IsInternal && campusIds.Contains(x.ClubId)));
+            && (x.ClubId == 0 && !candidates && !x.IsInternal && x.OrganizerCampusCode != null && x.OrganizerCampusCode == user.CampusCode
+                || x.IsInternal && memberIds.Contains(x.ClubId) || !x.IsInternal && campusIds.Contains(x.ClubId)));
         if (detailId.HasValue) query = query.Where(x => x.Id == detailId);
         else query = query.Where(x => x.Status != ActivityStatuses.Cancelled && x.Status != ActivityStatuses.Completed
-            && (db.Sessions.Any(s => s.ActivityId == x.Id && s.Status == "SCHEDULED" && s.EndTimeUtc > now)
-                || !db.Sessions.Any(s => s.ActivityId == x.Id) && x.EndTimeUtc > now));
+            && (candidates
+                ? db.Sessions.Any(s => s.ActivityId == x.Id && s.Status == "SCHEDULED" && s.EndTimeUtc > now)
+                    || !db.Sessions.Any(s => s.ActivityId == x.Id) && x.EndTimeUtc > now
+                : x.EndTimeUtc > now || db.Sessions.Any(s => s.ActivityId == x.Id && s.Status != "CANCELLED"
+                    && (s.EndTimeUtc > now || s.ClosesAt > now))));
         if (clubId.HasValue) query = query.Where(x => x.ClubId == clubId);
         if (!string.IsNullOrWhiteSpace(search)) { var text = search.Trim(); query = query.Where(x => x.Title.Contains(text) || x.Description.Contains(text)); }
         if (!string.IsNullOrWhiteSpace(semesterId)) query = query.Where(x => x.SemesterId == semesterId);
@@ -85,9 +91,10 @@ public static class StudentActivityEndpoints
         var timed = query.Select(x => new
         {
             Activity = x,
-            Start = db.Sessions.Where(s => s.ActivityId == x.Id && s.Status == "SCHEDULED" && s.EndTimeUtc > now
+            Start = candidates ? db.Sessions.Where(s => s.ActivityId == x.Id && s.Status == "SCHEDULED" && s.EndTimeUtc > now
                 && (sessionIds == null || sessionIds.Contains(s.Id)))
                 .OrderBy(s => s.StartTimeUtc).Select(s => (DateTimeOffset?)s.StartTimeUtc).FirstOrDefault() ?? x.StartTimeUtc
+                : x.StartTimeUtc
         });
         if (state == "UPCOMING") timed = timed.Where(x => x.Start > now);
         if (state == "LIVE") timed = timed.Where(x => x.Start <= now);
@@ -95,7 +102,8 @@ public static class StudentActivityEndpoints
         {
             query = timed.Where(x => x.Start > now)
                 .Select(x => x.Activity).Where(x => includeRegistered && db.ActivityParticipants.Any(p => p.ActivityId == x.Id && p.UserId == userId)
-                    || x.PublicationStatus == "PUBLISHED" && x.RegistrationOpensAt <= now && x.RegistrationClosesAt > now
+                    || x.PublicationStatus == "PUBLISHED" && x.StartTimeUtc > now
+                        && x.RegistrationOpensAt <= now && x.RegistrationClosesAt > now
                         && (x.Capacity == null || x.RegisteredCount < x.Capacity));
             query = query.Where(Eligibility(authority, campusIds));
             timed = query.Select(x => new
@@ -111,7 +119,9 @@ public static class StudentActivityEndpoints
         var rows = await timed.OrderBy(x => x.Start).ThenBy(x => x.Activity.Id)
             .Skip((int)Math.Min((long)(page - 1) * size, int.MaxValue)).Take(size).Select(x => x.Activity).ToListAsync(ct);
         var ids = rows.Select(x => x.Id).ToArray();
-        var sessions = await db.Sessions.AsNoTracking().Where(x => ids.Contains(x.ActivityId) && x.Status == "SCHEDULED" && x.EndTimeUtc > now
+        var sessions = await db.Sessions.AsNoTracking().Where(x => ids.Contains(x.ActivityId)
+            && (candidates ? x.Status == "SCHEDULED" && x.EndTimeUtc > now
+                : x.Status != "CANCELLED" && (x.EndTimeUtc > now || x.ClosesAt > now))
             && (sessionIds == null || sessionIds.Contains(x.Id)))
             .OrderBy(x => x.StartTimeUtc).ThenBy(x => x.Id).ToListAsync(ct);
         var registered = await db.ActivityParticipants.AsNoTracking().Where(x => x.UserId == userId && ids.Contains(x.ActivityId))
@@ -121,27 +131,33 @@ public static class StudentActivityEndpoints
         var checkedIn = await db.ActivityAttendances.AsNoTracking().Where(x => x.UserId == userId
             && x.VerificationStatus == "VERIFIED" && ids.Contains(x.ActivityId)).Select(x => x.SessionId).ToListAsync(ct);
         var metadata = authority.Clubs.ToDictionary(x => x.ClubId);
+        var sessionsByActivity = sessions.ToLookup(s => s.ActivityId);
         var items = rows.Select(a =>
         {
-            var session = sessions.FirstOrDefault(s => s.ActivityId == a.Id);
-            var club = metadata[a.ClubId];
-            var eligible = !a.IsInternal ? club.CampusCode == user.CampusCode
-                : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;
+            var activitySessions = sessionsByActivity[a.Id];
+            var session = activitySessions.FirstOrDefault(s => s.Status == "SCHEDULED" && s.EndTimeUtc > now);
+            var club = metadata.GetValueOrDefault(a.ClubId);
+            var eligible = club is null ? a.ClubId == 0 && a.OrganizerCampusCode == user.CampusCode
+                : !a.IsInternal ? club.CampusCode == user.CampusCode : club.IsApprovedMember && club.JoinedAt <= a.StartTimeUtc;
             var canRegister = eligible && !registered.Contains(a.Id) && a.Status == ActivityStatuses.Scheduled
                 && (a.PublicationStatus == "LEGACY"
                     || a.PublicationStatus == "PUBLISHED"
+                        && now < a.StartTimeUtc
                         && (a.RegistrationOpensAt == null || a.RegistrationOpensAt <= now)
                         && (a.RegistrationClosesAt == null || a.RegistrationClosesAt > now)
                         && (a.Capacity == null || a.RegisteredCount < a.Capacity));
-            var start = session?.StartTimeUtc ?? a.StartTimeUtc; var end = session?.EndTimeUtc ?? a.EndTimeUtc;
+            var start = candidates ? session?.StartTimeUtc ?? a.StartTimeUtc : a.StartTimeUtc;
+            var end = candidates ? session?.EndTimeUtc ?? a.EndTimeUtc : a.EndTimeUtc;
+            var timeline = candidates ? null : ActivityTimelineReadFilter.Resolve(a.Status, start, end, activitySessions, now);
             var action = canRegister ? "REGISTER" : eligible && registered.Contains(a.Id) && session is not null
                 && session.OpensAt <= now && session.ClosesAt >= now && !checkedIn.Contains(session.Id) ? "CHECK_IN" : "VIEW";
-            return new StudentActivityItem(a.Id, a.ClubId, club.ClubCode, club.ClubName, a.Title, a.Description,
-                a.CoverImageUrl, start, end, session?.Location ?? a.Location,
-                a.Status == ActivityStatuses.Cancelled ? "CANCELLED" : end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE",
+            return new StudentActivityItem(a.Id, a.ClubId, club?.ClubCode ?? "", club?.ClubName ?? a.ClubName, a.Title, a.Description,
+                a.CoverImageUrl, start, end, candidates ? session?.Location ?? a.Location : a.Location,
+                timeline?.Status ?? (end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE"),
                 action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,
                 JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])
             {
+                NextSessionStartTimeUtc = timeline?.NextSessionStartTimeUtc,
                 IsInternal = a.IsInternal,
                 IsRegistered = registered.Contains(a.Id),
                 RegistrationVersion = registrationVersions.TryGetValue(a.Id, out var registrationVersion) ? registrationVersion : null,

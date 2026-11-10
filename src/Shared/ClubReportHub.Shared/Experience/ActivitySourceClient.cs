@@ -4,8 +4,17 @@ using Microsoft.Extensions.Configuration;
 
 namespace ClubReportHub.Shared.Experience;
 
-public sealed record ActivitySourceContext(ExperienceSourceSnapshot Source, bool IsRegistered, bool AlreadyVerified);
-public sealed record ActivityExperienceScope(int ActivityId, int ClubId);
+public sealed record ActivitySourceContext(ExperienceSourceSnapshot Source, bool IsRegistered, bool AlreadyVerified)
+{
+    public bool? ClosingReportReady { get; init; }
+    public string? ClosingReportRole { get; init; }
+    public bool UsesClosingDutyXp { get; init; }
+}
+public sealed record ActivityExperienceScope(int ActivityId, int ClubId)
+{
+    public string? OrganizerCampusCode { get; init; }
+    public bool ClosingReportReady { get; init; }
+}
 
 public sealed class ActivitySourceClient(HttpClient client, IConfiguration configuration)
 {
