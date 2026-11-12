@@ -4,6 +4,7 @@ using ActivityService.Data;
 using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
+using ClubReportHub.Shared.Experience;
 using Microsoft.EntityFrameworkCore;
 using static ActivityService.Endpoints.ActivityActionHelpers;
 
@@ -28,6 +29,8 @@ public static class ActivityApplicationEndpoints
         var scope = await Authorize(input.ClubId, http, ct); Manager(scope, "event.registrations.manage");
         Require(input.ExpectedVersion is null, 400, "INVALID_VERSION", "A new draft has no expectedVersion.");
         var content = Normalize(input); Validate(content, false, http);
+        Require(DiscoveryTags.TryNormalize(input.TagSelection, true, out var tags), 400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
+        if (input.TagSelection is not null) content = content with { TagSelection = tags };
         var semester = await Semester(content, http, ct);
         content = content with { Period = semester.SemesterCode };
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
@@ -71,12 +74,16 @@ public static class ActivityApplicationEndpoints
         var input = await Body<ActivityApplicationInput>(http, ct);
         Require(input.ClubId == row.ClubId, 400, "IMMUTABLE_CLUB", "The application club cannot change.");
         var content = Normalize(input); Validate(content, false, http);
+        Require(DiscoveryTags.TryNormalize(input.TagSelection, true, out var tags), 400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
         var semester = await Semester(content, http, ct); content = content with { Period = semester.SemesterCode };
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
             Expected(input.ExpectedVersion ?? 0, row.Version);
             Require(row.Status is "DRAFT" or "REVISION_REQUESTED", 409, "APPLICATION_LOCKED", "Only an editable draft can change.");
-            row.ContentJson = JsonSerializer.Serialize(content, Json); row.SemesterId = semester.SemesterCode;
+            var selection = input.TagSelection is not null ? tags
+                : JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)?.TagSelection;
+            row.ContentJson = JsonSerializer.Serialize(content with { TagSelection = selection }, Json);
+            row.SemesterId = semester.SemesterCode;
             row.Version++; row.UpdatedAt = Now(http); History(db, row, http);
             return Results.Ok(await ApplicationResponse(db, row, scope, ct));
         }, ct);
@@ -122,6 +129,7 @@ public static class ActivityApplicationEndpoints
                     StartTimeUtc = content.StartTimeUtc!.Value,
                     EndTimeUtc = content.EndTimeUtc!.Value,
                     Scale = content.Scale!,
+                    TagSelectionJson = content.TagSelection is null ? null : DiscoveryTags.Store(content.TagSelection),
                     SemesterId = row.SemesterId,
                     PublicationStatus = "DRAFT",
                     IsInternal = content.IsInternal,

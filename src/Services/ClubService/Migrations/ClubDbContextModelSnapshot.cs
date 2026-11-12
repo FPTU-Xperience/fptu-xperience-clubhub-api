@@ -229,6 +229,9 @@ namespace ClubService.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("TagSelectionJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CampusCode");
@@ -445,6 +448,9 @@ namespace ClubService.Migrations
 
                     b.Property<DateTimeOffset>("SubmittedAtUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("TagSelectionJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("VenueSupport")
                         .IsRequired()

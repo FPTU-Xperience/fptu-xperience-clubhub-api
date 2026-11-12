@@ -15,7 +15,7 @@ namespace ClubService.Endpoints;
 
 public static class ClubPublicProfileEndpoints
 {
-    private static readonly HashSet<string> Fields = ["name", "category", "description", "contactEmail", "contactPhone", "scheduleLabel", "schedule", "expectedVersion", "expectedLocation", "majorEvents", "equipmentNeeds", "advisorNeeded"];
+    private static readonly HashSet<string> Fields = ["name", "category", "description", "contactEmail", "contactPhone", "scheduleLabel", "schedule", "expectedVersion", "expectedLocation", "majorEvents", "equipmentNeeds", "advisorNeeded", "tagSelection"];
 
     public static void MapClubPublicProfileEndpoints(this WebApplication app) =>
         app.MapPatch("/api/clubs/{clubId:int}/public-profile", UpdateAsync)
@@ -33,9 +33,22 @@ public static class ClubPublicProfileEndpoints
             return ApiOperations.Error(409, "CLUB_INACTIVE", "An inactive club cannot be edited here.");
         if (request.ValueKind != JsonValueKind.Object || request.EnumerateObject().Any(x => !Fields.Contains(x.Name))
             || request.EnumerateObject().GroupBy(x => x.Name).Any(x => x.Count() != 1))
-            return ApiOperations.Error(400, "INVALID_PROFILE_FIELDS", "Only the public text fields and expectedVersion are accepted.");
+            return ApiOperations.Error(400, "INVALID_PROFILE_FIELDS", "Only public profile fields and expectedVersion are accepted.");
         if (!request.TryGetProperty("expectedVersion", out var version) || version.ValueKind != JsonValueKind.String || !version.TryGetGuid(out var expected))
             return ApiOperations.Error(400, "VERSION_REQUIRED", "Provide the club version.");
+        string? tagSelectionJson = null;
+        if (request.TryGetProperty("tagSelection", out var tagSelection))
+        {
+            try
+            {
+                if (tagSelection.ValueKind != JsonValueKind.Object
+                    || !DiscoveryTags.TryNormalize(tagSelection.Deserialize<DiscoveryTagSelection>(
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web)), false, out var normalized))
+                    return ApiOperations.Error(400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
+                tagSelectionJson = DiscoveryTags.Store(normalized);
+            }
+            catch (JsonException) { return ApiOperations.Error(400, "INVALID_TAGS", DiscoveryTags.InvalidMessage); }
+        }
         if (request.TryGetProperty("schedule", out var structured))
         {
             if (request.TryGetProperty("scheduleLabel", out _)) return ApiOperations.Error(400, "CONFLICTING_SCHEDULE", "Provide structured schedule or scheduleLabel.");
@@ -67,9 +80,14 @@ public static class ClubPublicProfileEndpoints
                 return ApiOperations.Error(403, "PROFILE_AUTHORITY_REQUIRED", "Current club profile authority is required.");
             if (expected != club.ConcurrencyToken) return ApiOperations.Error(409, "STALE_VERSION", "Reload the club before saving.");
             if (request.EnumerateObject().All(x => x.Name == "expectedVersion"))
-                return ApiOperations.Error(400, "EMPTY_PATCH", "Provide a public text field.");
+                return ApiOperations.Error(400, "EMPTY_PATCH", "Provide a public profile field.");
             foreach (var field in request.EnumerateObject().Where(x => x.Name != "expectedVersion"))
             {
+                if (field.Name == "tagSelection")
+                {
+                    club.TagSelectionJson = tagSelectionJson;
+                    continue;
+                }
                 if (field.Name == "advisorNeeded")
                 {
                     if (field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return ApiOperations.Error(400, "INVALID_PROFILE_FIELD", "advisorNeeded must be boolean.");

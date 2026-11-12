@@ -19,6 +19,41 @@ namespace Backend.StabilizationTests;
 public sealed partial class CrossServiceWorkflowAuthorizationTests
 {
     [Fact]
+    public async Task TaggedCampusActivitiesEnterRecommendationSourceOnlyForMatchingCampus()
+    {
+        await using var app = await CreateStudentActivityAppAsync(studentCampusCode: CampusCodes.Hanoi);
+        int activityId;
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ActivityDbContext>();
+            var same = StudentActivity("Same campus");
+            same.ClubId = 0;
+            same.OrganizerCampusCode = CampusCodes.Hanoi;
+            same.TagSelectionJson = DiscoveryTags.Store(new(["RealWorldWork"], "workshop", ["API design"]));
+            var other = StudentActivity("Other campus");
+            other.ClubId = 0;
+            other.OrganizerCampusCode = CampusCodes.HoChiMinh;
+            db.AddRange(same, other);
+            await db.SaveChangesAsync();
+            activityId = same.Id;
+        }
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Internal-Workflow-Token", TestInternalWorkflowToken);
+        async Task<StudentActivityPage> Candidates(bool includeCampus)
+        {
+            using var response = await client.PostAsJsonAsync("/api/internal/experience/student/candidates",
+                new StudentCandidateQuery(104) { IncludeCampusActivities = includeCampus });
+            response.EnsureSuccessStatusCode();
+            return (await response.Content.ReadFromJsonAsync<StudentActivityPage>())!;
+        }
+        Assert.Empty((await Candidates(false)).Items);
+        var activity = Assert.Single((await Candidates(true)).Items);
+        Assert.Equal(activityId, activity.Id);
+        Assert.Equal(CampusCodes.Hanoi, activity.RecommendationSource?.OrganizerCampusCode);
+        Assert.Contains(activity.DiscoveryTags, tag => tag.Id == "experience:RealWorldWork");
+    }
+
+    [Fact]
     public async Task Student_DiscoveryPagesOnlyVisiblePublishedActivitiesAndNeverReturnsRoster()
     {
         await using var app = await CreateStudentActivityAppAsync();
@@ -178,7 +213,7 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         await db.SaveChangesAsync();
     }
 
-    private static async Task<WebApplication> CreateStudentActivityAppAsync(string? connection = null)
+    private static async Task<WebApplication> CreateStudentActivityAppAsync(string? connection = null, string studentCampusCode = "HN")
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
         builder.WebHost.UseTestServer(); builder.Logging.ClearProviders();
@@ -194,13 +229,13 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         builder.Services.AddClubReportJwtValidation(builder.Configuration, builder.Environment);
         builder.Services.AddAuthorization(o => o.AddPolicy(AuthPolicies.BusinessAccess, p => p.RequireAuthenticatedUser()));
         builder.Services.AddSingleton(new CurrentUserProfileClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
-        { Content = JsonContent.Create(new[] { new InternalUserProfile(104, "Canonical student", "student@example.invalid", "HN", true, false, null) }) }), builder.Configuration));
+        { Content = JsonContent.Create(new[] { new InternalUserProfile(104, "Canonical student", "student@example.invalid", studentCampusCode, true, false, null) }) }), builder.Configuration));
         builder.Services.AddSingleton(new ClubExperienceAuthorityClient(CreateFakeHttpClient(_ => new(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(new StudentClubScope([new(1, "C1", "Club 1", "Academic", "HN", false, false, null, Guid.NewGuid(), null),
-            new(2, "C2", "Club 2", "Research", "HCM", false, false, null, Guid.NewGuid(), null),
-            new(3, "C3", "Member club", "Academic", "HN", true, true, DateTimeOffset.UtcNow.AddYears(-1), Guid.NewGuid(), Guid.NewGuid()),
-            new(4, "C4", "Cross-campus member club", "Academic", "HCM", true, true, DateTimeOffset.UtcNow.AddYears(-1), Guid.NewGuid(), Guid.NewGuid())], DateTimeOffset.UtcNow, "TEST_SCOPE_ONLY"))
+                new(2, "C2", "Club 2", "Research", "HCM", false, false, null, Guid.NewGuid(), null),
+                new(3, "C3", "Member club", "Academic", "HN", true, true, DateTimeOffset.UtcNow.AddYears(-1), Guid.NewGuid(), Guid.NewGuid()),
+                new(4, "C4", "Cross-campus member club", "Academic", "HCM", true, true, DateTimeOffset.UtcNow.AddYears(-1), Guid.NewGuid(), Guid.NewGuid())], DateTimeOffset.UtcNow, "TEST_SCOPE_ONLY"))
         }), builder.Configuration));
         var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization();
         app.MapStudentActivityEndpoints(); app.MapStudentActivityHistoryEndpoints();

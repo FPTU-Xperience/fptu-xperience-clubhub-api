@@ -164,6 +164,7 @@ app.MapPrivateEvidenceEndpoints();
 app.MapClubExperienceStatisticsEndpoints();
 app.MapStudentExperienceEndpoints();
 app.MapProcessedRecommendationEndpoints();
+app.MapDiscoveryInteractionEndpoints();
 
 if (app.Environment.IsEnvironment("Test"))
 {

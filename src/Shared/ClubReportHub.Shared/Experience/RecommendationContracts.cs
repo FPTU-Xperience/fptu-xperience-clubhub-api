@@ -10,4 +10,7 @@ public sealed record RecommendationStudentSource(int UserId, string CampusCode, 
 public sealed record RecommendationStudentPage(IReadOnlyList<RecommendationStudentSource> Items, int NextUserId);
 public sealed record RecommendationSession(int Id, DateTimeOffset Start, DateTimeOffset End, bool Required);
 public sealed record RecommendationActivitySource(DateTimeOffset RegistrationDeadline, string Version,
-    IReadOnlyList<RecommendationSession> Sessions);
+    IReadOnlyList<RecommendationSession> Sessions)
+{
+    public string? OrganizerCampusCode { get; init; }
+}

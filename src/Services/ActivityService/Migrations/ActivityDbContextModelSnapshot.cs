@@ -1692,6 +1692,9 @@ namespace ActivityService.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<string>("TagSelectionJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)

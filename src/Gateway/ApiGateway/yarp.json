@@ -744,6 +744,26 @@
           "Path": "/api/v2/recommendations/clubs"
         }
       },
+      "student-discovery-interactions": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/recommendations/interactions",
+          "Methods": ["POST"]
+        }
+      },
+      "student-discovery-interaction-settings": {
+        "Order": -30,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v2/recommendations/interaction-settings",
+          "Methods": ["GET"]
+        }
+      },
       "student-experience-summary": {
         "Order": -30,
         "ClusterId": "admin-service",
