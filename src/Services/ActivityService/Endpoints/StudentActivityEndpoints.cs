@@ -26,7 +26,7 @@ public static class StudentActivityEndpoints
                 || request.SessionIds?.Any(x => x <= 0) == true) return Results.BadRequest();
             return await ReadAsync(request.UserId, null, null, null, request.SemesterId, request.Page, request.PageSize,
                 db, http, users, clubs, ct, candidates: true, activityIds: request.ActivityIds, includeRegistered: request.IncludeRegistered,
-                sessionIds: request.SessionIds);
+                sessionIds: request.SessionIds, includeCampusActivities: request.IncludeCampusActivities);
         }).AllowAnonymous().ExcludeFromDescription();
         app.MapPost("/api/internal/experience/student/counters", CountersAsync).AllowAnonymous().ExcludeFromDescription();
         app.MapPost("/api/internal/experience/student/source-status", SourceStatusAsync).AllowAnonymous().ExcludeFromDescription();
@@ -45,7 +45,8 @@ public static class StudentActivityEndpoints
     private static async Task<IResult> ReadAsync(int userId, int? clubId, string? search, string? status, string? semesterId,
         int page, int size, ActivityDbContext db, HttpContext http, CurrentUserProfileClient users,
         ClubExperienceAuthorityClient clubs, CancellationToken ct, bool candidates = false,
-        int? detailId = null, IReadOnlyList<int>? activityIds = null, bool includeRegistered = false, IReadOnlyList<int>? sessionIds = null)
+        int? detailId = null, IReadOnlyList<int>? activityIds = null, bool includeRegistered = false,
+        IReadOnlyList<int>? sessionIds = null, bool includeCampusActivities = false)
     {
         if (page < 1 || size is < 1 or > 100 || clubId is <= 0 || search?.Length > 200 || semesterId?.Length > 40)
             return ApiOperations.Error(400, "INVALID_DISCOVERY_QUERY", "Check filters and pagination.");
@@ -74,7 +75,7 @@ public static class StudentActivityEndpoints
                         || detailId.HasValue && x.PublicationStatus == "COMPLETED"
                             && (memberIds.Contains(x.ClubId) || x.ClubId == 0 && x.OrganizerCampusCode == user.CampusCode)
                         || !candidates && x.PublicationStatus == "LEGACY"))
-            && (x.ClubId == 0 && !candidates && !x.IsInternal && x.OrganizerCampusCode != null && x.OrganizerCampusCode == user.CampusCode
+            && (x.ClubId == 0 && (!candidates || includeCampusActivities) && !x.IsInternal && x.OrganizerCampusCode != null && x.OrganizerCampusCode == user.CampusCode
                 || x.IsInternal && memberIds.Contains(x.ClubId) || !x.IsInternal && campusIds.Contains(x.ClubId)));
         if (detailId.HasValue) query = query.Where(x => x.Id == detailId);
         else query = query.Where(x => x.Status != ActivityStatuses.Cancelled && x.Status != ActivityStatuses.Completed
@@ -105,7 +106,7 @@ public static class StudentActivityEndpoints
                     || x.PublicationStatus == "PUBLISHED" && x.StartTimeUtc > now
                         && x.RegistrationOpensAt <= now && x.RegistrationClosesAt > now
                         && (x.Capacity == null || x.RegisteredCount < x.Capacity));
-            query = query.Where(Eligibility(authority, campusIds));
+            query = query.Where(Eligibility(authority, campusIds, includeCampusActivities ? user.CampusCode : null));
             timed = query.Select(x => new
             {
                 Activity = x,
@@ -151,12 +152,14 @@ public static class StudentActivityEndpoints
             var timeline = candidates ? null : ActivityTimelineReadFilter.Resolve(a.Status, start, end, activitySessions, now);
             var action = canRegister ? "REGISTER" : eligible && registered.Contains(a.Id) && session is not null
                 && session.OpensAt <= now && session.ClosesAt >= now && !checkedIn.Contains(session.Id) ? "CHECK_IN" : "VIEW";
+            var weights = JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [];
             return new StudentActivityItem(a.Id, a.ClubId, club?.ClubCode ?? "", club?.ClubName ?? a.ClubName, a.Title, a.Description,
                 a.CoverImageUrl, start, end, candidates ? session?.Location ?? a.Location : a.Location,
                 timeline?.Status ?? (end <= now ? "COMPLETED" : start > now ? "UPCOMING" : "LIVE"),
                 action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,
-                JsonSerializer.Deserialize<List<PillarWeight>>(a.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [])
+                weights)
             {
+                DiscoveryTags = DiscoveryTags.ForActivity(a.TagSelectionJson, weights),
                 NextSessionStartTimeUtc = timeline?.NextSessionStartTimeUtc,
                 IsInternal = a.IsInternal,
                 IsRegistered = registered.Contains(a.Id),
@@ -166,22 +169,26 @@ public static class StudentActivityEndpoints
                 // required conservatively; never invent an attendable aggregate interval.
                 RecommendationSource = candidates && a.RegistrationClosesAt.HasValue ? new(a.RegistrationClosesAt.Value,
                     Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{a.Version}:" +
-                        string.Join("|", sessions.Where(s => s.ActivityId == a.Id).Select(s => $"{s.Id}:{s.Version}"))))),
-                    sessions.Where(s => s.ActivityId == a.Id).Select(s => new RecommendationSession(s.Id,
-                        s.StartTimeUtc, s.EndTimeUtc, true)).ToArray()) : null
+                        string.Join("|", activitySessions.Select(s => $"{s.Id}:{s.Version}"))))),
+                    activitySessions.Select(s => new RecommendationSession(s.Id,
+                        s.StartTimeUtc, s.EndTimeUtc, true)).ToArray())
+                { OrganizerCampusCode = a.ClubId == 0 ? a.OrganizerCampusCode : null } : null
             };
         }).ToArray();
         if (detailId.HasValue) return items.Length == 0 ? Results.NotFound() : Results.Ok(items[0]);
         return Results.Ok(new StudentActivityPage(items, page, size, total, (int)Math.Ceiling((decimal)total / size), now, authority.Version));
     }
 
-    private static Expression<Func<ClubActivity, bool>> Eligibility(StudentClubScope scope, int[] campusIds)
+    private static Expression<Func<ClubActivity, bool>> Eligibility(StudentClubScope scope, int[] campusIds, string? organizerCampus)
     {
         var p = Expression.Parameter(typeof(ClubActivity), "activity");
         var audience = Expression.Property(p, nameof(ClubActivity.IsInternal));
         var clubId = Expression.Property(p, nameof(ClubActivity.ClubId));
-        Expression predicate = Expression.AndAlso(Expression.Not(audience),
-            Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [typeof(int)], Expression.Constant(campusIds), clubId));
+        Expression publicScope = Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [typeof(int)], Expression.Constant(campusIds), clubId);
+        if (organizerCampus is not null)
+            publicScope = Expression.OrElse(publicScope, Expression.AndAlso(Expression.Equal(clubId, Expression.Constant(0)),
+                Expression.Equal(Expression.Property(p, nameof(ClubActivity.OrganizerCampusCode)), Expression.Constant(organizerCampus))));
+        Expression predicate = Expression.AndAlso(Expression.Not(audience), publicScope);
         foreach (var member in scope.Clubs.Where(x => x.IsApprovedMember && x.JoinedAt.HasValue))
         {
             var joined = Expression.AndAlso(Expression.Equal(clubId, Expression.Constant(member.ClubId)),

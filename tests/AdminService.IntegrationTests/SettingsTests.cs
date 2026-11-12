@@ -3,6 +3,9 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AdminService.Contracts;
+using AdminService.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace AdminService.IntegrationTests;
@@ -10,6 +13,50 @@ namespace AdminService.IntegrationTests;
 public sealed class SettingsTests(AdminApiFactory factory) : IClassFixture<AdminApiFactory>
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    [Fact]
+    public async Task DiscoveryCaptureSettingsApplyToStudentInteractionsWithRoleAndVersionChecks()
+    {
+        const string settingsPath = "/api/v1/admin/settings";
+        const string capturePath = "/api/v2/recommendations/interaction-settings";
+        const string interactionsPath = "/api/v2/recommendations/interactions";
+        using var admin = CreateClient("admin");
+        using var affairs = CreateClient("student-affairs");
+        using var student = CreateClient("student-1");
+        using var other = CreateClient("student-2");
+        using var anonymous = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(capturePath)).StatusCode);
+        var initial = (await student.GetFromJsonAsync<DiscoveryCaptureSettings>(capturePath))!;
+        Assert.Equal(DiscoveryCaptureSettings.Default, initial);
+        object Update(bool click, bool view, int seconds, int percent, Guid expectedVersion) =>
+            new { discoveryCapture = new { clickEnabled = click, viewEnabled = view, viewSeconds = seconds, visiblePercent = percent, expectedVersion } };
+        object Event(Guid eventId, Guid version, string action) =>
+            new { eventId, entityKind = "activity", entityId = 44, action, captureVersion = version };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await affairs.PutAsJsonAsync(settingsPath, Update(true, false, 8, 75, initial.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync(settingsPath, Update(true, false, 0, 75, initial.Version))).StatusCode);
+        var saved = await admin.PutAsJsonAsync(settingsPath, Update(true, false, 8, 75, initial.Version));
+        saved.EnsureSuccessStatusCode();
+        var current = (await student.GetFromJsonAsync<DiscoveryCaptureSettings>(capturePath))!;
+        Assert.NotEqual(initial.Version, current.Version);
+        Assert.Equal(8, current.ViewSeconds);
+        Assert.Equal(75, current.VisiblePercent);
+        Assert.False(current.ViewEnabled);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync(settingsPath, Update(true, true, 5, 50, initial.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await student.PostAsJsonAsync(interactionsPath, Event(Guid.NewGuid(), initial.Version, "click"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await student.PostAsJsonAsync(interactionsPath, Event(Guid.NewGuid(), initial.Version, "view"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync(interactionsPath, Event(Guid.NewGuid(), current.Version, "click"))).StatusCode);
+        var eventId = Guid.NewGuid();
+        var click = Event(eventId, current.Version, "click");
+        Assert.Equal(HttpStatusCode.NoContent, (await student.PostAsJsonAsync(interactionsPath, click)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await student.PostAsJsonAsync(interactionsPath, click)).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+        var captured = Assert.Single(await db.DiscoveryInteractions.ToListAsync());
+        Assert.Equal(301, captured.UserId);
+        Assert.Equal(eventId, captured.EventId);
+        Assert.Equal("[\"experience:Research\"]", captured.TagIdsJson);
+    }
 
     [Fact]
     public async Task GetSettings_WithoutToken_Returns401()

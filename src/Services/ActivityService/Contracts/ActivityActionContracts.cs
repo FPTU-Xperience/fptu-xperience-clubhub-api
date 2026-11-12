@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ClubReportHub.Shared.Experience;
 
 namespace ActivityService.Contracts;
 
@@ -6,7 +7,10 @@ namespace ActivityService.Contracts;
 public sealed record ActivityApplicationInput(int ClubId, string? Period, string? Title, string? Description,
     string? Objective, string? Location, DateTimeOffset? StartTimeUtc, DateTimeOffset? EndTimeUtc,
     string? Scale, bool IndependentActionsConfirmed, IReadOnlyList<ActivityActionInput>? Actions,
-    ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null, bool IsInternal = true);
+    ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null, bool IsInternal = true)
+{
+    public DiscoveryTagSelection? TagSelection { get; init; }
+}
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ActivityActionInput(string ClientId, string? Name, decimal BasePoints,

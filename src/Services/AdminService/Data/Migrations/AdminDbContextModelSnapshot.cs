@@ -644,6 +644,43 @@ namespace AdminService.Data.Migrations
                     b.ToTable("ContributionUpgradeRequests");
                 });
 
+            modelBuilder.Entity("AdminService.Data.DiscoveryInteraction", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EntityKind")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TagIdsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("UserId", "EventId");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.HasIndex("UserId", "OccurredAtUtc");
+
+                    b.ToTable("DiscoveryInteractions");
+                });
+
             modelBuilder.Entity("AdminService.Data.ExperienceInbox", b =>
                 {
                     b.Property<Guid>("EventId")
@@ -886,6 +923,10 @@ namespace AdminService.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("DiscoveryCaptureJson")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("EmailNotifications")
                         .HasColumnType("bit");

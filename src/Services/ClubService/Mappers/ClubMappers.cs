@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ClubReportHub.Shared.Experience;
 using ClubService.Contracts;
 using ClubService.Models;
 
@@ -48,9 +49,13 @@ public static class ClubMappers
             club.CampusCode)
         {
             Version = club.ConcurrencyToken,
+            DiscoveryTags = DiscoveryTags.ForClub(club.TagSelectionJson, club.Category),
+            TagSelection = DiscoveryTags.Read(club.TagSelectionJson),
             CoverImageUrl = club.CoverImageUrl,
-            ExpectedLocation = club.ExpectedLocation, MajorEvents = club.MajorEvents,
-            EquipmentNeeds = club.EquipmentNeeds, AdvisorNeeded = club.AdvisorNeeded,
+            ExpectedLocation = club.ExpectedLocation,
+            MajorEvents = club.MajorEvents,
+            EquipmentNeeds = club.EquipmentNeeds,
+            AdvisorNeeded = club.AdvisorNeeded,
             Schedule = club.ScheduleJson is null ? null : JsonSerializer.Deserialize<JsonElement>(club.ScheduleJson)
         };
     }
@@ -85,7 +90,10 @@ public static class ClubMappers
             memberCount,
             club.IsActive,
             managers,
-            club.CampusCode);
+            club.CampusCode)
+        {
+            DiscoveryTags = DiscoveryTags.ForClub(club.TagSelectionJson, club.Category)
+        };
     }
 
     public static ClubPublicDetailResponse ToPublicDetailResponse(Club club)
@@ -122,9 +130,13 @@ public static class ClubMappers
             club.CampusCode)
         {
             Version = club.ConcurrencyToken,
+            DiscoveryTags = DiscoveryTags.ForClub(club.TagSelectionJson, club.Category),
+            TagSelection = DiscoveryTags.Read(club.TagSelectionJson),
             Schedule = club.ScheduleJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(club.ScheduleJson),
-            ExpectedLocation = club.ExpectedLocation, MajorEvents = club.MajorEvents,
-            EquipmentNeeds = club.EquipmentNeeds, AdvisorNeeded = club.AdvisorNeeded
+            ExpectedLocation = club.ExpectedLocation,
+            MajorEvents = club.MajorEvents,
+            EquipmentNeeds = club.EquipmentNeeds,
+            AdvisorNeeded = club.AdvisorNeeded
         };
     }
 
@@ -225,7 +237,10 @@ public static class ClubMappers
             application.CampusCode,
             application.Version,
             application.ApprovedManagerUserId,
-            application.ApprovedManagerName);
+            application.ApprovedManagerName)
+        {
+            TagSelection = DiscoveryTags.Read(application.TagSelectionJson)
+        };
     }
 
     // ========================================================================

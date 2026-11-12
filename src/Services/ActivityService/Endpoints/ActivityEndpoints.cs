@@ -6,6 +6,7 @@ using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Events;
+using ClubReportHub.Shared.Experience;
 using ClubReportHub.Shared.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -33,6 +34,7 @@ public static class ActivityEndpoints
         MapCreateActivity(activities);
         MapCreateFromApprovedReport(activities);
         activities.MapActivityWriteEndpoints();
+        activities.MapPut("/{id:int}/discovery-tags", ActivityTagEndpoints.UpdateAsync);
         app.MapActivityRescheduleEndpoints();
         app.MapActivityRecapEndpoints();
         app.MapActivityClosingReportEndpoints();
@@ -184,6 +186,8 @@ public static class ActivityEndpoints
                 return Results.BadRequest(new { message = "StartTimeUtc and startAt must agree when both are provided." });
             if (request.EndTimeUtc.HasValue && request.EndAt.HasValue && request.EndTimeUtc != request.EndAt)
                 return Results.BadRequest(new { message = "EndTimeUtc and endAt must agree when both are provided." });
+            if (!DiscoveryTags.TryNormalize(request.TagSelection, true, out var tags))
+                return ApiOperations.Error(400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
 
             var title = request.Title ?? request.Name;
             var start = request.StartTimeUtc ?? request.StartAt;
@@ -251,6 +255,7 @@ public static class ActivityEndpoints
                 EffortTier = request.EffortTier ?? "T1",
                 Scale = request.Scale ?? "Club",
                 PillarWeightsJson = System.Text.Json.JsonSerializer.Serialize(request.PillarWeights ?? [], ActivitySessionEndpoints.JsonOptions),
+                TagSelectionJson = request.TagSelection is null ? null : DiscoveryTags.Store(tags),
                 PolicyVersion = request.PolicyVersion,
                 Capacity = request.Capacity,
                 RegistrationOpensAt = request.RegistrationOpensAt,

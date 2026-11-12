@@ -21,6 +21,7 @@ internal static class ActivityEndpointHelpers
     internal static ActivityResponse ToResponse(
         ClubActivity activity, int? visibleUserId = null)
     {
+        var weights = JsonSerializer.Deserialize<List<PillarWeight>>(activity.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? [];
         return new ActivityResponse(
             activity.Id,
             activity.ClubId,
@@ -83,7 +84,9 @@ internal static class ActivityEndpointHelpers
             Scale = activity.Scale,
             PolicyVersion = activity.PolicyVersion,
             EvidenceRequirements = activity.EvidenceRequirements,
-            PillarWeights = JsonSerializer.Deserialize<List<PillarWeight>>(activity.PillarWeightsJson, ActivitySessionEndpoints.JsonOptions) ?? []
+            PillarWeights = weights,
+            DiscoveryTags = DiscoveryTags.ForActivity(activity.TagSelectionJson, weights),
+            TagSelection = DiscoveryTags.Read(activity.TagSelectionJson)
         };
     }
 

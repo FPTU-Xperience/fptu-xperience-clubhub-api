@@ -157,6 +157,12 @@ public sealed class AdminApiFactory : WebApplicationFactory<Program>
                     .GetAwaiter().GetResult()!;
                 response = new ClubReportHub.Shared.Experience.StudentSourceStatus(sources.Sources, DateTimeOffset.UtcNow);
             }
+            else if (request.RequestUri.AbsolutePath.StartsWith("/api/v2/activities/", StringComparison.Ordinal))
+            {
+                if (request.RequestUri.AbsolutePath != "/api/v2/activities/44" || request.Headers.Authorization?.Parameter != "student-1")
+                    return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+                response = new { discoveryTags = new[] { new { id = "experience:Research", label = "Nghiên cứu", kind = "experience" } } };
+            }
             else response = new ClubReportHub.Shared.Experience.StudentActivityPage(
                 [new(1, 1, "C1", "Club 1", "Published activity", "Safe", null, DateTimeOffset.UtcNow.AddDays(1),
                     DateTimeOffset.UtcNow.AddDays(1).AddHours(1), "Campus", "UPCOMING", "REGISTER", true, true, "FA26",

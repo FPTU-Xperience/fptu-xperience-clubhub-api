@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using ClubReportHub.Shared.Experience;
 
 namespace ClubService.Contracts;
 
@@ -17,7 +18,10 @@ public sealed record ClubDirectoryResponse(
     int MemberCount,
     bool IsActive,
     IReadOnlyCollection<ManagerAssignmentResponse> Managers,
-    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi);
+    string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
+{
+    public IReadOnlyList<DiscoveryTag> DiscoveryTags { get; init; } = [];
+}
 
 public sealed record PublicLeaderResponse(
     string DisplayName,
@@ -42,6 +46,8 @@ public sealed record ClubPublicDetailResponse(
     string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
 {
     public Guid Version { get; init; }
+    public IReadOnlyList<DiscoveryTag> DiscoveryTags { get; init; } = [];
+    public DiscoveryTagSelection? TagSelection { get; init; }
     public System.Text.Json.JsonElement? Schedule { get; init; }
     public string ExpectedLocation { get; init; } = string.Empty;
     public string MajorEvents { get; init; } = string.Empty;
@@ -66,6 +72,8 @@ public sealed record ClubResponse(
     string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
 {
     public Guid Version { get; init; }
+    public IReadOnlyList<DiscoveryTag> DiscoveryTags { get; init; } = [];
+    public DiscoveryTagSelection? TagSelection { get; init; }
     public string? CoverImageUrl { get; init; }
     public System.Text.Json.JsonElement? Schedule { get; init; }
     public string ExpectedLocation { get; init; } = string.Empty;
@@ -182,7 +190,10 @@ public sealed record ClubCreationApplicationResponse(
     string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi,
     Guid Version = default,
     int? ApprovedManagerUserId = null,
-    string? ApprovedManagerName = null);
+    string? ApprovedManagerName = null)
+{
+    public DiscoveryTagSelection? TagSelection { get; init; }
+}
 
 public sealed record CreateClubRequest(
     [StringLength(20)] string Code,
@@ -194,7 +205,10 @@ public sealed record CreateClubRequest(
     [StringLength(1000)] string? LogoUrl = null,
     [StringLength(500)] string? ScheduleLabel = null,
     bool IsRecruiting = false,
-    [StringLength(20)] string? CampusCode = null);
+    [StringLength(20)] string? CampusCode = null)
+{
+    public DiscoveryTagSelection? TagSelection { get; init; }
+}
 
 public sealed record UpdateClubRequest(
     [StringLength(200)] string? Name = null,
@@ -277,7 +291,10 @@ public sealed record CreateClubApplicationRequest(
     bool CommittedToResponsibility,
     bool CommittedToReporting,
     [StringLength(20)] string? CampusCode = null,
-    Guid? ExpectedVersion = null);
+    Guid? ExpectedVersion = null)
+{
+    public DiscoveryTagSelection? TagSelection { get; init; }
+}
 
 public sealed record ReviewClubApplicationRequest(
     [StringLength(1000)] string? Note,

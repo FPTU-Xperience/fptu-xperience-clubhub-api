@@ -3,6 +3,8 @@ using AdminService.Contracts;
 using AdminService.Data;
 using AdminService.Errors;
 using AdminService.Security;
+using AdminService.Services;
+using ClubReportHub.Shared.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -84,6 +86,15 @@ public static class SettingsEndpoints
         ValidateUpdate(request);
 
         var settings = await EnsureSettingsSeededAsync(dbContext, cancellationToken);
+        if (request.DiscoveryCapture is { } capture)
+        {
+            var current = DiscoveryCapturePolicy.Decode(settings.DiscoveryCaptureJson);
+            if (capture.ExpectedVersion != current.Version)
+                return ApiOperations.Error(409, "DISCOVERY_CAPTURE_CHANGED", "Reload the capture settings.");
+            var next = new DiscoveryCaptureSettings(capture.ClickEnabled, capture.ViewEnabled,
+                capture.ViewSeconds, capture.VisiblePercent, current.Version);
+            if (next != current) settings.DiscoveryCaptureJson = DiscoveryCapturePolicy.Encode(next with { Version = Guid.NewGuid() });
+        }
 
         if (!string.IsNullOrWhiteSpace(request.GoogleDomain))
         {
@@ -123,7 +134,9 @@ public static class SettingsEndpoints
         settings.UpdatedAtUtc = DateTimeOffset.UtcNow;
         settings.UpdatedBy = currentActor.Email ?? currentActor.SubjectId;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try { await dbContext.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException)
+        { return ApiOperations.Error(409, "SETTINGS_CHANGED", "Reload the platform settings."); }
 
         await auditService.WriteAsync(
             new AuditWriteRequest(
@@ -136,7 +149,13 @@ public static class SettingsEndpoints
                     ["googleDomain"] = settings.GoogleDomain,
                     ["digest"] = settings.Digest,
                     ["rateLimit"] = settings.RateLimit.ToString(),
-                    ["retention"] = settings.Retention.ToString()
+                    ["retention"] = settings.Retention.ToString(),
+                    ["discoveryCaptureVersion"] = request.DiscoveryCapture is null ? null
+                        : DiscoveryCapturePolicy.Decode(settings.DiscoveryCaptureJson).Version.ToString(),
+                    ["discoveryClickEnabled"] = request.DiscoveryCapture?.ClickEnabled.ToString(),
+                    ["discoveryViewEnabled"] = request.DiscoveryCapture?.ViewEnabled.ToString(),
+                    ["discoveryViewSeconds"] = request.DiscoveryCapture?.ViewSeconds.ToString(),
+                    ["discoveryVisiblePercent"] = request.DiscoveryCapture?.VisiblePercent.ToString()
                 }),
             cancellationToken);
 
@@ -219,6 +238,13 @@ public static class SettingsEndpoints
         {
             errors.Add(new ErrorDetail("retention", "Retention days must be between 30 and 3650 days."));
         }
+        if (request.DiscoveryCapture is { } capture)
+        {
+            if (capture.ViewSeconds is < 1 or > 30)
+                errors.Add(new ErrorDetail("discoveryCapture.viewSeconds", "View time must be between 1 and 30 seconds."));
+            if (capture.VisiblePercent is < 10 or > 100)
+                errors.Add(new ErrorDetail("discoveryCapture.visiblePercent", "Visible percentage must be between 10 and 100."));
+        }
 
         if (errors.Count > 0)
         {
@@ -265,5 +291,8 @@ public static class SettingsEndpoints
         s.RateLimit,
         s.Retention,
         s.UpdatedAtUtc,
-        s.UpdatedBy);
+        s.UpdatedBy)
+    {
+        DiscoveryCapture = DiscoveryCapturePolicy.Decode(s.DiscoveryCaptureJson)
+    };
 }

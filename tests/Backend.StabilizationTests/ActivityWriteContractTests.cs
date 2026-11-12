@@ -10,6 +10,7 @@ using ActivityService.Endpoints;
 using ActivityService.Infrastructure;
 using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
+using ClubReportHub.Shared.Experience;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -28,6 +29,32 @@ namespace Backend.StabilizationTests;
 public sealed class ActivityWriteContractTests
 {
     private const string SigningKey = "ActivityWriteContractSigningKey1234567890!@#$";
+
+    [Fact]
+    public async Task ActivityDiscoveryTagsRequireContentAuthorityAndCurrentVersion()
+    {
+        await using var fixture = await ActivityFixture.CreateAsync();
+        using var member = fixture.Client(100, AuthRoles.ClubMember);
+        using var manager = fixture.Client(200, AuthRoles.ClubManager);
+        var before = await fixture.ActivityAsync();
+        var request = new
+        {
+            expectedVersion = before.Version,
+            tagSelection = new { experience = new[] { "RealWorldWork" }, activityCategory = "workshop", custom = new[] { " Thiết kế API " } }
+        };
+        const string path = "/api/activities/1/discovery-tags";
+        Assert.Equal(HttpStatusCode.Forbidden, (await member.PutAsJsonAsync(path, request)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.PutAsJsonAsync(path, request)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await manager.PutAsJsonAsync(path, request)).StatusCode);
+
+        var after = await fixture.ActivityAsync();
+        Assert.NotEqual(before.Version, after.Version);
+        Assert.Equal(before.PillarWeightsJson, after.PillarWeightsJson);
+        var tags = DiscoveryTags.ForActivity(after.TagSelectionJson, []);
+        Assert.Contains(tags, tag => tag.Id == "experience:RealWorldWork");
+        Assert.Contains(tags, tag => tag.Id == "activity-category:workshop");
+        Assert.Contains(tags, tag => tag.Kind == "custom" && tag.Label == "Thiết kế API");
+    }
 
     [Theory]
     [InlineData(false)]

@@ -30,6 +30,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     public DbSet<InvalidatedExperienceSource> InvalidatedExperienceSources => Set<InvalidatedExperienceSource>();
     public DbSet<ApprovedExperiencePolicy> ApprovedExperiencePolicies => Set<ApprovedExperiencePolicy>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<DiscoveryInteraction> DiscoveryInteractions => Set<DiscoveryInteraction>();
 
     public override int SaveChanges() => SaveChanges(true);
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

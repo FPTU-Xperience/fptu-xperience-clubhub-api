@@ -73,14 +73,21 @@ internal static class CampusActivityEndpoints
     {
         var actor = await CampusReviewer(http, ct);
         var input = await Body<Plan>(http, ct);
+        Require(DiscoveryTags.TryNormalize(input.TagSelection, true, out var tags), 400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
         await Validate(input, http, ct);
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
             var row = new ClubActivity
             {
-                ClubName = "Công tác sinh viên", OrganizerCampusCode = actor.CampusCode,
-                IsInternal = false, DiscoveryVisibility = "CAMPUS_PUBLIC", Eligibility = "CAMPUS_PUBLIC",
-                PublicationStatus = "DRAFT", CreatedByUserId = actor.Id, CreatedAtUtc = Now(http)
+                ClubName = "Công tác sinh viên",
+                OrganizerCampusCode = actor.CampusCode,
+                IsInternal = false,
+                DiscoveryVisibility = "CAMPUS_PUBLIC",
+                Eligibility = "CAMPUS_PUBLIC",
+                PublicationStatus = "DRAFT",
+                CreatedByUserId = actor.Id,
+                CreatedAtUtc = Now(http),
+                TagSelectionJson = input.TagSelection is null ? null : DiscoveryTags.Store(tags)
             };
             Apply(row, input, Now(http));
             db.Add(row);
@@ -95,6 +102,7 @@ internal static class CampusActivityEndpoints
         var row = await Find(id, db, ct);
         Require(row.OrganizerCampusCode == actor.CampusCode && row.ClubId == 0, 403, "CAMPUS_SCOPE_DENIED", "This activity belongs to another organizer.");
         var input = await Body<Plan>(http, ct);
+        Require(DiscoveryTags.TryNormalize(input.TagSelection, true, out var tags), 400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
         await Validate(input, http, ct);
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
@@ -112,6 +120,7 @@ internal static class CampusActivityEndpoints
                 row.ScoringSnapshotJson = null;
             }
             Apply(row, input, Now(http));
+            if (input.TagSelection is not null) row.TagSelectionJson = DiscoveryTags.Store(tags);
             return Results.Ok(View(row, offer));
         }, ct);
     }
@@ -232,8 +241,12 @@ internal static class CampusActivityEndpoints
             Require(offer is null, 409, "HANDOVER_EXISTS", "This activity already has a handover decision or a pending offer.");
             offer = new ActivityHandover
             {
-                ActivityId = id, ClubId = input.ClubId, ClubName = scope.Club.Name, Version = Guid.NewGuid(),
-                OfferedBy = actor.Id, OfferedAtUtc = now
+                ActivityId = id,
+                ClubId = input.ClubId,
+                ClubName = scope.Club.Name,
+                Version = Guid.NewGuid(),
+                OfferedBy = actor.Id,
+                OfferedAtUtc = now
             };
             db.Add(offer);
             db.AddOutboxMessage(new ExperienceNotificationEvent(Guid.NewGuid(), now, input.ClubId, managers,
@@ -249,13 +262,13 @@ internal static class CampusActivityEndpoints
         Manager(scope);
         var now = Now(http);
         var items = await (from offer in db.Set<ActivityHandover>().AsNoTracking()
-            join activity in db.Activities.AsNoTracking() on offer.ActivityId equals activity.Id
-            where offer.ClubId == clubId && (offer.Status == "PENDING" && activity.ClubId == 0
-                || offer.Status == "ACCEPTED" && activity.ClubId == clubId)
-                && activity.OrganizerCampusCode == scope.Club.CampusCode && activity.PublicationStatus == "DRAFT"
-                && activity.Status == ActivityStatuses.Scheduled && activity.StartTimeUtc > now
-            orderby activity.Id descending
-            select new { activity, offer }).Take(100).ToListAsync(ct);
+                           join activity in db.Activities.AsNoTracking() on offer.ActivityId equals activity.Id
+                           where offer.ClubId == clubId && (offer.Status == "PENDING" && activity.ClubId == 0
+                               || offer.Status == "ACCEPTED" && activity.ClubId == clubId)
+                               && activity.OrganizerCampusCode == scope.Club.CampusCode && activity.PublicationStatus == "DRAFT"
+                               && activity.Status == ActivityStatuses.Scheduled && activity.StartTimeUtc > now
+                           orderby activity.Id descending
+                           select new { activity, offer }).Take(100).ToListAsync(ct);
         return Results.Ok(items.Select(x => View(x.activity, x.offer)));
     }
 
@@ -333,8 +346,15 @@ internal static class CampusActivityEndpoints
                 409, "DUTY_ALREADY_ASSIGNED", "This student already has this role.");
             var duty = new CampusActivityDuty
             {
-                Id = Guid.NewGuid(), Version = Guid.NewGuid(), ActivityId = id, UserId = input.UserId, Role = input.Role!,
-                DisplayName = user!.DisplayName, Responsibility = responsibility!, AssignedBy = scope.Account.Id, AssignedAtUtc = Now(http)
+                Id = Guid.NewGuid(),
+                Version = Guid.NewGuid(),
+                ActivityId = id,
+                UserId = input.UserId,
+                Role = input.Role!,
+                DisplayName = user!.DisplayName,
+                Responsibility = responsibility!,
+                AssignedBy = scope.Account.Id,
+                AssignedAtUtc = Now(http)
             };
             db.Add(duty);
             return Results.Ok(new { duty.Id, duty.Version });
@@ -393,9 +413,17 @@ internal static class CampusActivityEndpoints
                 400, "INVALID_CAMPUS_SESSION", "The session and attendance window must fit the activity schedule.");
             var session = new ActivitySession
             {
-                ActivityId = id, SeriesId = Guid.NewGuid(), SemesterId = row.SemesterId!, Location = location!,
-                StartTimeUtc = input.StartTimeUtc, EndTimeUtc = input.EndTimeUtc, OpensAt = input.OpensAt, ClosesAt = input.ClosesAt,
-                CreatedAtUtc = now, UpdatedAtUtc = now, CreatedByUserId = scope.Account.Id
+                ActivityId = id,
+                SeriesId = Guid.NewGuid(),
+                SemesterId = row.SemesterId!,
+                Location = location!,
+                StartTimeUtc = input.StartTimeUtc,
+                EndTimeUtc = input.EndTimeUtc,
+                OpensAt = input.OpensAt,
+                ClosesAt = input.ClosesAt,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                CreatedByUserId = scope.Account.Id
             };
             row.Version = Guid.NewGuid();
             row.UpdatedAtUtc = now;
@@ -427,10 +455,17 @@ internal static class CampusActivityEndpoints
                 409, "ATTENDANCE_EXISTS", "Attendance has already been recorded.");
             var attendance = new ActivityAttendance
             {
-                ActivityId = id, SessionId = sessionId, UserId = input.UserId, FullName = participant!.FullName,
+                ActivityId = id,
+                SessionId = sessionId,
+                UserId = input.UserId,
+                FullName = participant!.FullName,
                 AttendanceDate = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(7)).Date),
-                Status = AttendanceStatuses.Present, VerificationStatus = "VERIFIED", VerificationMethod = "MANUAL_REVIEW",
-                CheckedInAtUtc = now, CheckedInByUserId = scope.Account.Id, CreatedAtUtc = now
+                Status = AttendanceStatuses.Present,
+                VerificationStatus = "VERIFIED",
+                VerificationMethod = "MANUAL_REVIEW",
+                CheckedInAtUtc = now,
+                CheckedInByUserId = scope.Account.Id,
+                CreatedAtUtc = now
             };
             db.Add(attendance);
             if (activity.ScoringSnapshotJson is { } blueprint)
@@ -438,8 +473,13 @@ internal static class CampusActivityEndpoints
                 var saved = JsonSerializer.Deserialize<ExperienceSourceSnapshot>(blueprint, ActivitySessionEndpoints.JsonOptions)!;
                 var source = saved with
                 {
-                    ClubId = activity.ClubId, ActivityVersion = activity.Version, SessionId = session.Id, Title = activity.Title,
-                    SessionVersion = session.Version, StartTimeUtc = session.StartTimeUtc, EndTimeUtc = session.EndTimeUtc
+                    ClubId = activity.ClubId,
+                    ActivityVersion = activity.Version,
+                    SessionId = session.Id,
+                    Title = activity.Title,
+                    SessionVersion = session.Version,
+                    StartTimeUtc = session.StartTimeUtc,
+                    EndTimeUtc = session.EndTimeUtc
                 };
                 attendance.RecognitionStatus = "PENDING";
                 await db.SaveChangesAsync(ct);
@@ -464,8 +504,12 @@ internal static class CampusActivityEndpoints
                 409, "CLOSING_REPORT_EXISTS", "A report already exists.");
             var report = new ActivityClosingReport
             {
-                ActivityId = id, Status = "DRAFT", Version = Guid.NewGuid(), SubmittedBy = actor.Id,
-                SubmittedAtUtc = Now(http), Summary = summary!
+                ActivityId = id,
+                Status = "DRAFT",
+                Version = Guid.NewGuid(),
+                SubmittedBy = actor.Id,
+                SubmittedAtUtc = Now(http),
+                Summary = summary!
             };
             db.Add(report);
             return Results.Ok(Report(report));
@@ -539,16 +583,32 @@ internal static class CampusActivityEndpoints
 
     private static object View(ClubActivity a, ActivityHandover? h) => new
     {
-        a.Id, a.Version, a.Title, a.Description, a.Location, a.SemesterId, a.StartTimeUtc, a.EndTimeUtc,
-        a.ClubId, a.ClubName, a.Capacity, a.Status, a.PublicationStatus, a.RegistrationOpensAt, a.RegistrationClosesAt,
+        a.Id,
+        a.Version,
+        a.Title,
+        a.Description,
+        a.Location,
+        a.SemesterId,
+        a.StartTimeUtc,
+        a.EndTimeUtc,
+        a.ClubId,
+        a.ClubName,
+        a.Capacity,
+        a.Status,
+        a.PublicationStatus,
+        a.RegistrationOpensAt,
+        a.RegistrationClosesAt,
         publishAtUtc = a.CampusPublishAtUtc,
-        a.PolicyVersion, a.EffortTier,
+        a.PolicyVersion,
+        a.EffortTier,
+        TagSelection = DiscoveryTags.Read(a.TagSelectionJson),
         handover = h is null ? null : new { h.ClubId, h.ClubName, h.Version, h.Status, h.OfferedAtUtc, h.DecidedAtUtc }
     };
 
     private static object Report(ActivityClosingReport r) => new { r.Version, r.Status, r.Summary, r.ReviewedAtUtc };
     private sealed record Plan(string? Title, string? Description, string? Location, string? SemesterId,
-        DateTimeOffset StartTimeUtc, DateTimeOffset EndTimeUtc, int? Capacity, Guid? ExpectedVersion);
+        DateTimeOffset StartTimeUtc, DateTimeOffset EndTimeUtc, int? Capacity, Guid? ExpectedVersion,
+        DiscoveryTagSelection? TagSelection = null);
     private sealed record PublishInput(Guid ExpectedVersion, DateTimeOffset RegistrationOpensAt, DateTimeOffset RegistrationClosesAt,
         DateTimeOffset? PublishAtUtc);
     private sealed record OfferInput(Guid ExpectedVersion, int ClubId);

@@ -312,6 +312,8 @@ public static class ClubEndpoints
         ClubDbContext db,
         CancellationToken cancellationToken)
     {
+        if (!ClubReportHub.Shared.Experience.DiscoveryTags.TryNormalize(request.TagSelection, false, out var tags))
+            return Results.BadRequest(new { message = ClubReportHub.Shared.Experience.DiscoveryTags.InvalidMessage });
         if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
         {
             return Results.BadRequest(new { message = "Club code and name are required." });
@@ -343,6 +345,7 @@ public static class ClubEndpoints
             Code = code,
             Name = request.Name.Trim(),
             Category = normalizedCat,
+            TagSelectionJson = request.TagSelection is null ? null : ClubReportHub.Shared.Experience.DiscoveryTags.Store(tags),
             CampusCode = campusCode,
             Description = request.Description?.Trim() ?? string.Empty,
             LogoUrl = request.LogoUrl?.Trim(),

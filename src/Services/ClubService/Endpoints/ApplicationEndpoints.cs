@@ -119,6 +119,8 @@ public static class ApplicationEndpoints
 
     private static async Task<IResult> SubmitApplication(CreateClubApplicationRequest request, ClaimsPrincipal user, ClubDbContext db, HttpContext http, CancellationToken ct)
     {
+        if (!DiscoveryTags.TryNormalize(request.TagSelection, false, out var tags))
+            return ApiOperations.Error(400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
         var (profile, error) = await ProfileAsync(user.GetUserId(), http, ct); if (error is not null) return error;
         if (request.CampusCode is not null && request.CampusCode != profile!.CampusCode) return Results.Forbid();
         var canonical = request with { CampusCode = profile!.CampusCode, FounderFullName = profile.DisplayName, FounderEmail = profile.Email };
@@ -132,7 +134,11 @@ public static class ApplicationEndpoints
             if (await db.ClubCreationApplications.AnyAsync(x => x.RequesterUserId == user.GetUserId() && x.Status == ClubApplicationStatuses.Submitted, ct))
                 return Results.Conflict(new { message = "An application is already awaiting review." });
             if (await db.Clubs.AnyAsync(x => x.Code == code, ct)) return Results.Conflict(new { message = "Club code already exists." });
-            var row = new ClubCreationApplication { RequesterUserId = user.GetUserId() };
+            var row = new ClubCreationApplication
+            {
+                RequesterUserId = user.GetUserId(),
+                TagSelectionJson = request.TagSelection is null ? null : DiscoveryTags.Store(tags)
+            };
             ClubMappers.ApplyClubApplicationRequest(row, canonical, code); db.Add(row); await db.SaveChangesAsync(ct);
             return Results.Created($"/api/clubs/applications/{row.Id}", ClubMappers.ToApplicationResponse(row));
         }, ct);
@@ -140,15 +146,25 @@ public static class ApplicationEndpoints
 
     private static async Task<IResult> UpdateApplication(int applicationId, CreateClubApplicationRequest request, ClaimsPrincipal user, ClubDbContext db, HttpContext http, CancellationToken ct)
     {
+        if (!DiscoveryTags.TryNormalize(request.TagSelection, false, out var tags))
+            return ApiOperations.Error(400, "INVALID_TAGS", DiscoveryTags.InvalidMessage);
         var row = await db.ClubCreationApplications.SingleOrDefaultAsync(x => x.Id == applicationId, ct);
         if (row is null) return Results.NotFound();
         if (row.RequesterUserId != user.GetUserId()) return Results.Forbid();
         var (profile, error) = await ProfileAsync(user.GetUserId(), http, ct); if (error is not null) return error;
         if (profile!.CampusCode != row.CampusCode || request.CampusCode is not null && request.CampusCode != row.CampusCode) return Results.Forbid();
-        var canonical = request with { CampusCode = row.CampusCode, FounderFullName = profile.DisplayName, FounderEmail = profile.Email,
-            LogoUrl = request.LogoUrl ?? row.LogoUrl, ExpectedLocation = request.ExpectedLocation ?? row.ExpectedLocation,
-            ExpectedSchedule = request.ExpectedSchedule ?? row.ExpectedSchedule, MajorEvents = request.MajorEvents ?? row.MajorEvents,
-            EquipmentNeeds = request.EquipmentNeeds ?? row.EquipmentNeeds, AdvisorNeeded = request.AdvisorNeeded || row.AdvisorNeeded };
+        var canonical = request with
+        {
+            CampusCode = row.CampusCode,
+            FounderFullName = profile.DisplayName,
+            FounderEmail = profile.Email,
+            LogoUrl = request.LogoUrl ?? row.LogoUrl,
+            ExpectedLocation = request.ExpectedLocation ?? row.ExpectedLocation,
+            ExpectedSchedule = request.ExpectedSchedule ?? row.ExpectedSchedule,
+            MajorEvents = request.MajorEvents ?? row.MajorEvents,
+            EquipmentNeeds = request.EquipmentNeeds ?? row.EquipmentNeeds,
+            AdvisorNeeded = request.AdvisorNeeded || row.AdvisorNeeded
+        };
         var code = string.IsNullOrWhiteSpace(request.Code) ? row.Code : ValidationExtensions.NormalizeOrGenerateClubCode(request.Code, row.RequesterUserId);
         var validation = ValidationExtensions.ValidateClubApplication(canonical, code);
         if (validation is not null) return Results.BadRequest(new { message = validation });
@@ -157,6 +173,7 @@ public static class ApplicationEndpoints
             await db.Entry(row).ReloadAsync(ct);
             if (request.ExpectedVersion != row.Version || row.Status != ClubApplicationStatuses.NeedsRevision) return Results.Conflict(new { message = "Reload an application requiring revision." });
             if (await db.Clubs.AnyAsync(x => x.Code == code, ct)) return Results.Conflict(new { message = "Club code already exists." });
+            if (request.TagSelection is not null) row.TagSelectionJson = DiscoveryTags.Store(tags);
             ClubMappers.ApplyClubApplicationRequest(row, canonical, code); row.Version = Guid.NewGuid(); row.Status = ClubApplicationStatuses.Submitted;
             row.ReviewNote = null; row.ReviewConditions = null; row.ReviewerSignature = null; row.ReviewedAtUtc = null; row.ReviewedByUserId = null; row.SubmittedAtUtc = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct); return Results.Ok(ClubMappers.ToApplicationResponse(row));
@@ -182,16 +199,38 @@ public static class ApplicationEndpoints
             if (request.ExpectedVersion != row.Version || row.Status != ClubApplicationStatuses.Submitted) return Results.Conflict(new { message = "Reload the pending application before reviewing." });
             if (await db.ClubManagerAssignments.AnyAsync(x => x.ManagerUserId == managerId && x.IsActive, ct)) return Results.Conflict(new { message = "Selected manager already manages a club." });
             if (await db.Clubs.AnyAsync(x => x.Code == row.Code, ct)) return Results.Conflict(new { message = "Club code already exists." });
-            var club = new Club { Code = row.Code, Name = row.Name, Category = row.Category, CampusCode = row.CampusCode,
-                Description = row.Description, LogoUrl = row.LogoUrl, ContactEmail = row.ContactEmail, ContactPhone = row.ContactPhone,
-                ExpectedLocation = row.ExpectedLocation, MajorEvents = row.MajorEvents, EquipmentNeeds = row.EquipmentNeeds, AdvisorNeeded = row.AdvisorNeeded };
+            var club = new Club
+            {
+                Code = row.Code,
+                Name = row.Name,
+                Category = row.Category,
+                CampusCode = row.CampusCode,
+                TagSelectionJson = row.TagSelectionJson,
+                Description = row.Description,
+                LogoUrl = row.LogoUrl,
+                ContactEmail = row.ContactEmail,
+                ContactPhone = row.ContactPhone,
+                ExpectedLocation = row.ExpectedLocation,
+                MajorEvents = row.MajorEvents,
+                EquipmentNeeds = row.EquipmentNeeds,
+                AdvisorNeeded = row.AdvisorNeeded
+            };
             club.ManagerAssignments.Add(new ClubManagerAssignment { ManagerUserId = managerId, ManagerName = manager.DisplayName });
             foreach (var account in new[] { manager, requester }.DistinctBy(x => x.Id))
-                club.Memberships.Add(new ClubMembership { UserId = account.Id, FullName = account.DisplayName, Email = account.Email,
+                club.Memberships.Add(new ClubMembership
+                {
+                    UserId = account.Id,
+                    FullName = account.DisplayName,
+                    Email = account.Email,
                     PhoneNumber = account.Id == row.RequesterUserId ? row.ContactPhone : account.PhoneNumber ?? string.Empty,
                     Address = account.Id == row.RequesterUserId ? row.FounderOrganization : string.Empty,
-                    Role = ClubMemberRoles.Member, Status = ClubMembershipStatuses.Approved, AcceptedClubRules = true, CommittedToParticipate = true,
-                    ReviewedAtUtc = DateTimeOffset.UtcNow, ReviewedByUserId = user.GetUserId() });
+                    Role = ClubMemberRoles.Member,
+                    Status = ClubMembershipStatuses.Approved,
+                    AcceptedClubRules = true,
+                    CommittedToParticipate = true,
+                    ReviewedAtUtc = DateTimeOffset.UtcNow,
+                    ReviewedByUserId = user.GetUserId()
+                });
             db.Clubs.Add(club); await db.SaveChangesAsync(ct);
             Stamp(row, request, user, ClubApplicationStatuses.Approved); row.CreatedClubId = club.Id;
             row.ApprovedManagerUserId = managerId; row.ApprovedManagerName = manager.DisplayName;

@@ -36,6 +36,8 @@ public sealed record ActivityResponse(
     public DateTimeOffset? RegistrationClosesAt { get; init; }
     public string Eligibility { get; init; } = "CLUB_MEMBER";
     public IReadOnlyList<PillarWeight> PillarWeights { get; init; } = [];
+    public IReadOnlyList<DiscoveryTag> DiscoveryTags { get; init; } = [];
+    public DiscoveryTagSelection? TagSelection { get; init; }
     public string? CoverImageUrl { get; init; }
     public IReadOnlyList<ActivityResourceResponse>? Resources { get; init; }
     public ActivityResourceCapabilities ResourceCapabilities { get; init; } = new(false, false, []);
@@ -96,7 +98,10 @@ public sealed record CreateActivityRequest(
     DateTimeOffset? EndAt = null, string? SemesterId = null, string? EffortTier = null, string? Scale = null,
     IReadOnlyList<PillarWeight>? PillarWeights = null, Guid? PolicyVersion = null, int? Capacity = null,
     DateTimeOffset? RegistrationOpensAt = null, DateTimeOffset? RegistrationClosesAt = null,
-    string? Eligibility = null, string? EvidenceRequirements = null, string DiscoveryVisibility = "CLUB_ONLY", bool? IsInternal = null);
+    string? Eligibility = null, string? EvidenceRequirements = null, string DiscoveryVisibility = "CLUB_ONLY", bool? IsInternal = null)
+{
+    public DiscoveryTagSelection? TagSelection { get; init; }
+}
 
 public sealed record CreateActivityFromApprovedReportRequest(
     int ReportId,

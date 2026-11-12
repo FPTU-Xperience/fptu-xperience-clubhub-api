@@ -40,14 +40,17 @@ public static class ProcessedRecommendationEndpoints
             var configuration = http.RequestServices.GetRequiredService<IConfiguration>();
             var environment = configuration["Experience:Environment"] ?? "PROJECT";
             var now = DateTimeOffset.UtcNow;
-            if (kind == "activities" && !await db.ApprovedExperiencePolicies.AsNoTracking().AnyAsync(x =>
+            var needsBasicFallback = kind == "activities" && !await db.ApprovedExperiencePolicies.AsNoTracking().AnyAsync(x =>
                 x.SemesterId == semester[0].SemesterCode && x.Scope == "PERIOD" && x.Environment == environment
-                && x.ApprovedAt <= now && (x.EffectiveAt == null || x.EffectiveAt <= now), ct))
-                return await StudentExperienceEndpoints.ReadBaselineRecommendationsAsync(limit, semester[0].SemesterCode,
-                    "PERIOD", db, http, configuration, sources, ct);
-            var result = await client.ReadAsync(userId, semester[0].SemesterCode, kind, ct);
+                && x.ApprovedAt <= now && (x.EffectiveAt == null || x.EffectiveAt <= now), ct);
+            Task<IResult> BasicFallback() => StudentExperienceEndpoints.ReadBaselineRecommendationsAsync(limit,
+                semester[0].SemesterCode, "PERIOD", db, http, configuration, sources, ct);
+            JsonElement result;
+            try { result = await client.ReadAsync(userId, semester[0].SemesterCode, kind, ct); }
+            catch (HttpRequestException) when (needsBasicFallback) { return await BasicFallback(); }
             var available = result.GetProperty("available").GetBoolean();
             var status = result.GetProperty("status").GetString();
+            if (needsBasicFallback && !available) return await BasicFallback();
             if (!available) return Results.Ok(new { items = Array.Empty<object>(), available = false, status, sourceLabel = "PROCESSED_RECOMMENDATION" });
             if (result.GetProperty("userId").GetInt32() != userId || result.GetProperty("semesterId").GetString() != semester[0].SemesterCode
                 || result.GetProperty("type").GetString() != kind || result.GetProperty("expiresAt").GetDateTimeOffset() <= DateTimeOffset.UtcNow)
@@ -55,6 +58,9 @@ public static class ProcessedRecommendationEndpoints
             var ranking = result.GetProperty("items").EnumerateArray().ToArray();
             if (ranking.Length > 20 || ranking.Select(x => x.GetProperty("id").GetInt32()).Distinct().Count() != ranking.Length)
                 throw new HttpRequestException("Invalid processed ranking.");
+            if (needsBasicFallback && !ranking.Any(item => item.GetProperty("reasons").EnumerateArray()
+                .Any(reason => reason.GetProperty("code").GetString() == "TAG_INTEREST_MATCH")))
+                return await BasicFallback();
             var items = new List<object>();
             var filtered = false;
             var snapshot = result.GetProperty("snapshotId").GetString();
@@ -62,7 +68,8 @@ public static class ProcessedRecommendationEndpoints
             if (kind == "activities")
             {
                 var ids = ranking.Select(x => x.GetProperty("id").GetInt32()).ToArray();
-                var live = ids.Length == 0 ? null : await sources.CandidatesAsync(new(userId, 1, 100, semester[0].SemesterCode, ids), ct);
+                var live = ids.Length == 0 ? null : await sources.CandidatesAsync(
+                    new(userId, 1, 100, semester[0].SemesterCode, ids) { IncludeCampusActivities = true }, ct);
                 var byId = live?.Items.ToDictionary(x => x.Id) ?? [];
                 foreach (var item in ranking)
                 {

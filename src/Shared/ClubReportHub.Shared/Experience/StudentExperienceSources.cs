@@ -8,11 +8,15 @@ public sealed record StudentClubMetadata(int ClubId, string ClubCode, string Clu
     bool IsApprovedMember, bool CanViewPrivate, DateTimeOffset? JoinedAt, Guid Version, Guid? MembershipVersion)
 {
     public bool IsRecruiting { get; init; }
+    public IReadOnlyList<DiscoveryTag> DiscoveryTags { get; init; } = [];
 }
 public sealed record StudentClubScope(IReadOnlyList<StudentClubMetadata> Clubs, DateTimeOffset AsOf, string Version);
 public sealed record StudentCandidateQuery(int UserId, int Page = 1, int PageSize = 100,
     string? SemesterId = null, IReadOnlyList<int>? ActivityIds = null, bool IncludeRegistered = false,
-    IReadOnlyList<int>? SessionIds = null);
+    IReadOnlyList<int>? SessionIds = null)
+{
+    public bool IncludeCampusActivities { get; init; }
+}
 public sealed record StudentSourceReference(int ActivityId, int SessionId);
 public sealed record StudentSourceStatusQuery(IReadOnlyList<StudentSourceReference> Sources);
 public sealed record StudentSourceStatus(IReadOnlyList<StudentSourceReference> ActiveSources, DateTimeOffset AsOf);
@@ -24,6 +28,7 @@ public sealed record StudentActivityItem(int Id, int ClubId, string ClubCode, st
 {
     public DateTimeOffset? NextSessionStartTimeUtc { get; init; }
     public RecommendationActivitySource? RecommendationSource { get; init; }
+    public IReadOnlyList<DiscoveryTag> DiscoveryTags { get; init; } = [];
     public bool IsInternal { get; init; } = true;
     public bool IsRegistered { get; init; }
     public bool CanCancelRegistration { get; init; }

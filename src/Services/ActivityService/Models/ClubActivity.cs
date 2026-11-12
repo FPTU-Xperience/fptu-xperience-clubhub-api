@@ -11,6 +11,7 @@ public sealed class ClubActivity
     public string EffortTier { get; set; } = "T1";
     public string Scale { get; set; } = "Club";
     public string PillarWeightsJson { get; set; } = "[]";
+    public string? TagSelectionJson { get; set; }
     public Guid? PolicyVersion { get; set; }
     public string? ScoringSnapshotJson { get; set; }
     public int? Capacity { get; set; }
