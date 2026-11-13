@@ -120,14 +120,20 @@ public sealed class RecommendationFeedWorker(IServiceScopeFactory scopes, IConfi
             published = true,
             cancelled = false,
             registrationOpen = true,
-            x.RecommendationSource.RegistrationDeadline,
+            registrationDeadline = x.RecommendationSource.RegistrationDeadline.ToUniversalTime(),
             capacityAvailable = true,
             eligibleUserIds = new[] { student.UserId },
             interestIds = MapInterests(configuration.GetSection($"Recommendation:Activities:{x.Id}:Interests").Get<string[]>() ?? []),
             tagIds = x.DiscoveryTags.Select(tag => tag.Id).Order(StringComparer.Ordinal).ToArray(),
             majorCodes = configuration.GetSection($"Recommendation:Activities:{x.Id}:MajorCodes").Get<string[]>() ?? [],
             pillarWeights = x.PillarWeights.Where(p => RadarPillars.CoreSix.Contains(p.Pillar)).ToDictionary(p => p.Pillar, p => p.Weight),
-            x.RecommendationSource.Sessions,
+            sessions = x.RecommendationSource.Sessions.Select(session => new
+            {
+                session.Id,
+                start = session.Start.ToUniversalTime(),
+                end = session.End.ToUniversalTime(),
+                session.Required
+            }),
             scheduleAvailability = "KNOWN"
         }).Where(x => x.pillarWeights.Count == 0 ? x.tagIds.Length > 0
             : Math.Abs(x.pillarWeights.Values.Sum() - 1) < 0.000001m).ToArray();

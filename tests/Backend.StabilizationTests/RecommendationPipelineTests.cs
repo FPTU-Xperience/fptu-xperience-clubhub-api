@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using AdminService.Data;
+using AdminService.Services;
 using AuthService.Data;
 using AuthService.Endpoints;
 using AuthService.Models;
@@ -12,12 +14,105 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
 namespace Backend.StabilizationTests;
 
 public sealed class RecommendationPipelineTests
 {
     private const string Token = "Synthetic-Recommendation-Internal-Token-2026";
+
+    [Fact]
+    public async Task WorkerFeed_SerializesActivityDeadlinesAndSessionsAsUtc()
+    {
+        await using var sql = new SqliteConnection("DataSource=:memory:");
+        await sql.OpenAsync();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Recommendation:Enabled"] = "true",
+            ["Security:InternalWorkflowToken"] = Token,
+            ["Recommendation:Token"] = Token
+        }).Build();
+        var offset = TimeSpan.FromHours(7);
+        var start = DateTimeOffset.UtcNow.ToOffset(offset).AddDays(2);
+        var end = start.AddHours(1);
+        var deadline = start.AddHours(-2);
+        var club = new StudentClubMetadata(1, "TEST", "Test Club", "ACADEMIC", "HAN",
+            false, false, null, Guid.NewGuid(), null)
+        {
+            IsRecruiting = true,
+            DiscoveryTags = DiscoveryTags.ForClub(null, "ACADEMIC")
+        };
+        var activity = new StudentActivityItem(2, 1, club.ClubCode, club.ClubName, "Workshop", "", null,
+            start, end, "", "UPCOMING", "REGISTER", true, true, "FALL2026", 3,
+            Guid.NewGuid(), null, null, [])
+        {
+            IsInternal = false,
+            DiscoveryTags = DiscoveryTags.ForActivity(DiscoveryTags.Store(new(ActivityCategory: "workshop")), []),
+            RecommendationSource = new(deadline, "activity-version", [new(3, start, end, true)])
+        };
+        var student = new RecommendationStudentSource(11, "HAN", "account-version", Guid.Empty, [],
+            null, "schedule-version", "UNKNOWN", []);
+        using var auth = FeedHttp(async (request, ct) =>
+        {
+            var query = await request.Content!.ReadFromJsonAsync<RecommendationExportQuery>(ct);
+            return FeedResponse(query!.AfterUserId == 0 ? new RecommendationStudentPage([student], 11) : new([], 11));
+        });
+        using var clubSource = FeedHttp((_, _) => Task.FromResult(FeedResponse(
+            new StudentClubScope([club], DateTimeOffset.UtcNow, "scope-version"))));
+        using var activitySource = FeedHttp((_, _) => Task.FromResult(FeedResponse(
+            new StudentActivityPage([activity], 1, 100, 1, 1, DateTimeOffset.UtcNow, "scope-version"))));
+        var feed = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var engine = FeedHttp(async (request, ct) =>
+        {
+            feed.TrySetResult(await request.Content!.ReadFromJsonAsync<JsonElement>(ct));
+            return new HttpResponseMessage(HttpStatusCode.Accepted);
+        });
+        var clients = Substitute.For<IHttpClientFactory>();
+        clients.CreateClient("RecommendationAuth").Returns(auth);
+        clients.CreateClient("ExperienceActivity").Returns(activitySource);
+        var services = new ServiceCollection().AddDbContext<AdminDbContext>(x => x.UseSqlite(sql))
+            .AddSingleton<IHttpClientFactory>(clients)
+            .AddSingleton(new ClubExperienceAuthorityClient(clubSource, config))
+            .AddSingleton(new StudentExperienceSourceClient(clients, config))
+            .AddSingleton(new RecommendationClient(engine, config));
+        await using var provider = services.BuildServiceProvider();
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+            await db.Database.EnsureCreatedAsync();
+            db.Semesters.Add(new Semester { SemesterCode = "FALL2026", IsActive = true });
+            await db.SaveChangesAsync();
+        }
+        using var worker = new RecommendationFeedWorker(provider.GetRequiredService<IServiceScopeFactory>(),
+            config, NullLogger<RecommendationFeedWorker>.Instance, new RecommendationWakeSignal());
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            var message = await feed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var exported = message.GetProperty("snapshot").GetProperty("activities")[0];
+            var session = exported.GetProperty("sessions")[0];
+            Assert.Equal(deadline, exported.GetProperty("registrationDeadline").GetDateTimeOffset());
+            Assert.Equal(start, session.GetProperty("start").GetDateTimeOffset());
+            Assert.Equal(end, session.GetProperty("end").GetDateTimeOffset());
+            Assert.Equal(TimeSpan.Zero, exported.GetProperty("registrationDeadline").GetDateTimeOffset().Offset);
+            Assert.Equal(TimeSpan.Zero, session.GetProperty("start").GetDateTimeOffset().Offset);
+            Assert.Equal(TimeSpan.Zero, session.GetProperty("end").GetDateTimeOffset().Offset);
+        }
+        finally { await worker.StopAsync(CancellationToken.None); }
+    }
+
+    private static HttpClient FeedHttp(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send)
+        => new(new FeedHandler(send)) { BaseAddress = new Uri("http://test/") };
+
+    private static HttpResponseMessage FeedResponse<T>(T value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
+
+    private sealed class FeedHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => send(request, cancellationToken);
+    }
 
     [Fact]
     public async Task AuthExport_IsPrivatePagedAndContainsOnlyFeatureData()
