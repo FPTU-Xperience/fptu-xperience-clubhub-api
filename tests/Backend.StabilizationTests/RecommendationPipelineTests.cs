@@ -24,6 +24,44 @@ public sealed class RecommendationPipelineTests
     private const string Token = "Synthetic-Recommendation-Internal-Token-2026";
 
     [Fact]
+    public async Task RecommendationClient_PostsLengthDelimitedJsonToEngine()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Recommendation:Token"] = Token
+        }).Build();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        await using var app = builder.Build();
+        var received = new List<(string Path, string[] Properties)>();
+        app.MapPost("/internal/{operation}", async (Microsoft.AspNetCore.Http.HttpRequest request) =>
+        {
+            if (request.Headers.ContainsKey("Transfer-Encoding") || request.ContentLength is null or <= 0
+                || request.ContentType?.Split(';')[0] != "application/json")
+                return Microsoft.AspNetCore.Http.Results.StatusCode(415);
+            using var payload = await JsonDocument.ParseAsync(request.Body);
+            received.Add((request.Path.Value!, payload.RootElement.EnumerateObject().Select(field => field.Name).Order().ToArray()));
+            return Microsoft.AspNetCore.Http.Results.Accepted();
+        });
+        await app.StartAsync();
+        using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+        var engine = new RecommendationClient(http, config);
+
+        await engine.FeedAsync(new { schemaVersion = "1.0" }, DateTimeOffset.UtcNow, CancellationToken.None);
+        await engine.InvalidateAsync([11], CancellationToken.None);
+
+        Assert.Collection(received, feed =>
+        {
+            Assert.Equal("/internal/feeds", feed.Path);
+            Assert.Equal(["readStartedAt", "snapshot"], feed.Properties);
+        }, invalidation =>
+        {
+            Assert.Equal("/internal/invalidations", invalidation.Path);
+            Assert.Equal(["userIds"], invalidation.Properties);
+        });
+    }
+
+    [Fact]
     public async Task WorkerFeed_SerializesActivityDeadlinesAndSessionsAsUtc()
     {
         await using var sql = new SqliteConnection("DataSource=:memory:");
