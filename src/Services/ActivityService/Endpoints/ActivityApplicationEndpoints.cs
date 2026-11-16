@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ActivityService.Contracts;
 using ActivityService.Data;
+using ActivityService.Infrastructure;
 using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
@@ -17,6 +18,8 @@ public static class ActivityApplicationEndpoints
         var group = SafeGroup(app, "/api/activity-applications").WithTags("Activity applications");
         group.MapPost("", Create);
         group.MapGet("", List);
+        group.MapGet("/review-queue", ReviewQueue);
+        group.MapGet("/staffing-candidates", StaffingCandidates);
         group.MapGet("/{id:int}", Get);
         group.MapPatch("/{id:int}", Update);
         group.MapPost("/{id:int}/submit", Submit);
@@ -68,6 +71,63 @@ public static class ActivityApplicationEndpoints
         var items = new List<object>(); foreach (var row in rows) items.Add(await ApplicationResponse(db, row, scope, ct));
         return Results.Ok(new { items, page = index, pageSize = size, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)size) });
     }
+    private static async Task<IResult> ReviewQueue(int? page, int? pageSize, HttpContext http, ActivityDbContext db, CancellationToken ct)
+    {
+        var admin = http.User.IsInRole(AuthRoles.Admin);
+        Require(admin || http.User.IsInRole(AuthRoles.StudentAffairsAdmin), 403, "REVIEW_ACCESS_DENIED", "A CTSV reviewer is required.");
+        var actor = http.User.GetUserId();
+        var account = (await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync([actor], ct)).GetValueOrDefault(actor);
+        Require(account is { IsActive: true, IsLocked: false }, 403, "ACCOUNT_UNAVAILABLE", "An active account is required.");
+        var index = page ?? 1;
+        var size = pageSize ?? 20;
+        Require(index is >= 1 and <= 100000 && size is >= 1 and <= 100, 400, "INVALID_PAGINATION", "Use page >= 1 and pageSize 1–100.");
+        var query = db.Set<ActivityApplication>().AsNoTracking().Where(row => row.Status == "SUBMITTED");
+        if (!admin) query = query.Where(row => row.CampusCode == account!.CampusCode);
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderByDescending(row => row.Id).Skip((index - 1) * size).Take(size).ToArrayAsync(ct);
+        var items = rows.Select(row => new
+        {
+            row.Id, row.ClubId, row.Status,
+            Title = JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)?.Title
+        });
+        return Results.Ok(new { items, page = index, pageSize = size, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)size) });
+    }
+    private static async Task<IResult> StaffingCandidates(int clubId, HttpContext http, CancellationToken ct)
+    {
+        var scope = await Authorize(clubId, http, ct);
+        Manager(scope, "event.registrations.manage");
+        var candidates = await ReadStaffingCandidates(clubId, http, ct);
+        return Results.Ok(new { items = candidates.Select(row => new { row.UserId, row.DisplayName, AssignmentKind = row.StaffingKind }) });
+    }
+    private static async Task<ClubAssignmentCandidate[]> ReadStaffingCandidates(int clubId, HttpContext http, CancellationToken ct) =>
+        (await http.RequestServices.GetRequiredService<ClubMemberRosterClient>()
+            .GetAssignmentCandidatesAsync(clubId, Now(http), http.GetBearerToken(), ct, includeStaffing: true))
+        .Where(row => row.StaffingKind is "HOST" or "STAFF").ToArray();
+
+    private static async Task<ApplicationStaffingInput[]> ResolveStaffing(ActivityApplicationInput content, HttpContext http, CancellationToken ct)
+    {
+        var staffing = content.Staffing ?? [];
+        Require(staffing.Any(row => row.AssignmentKind == "HOST") && staffing.Any(row => row.AssignmentKind == "STAFF"),
+            400, "STAFFING_REQUIRED", "Assign at least one Event group member as Host and one regular member as Staff.");
+        Require(staffing.Select(row => row.UserId).Distinct().Count() == staffing.Count, 400, "INVALID_STAFFING", "Assign each club member only once.");
+        var actions = content.Actions!.ToDictionary(row => row.ClientId, StringComparer.Ordinal);
+        var capacity = content.Recruitment?.Positions?.ToDictionary(row => row.ActionClientId, row => row.Capacity, StringComparer.Ordinal);
+        foreach (var group in staffing.GroupBy(row => row.ActionClientId, StringComparer.Ordinal))
+        {
+            Require(!string.IsNullOrWhiteSpace(group.Key) && actions.ContainsKey(group.Key), 400, "INVALID_STAFFING", "Each assignment must reference an action in the plan.");
+            Require(group.Count() + (capacity?.GetValueOrDefault(group.Key) ?? 0) <= actions[group.Key].ExpectedPeople,
+                400, "INVALID_STAFFING", "Assignments and recruitment must fit within planned action capacity.");
+        }
+        var candidates = (await ReadStaffingCandidates(content.ClubId, http, ct)).ToDictionary(row => row.UserId);
+        var result = new List<ApplicationStaffingInput>();
+        foreach (var assignment in staffing)
+        {
+            Require(candidates.TryGetValue(assignment.UserId, out var candidate) && candidate.StaffingKind == assignment.AssignmentKind,
+                409, "STAFFING_MEMBER_INELIGIBLE", "A Host or Staff assignment no longer matches the current eligible club roster.");
+            result.Add(assignment with { DisplayName = candidate!.DisplayName });
+        }
+        return result.ToArray();
+    }
     private static async Task<IResult> Update(int id, HttpContext http, ActivityDbContext db, CancellationToken ct)
     {
         var row = await Find(id, db, ct); var scope = await ReadScope(row, http, ct); Manager(scope, "event.registrations.manage");
@@ -98,6 +158,8 @@ public static class ActivityApplicationEndpoints
             Require(row.Status is "DRAFT" or "REVISION_REQUESTED", 409, "APPLICATION_LOCKED", "Only an editable draft can be submitted.");
             var content = JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)!;
             Validate(content, true, http); await Semester(content, http, ct);
+            var staffing = await ResolveStaffing(content, http, ct);
+            row.ContentJson = JsonSerializer.Serialize(content with { Staffing = staffing }, Json);
             if (row.Status == "REVISION_REQUESTED") row.Revision++;
             row.Status = "SUBMITTED"; row.Version++; row.UpdatedAt = Now(http); History(db, row, http);
             return Results.Ok(await ApplicationResponse(db, row, scope, ct));
@@ -119,6 +181,8 @@ public static class ActivityApplicationEndpoints
             {
                 var content = JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)!;
                 Validate(content, true, http); await Semester(content, http, ct);
+                // Plans already in the review queue before internal staffing was introduced remain reviewable.
+                var staffing = content.Staffing is null ? [] : await ResolveStaffing(content, http, ct);
                 var activity = new ClubActivity
                 {
                     ClubId = row.ClubId,
@@ -146,6 +210,17 @@ public static class ActivityApplicationEndpoints
                 { ActivityId = activity.Id, ClientId = x.ClientId, DefinitionJson = JsonSerializer.Serialize(x, Json) }).ToArray();
                 db.AddRange(rules);
                 await db.SaveChangesAsync(ct);
+                var rulesByClientId = rules.ToDictionary(rule => rule.ClientId, StringComparer.Ordinal);
+                db.AddRange(staffing.Select(assignment => new ActivityStaffAssignment
+                {
+                    ActivityId = activity.Id,
+                    ActionRuleId = rulesByClientId[assignment.ActionClientId].Id,
+                    UserId = assignment.UserId,
+                    DisplayName = assignment.DisplayName!,
+                    AssignmentKind = assignment.AssignmentKind,
+                    CreatedBy = row.CreatedBy,
+                    CreatedAt = Now(http)
+                }));
                 if (content.Recruitment is { } recruitment)
                 {
                     var recruitmentRow = new ActivityRecruitment

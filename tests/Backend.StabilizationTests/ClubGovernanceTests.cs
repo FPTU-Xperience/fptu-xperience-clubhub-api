@@ -83,6 +83,42 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
     }
 
     [Fact]
+    public async Task Governance_ActivityStaffingUsesCurrentEventAndRegularMembership()
+    {
+        var state = new GovernanceState();
+        await using var app = await GovernanceApp(state);
+        using var owner = FormationClient(app, 100, AuthRoles.ClubMember, "HAN");
+        using var eventMember = FormationClient(app, 104, AuthRoles.ClubMember, "HAN");
+        using var regular = FormationClient(app, 106, AuthRoles.ClubMember, "HAN");
+        await InitializeGovernance(owner);
+        var term = await owner.GetFromJsonAsync<JsonElement>(GovernanceUrl);
+        var groups = term.GetProperty("configuration").GetProperty("groups").EnumerateArray().ToArray();
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ClubDbContext>();
+        var members = await db.ClubMemberships.ToDictionaryAsync(row => row.UserId, row => row.Id);
+        async Task AddTo(string preset, int userId)
+        {
+            var group = groups.Single(row => row.GetProperty("presetCode").GetString() == preset);
+            term = await GovernanceWrite(owner, GovernanceUrl + "/assignment-changes",
+                new GovernanceAssignmentInput(term.GetProperty("version").GetGuid(), "Assign member", "ADD",
+                    group.GetProperty("id").GetGuid(), [members[userId]]));
+        }
+        await AddTo("EVENT", 104);
+        await AddTo("CONTENT", 105);
+        const string roles = "/api/clubs/1/roles?includeStaffing=true";
+        Assert.Equal(HttpStatusCode.Forbidden, (await regular.GetAsync(roles)).StatusCode);
+        var items = (await eventMember.GetFromJsonAsync<JsonElement>(roles)).GetProperty("items").EnumerateArray()
+            .ToDictionary(row => row.GetProperty("userId").GetInt32(), row => row.GetProperty("staffingKind").GetString());
+        Assert.Null(items[100]);
+        Assert.Equal("HOST", items[104]);
+        Assert.Null(items[105]);
+        Assert.Equal("STAFF", items[106]);
+        state.Current = false;
+        var expired = (await owner.GetFromJsonAsync<JsonElement>(roles)).GetProperty("items").EnumerateArray();
+        Assert.DoesNotContain(expired, row => row.GetProperty("staffingKind").GetString() == "HOST");
+    }
+
+    [Fact]
     public async Task Governance_GroupLeadManagesOnlyOwnAssignmentsAndCannotChangePermissions()
     {
         await using var app = await GovernanceApp(new GovernanceState());

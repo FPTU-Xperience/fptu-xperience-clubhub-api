@@ -22,7 +22,7 @@ public static class ClubRoleEndpoints
     }
     private static async Task<bool> CanManage(int clubId, HttpContext http, ClubDbContext db, CancellationToken ct) =>
         http.User.IsSuperAdmin() || await ClubGovernancePolicy.HasLeadership(db, clubId, http, ct);
-    private static async Task<IResult> ReadAsync(int clubId, int? page, int? pageSize, ClubDbContext db, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> ReadAsync(int clubId, int? page, int? pageSize, bool? includeStaffing, ClubDbContext db, HttpContext http, CancellationToken ct)
     {
         http.Response.Headers.CacheControl = "no-store";
         var club = await db.Clubs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == clubId && x.IsActive, ct);
@@ -30,6 +30,8 @@ public static class ClubRoleEndpoints
         var canManage = await CanManage(clubId, http, db, ct);
         var reviewer = http.User.IsStudentAffairsAdministrator() && (http.User.IsSuperAdmin() || http.User.GetCampus() == club.CampusCode);
         if (!canManage && !reviewer && !await db.ClubMemberships.AnyAsync(x => x.ClubId == clubId && x.UserId == http.User.GetUserId() && x.Status == ClubMembershipStatuses.Approved, ct)) return Results.Forbid();
+        if (includeStaffing == true && !canManage && !reviewer
+            && !await ClubGovernancePolicy.CanPerform(db, clubId, "event.registrations.manage", http, ct)) return Results.Forbid();
         var owners = await db.ClubManagerAssignments.AsNoTracking().Where(x => x.ClubId == clubId && x.IsActive).Select(x => x.ManagerUserId).ToArrayAsync(ct);
         var legacyTreasurers = await db.ClubMemberships.Where(x => x.ClubId == clubId && x.Status == ClubMembershipStatuses.Approved && x.Role == ClubMemberRoles.Treasurer).Select(x => x.UserId).ToArrayAsync(ct);
         var groupTreasurers = await ClubGovernancePolicy.GroupTreasurers(db, clubId, http, ct);
@@ -44,6 +46,27 @@ public static class ClubRoleEndpoints
             try { profiles = await profileClient.GetAsync(rows.Select(row => row.UserId), ct); }
             catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException)
             { return ApiOperations.Error(503, "PROFILE_SERVICE_UNAVAILABLE", "Current member display names are unavailable."); }
+        var staffing = new Dictionary<int, string>();
+        if (includeStaffing == true)
+        {
+            var config = await ClubGovernancePolicy.Current(db, clubId, http, ct);
+            var groups = config?.Groups.Where(group => !group.Archived && !group.Protected).ToArray() ?? [];
+            var grouped = groups.SelectMany(group => group.Assignments)
+                .Select(member => (member.MembershipId, member.UserId)).ToHashSet();
+            var hosts = groups.Where(group => group.PresetCode == "EVENT").SelectMany(group => group.Assignments)
+                .Select(member => (member.MembershipId, member.UserId)).ToHashSet();
+            var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
+            var viceMembershipIds = await db.Set<ClubViceAppointment>().Where(row => row.ClubId == clubId
+                && row.Status == "APPROVED" && row.From <= now && now < row.Until).Select(row => row.MembershipId).ToArrayAsync(ct);
+            foreach (var row in rows)
+            {
+                if (!profiles.TryGetValue(row.UserId, out var profile) || profile is not { IsActive: true, IsLocked: false }
+                    || profile.CampusCode != club.CampusCode) continue;
+                if (hosts.Contains((row.Id, row.UserId))) staffing.Add(row.Id, "HOST");
+                else if (row.Role == ClubMemberRoles.Member && !grouped.Contains((row.Id, row.UserId))
+                    && !owners.Contains(row.UserId) && !viceMembershipIds.Contains(row.Id)) staffing.Add(row.Id, "STAFF");
+            }
+        }
         return Results.Ok(new
         {
             clubId,
@@ -60,6 +83,7 @@ public static class ClubRoleEndpoints
                 displayName = profiles.TryGetValue(row.UserId, out var profile) && !string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.DisplayName.Trim() : row.FullName,
                 joinedAtUtc = row.ReviewedAtUtc ?? row.RequestedAtUtc,
                 role = ClubMemberRoleRules.ResolveDisplayRole(row.Role, owners.Contains(row.UserId)),
+                staffingKind = staffing.GetValueOrDefault(row.Id),
                 version = row.ConcurrencyToken,
                 canAssignTreasurer = canManage && !groupGovernance && !owners.Contains(row.UserId) && row.Role != ClubMemberRoles.Treasurer && (count < 2 || groupTreasurers.Contains(row.UserId)),
                 canRevokeTreasurer = canManage && !owners.Contains(row.UserId) && row.Role == ClubMemberRoles.Treasurer

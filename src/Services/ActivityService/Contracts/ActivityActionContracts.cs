@@ -10,6 +10,13 @@ public sealed record ActivityApplicationInput(int ClubId, string? Period, string
     ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null, bool IsInternal = true)
 {
     public DiscoveryTagSelection? TagSelection { get; init; }
+    public IReadOnlyList<ApplicationStaffingInput>? Staffing { get; init; }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ApplicationStaffingInput(int UserId, string ActionClientId, string AssignmentKind)
+{
+    public string? DisplayName { get; init; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

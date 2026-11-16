@@ -116,7 +116,8 @@ internal static class ActivityActionHelpers
         Objective = value.Objective?.Trim() ?? "",
         Location = value.Location?.Trim() ?? "",
         ExpectedVersion = null,
-        Actions = value.Actions?.Select(x => x is null ? throw new JsonException() : x with { Name = x.Name?.Trim() ?? "" }).ToArray() ?? []
+        Actions = value.Actions?.Select(x => x is null ? throw new JsonException() : x with { Name = x.Name?.Trim() ?? "" }).ToArray() ?? [],
+        Staffing = value.Staffing?.Select(x => x is null ? throw new JsonException() : x with { DisplayName = null }).ToArray()
     };
     internal static void Validate(ActivityApplicationInput value, bool submit, HttpContext http)
     {
@@ -218,6 +219,7 @@ internal static class ActivityActionHelpers
             content.IndependentActionsConfirmed,
             content.Actions,
             content.Recruitment,
+            content.Staffing,
             activityId,
             expectedRawXp = (decimal?)null,
             scoringStatus = ScoringStatus,

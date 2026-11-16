@@ -335,8 +335,40 @@ public sealed class ActivityActionContractTests
             Assert.Null(row.PolicyVersion); Assert.Null(row.ScoringSnapshotJson);
             Assert.Equal(1, await db.Set<ActivityExecution>().CountAsync());
             Assert.Equal(1, await db.Set<ActivityActionRule>().CountAsync());
+            var staffing = await db.Set<ActivityStaffAssignment>().OrderBy(x => x.UserId).ToArrayAsync();
+            Assert.Collection(staffing,
+                host => { Assert.Equal(901, host.UserId); Assert.Equal("HOST", host.AssignmentKind); },
+                staff => { Assert.Equal(902, staff.UserId); Assert.Equal("STAFF", staff.AssignmentKind); });
             Assert.Empty(await db.OutboxMessages.Where(x => x.EventType != "recommendation.source.changed").ToArrayAsync());
         });
+    }
+
+    [Fact]
+    public async Task Application_RequiresEligibleInternalRolesAndEntersOnlyTheScopedReviewQueue()
+    {
+        await using var f = await Fixture.Create();
+        using var manager = f.Client(200); using var reviewer = f.Client(202); using var otherCampus = f.Client(203);
+        const string queue = "/api/activity-applications/review-queue";
+        var draft = await Json(await Send(manager, HttpMethod.Post, "/api/activity-applications", Payload(includeStaffing: false), "draft"));
+        var id = draft.GetProperty("id").GetInt32();
+        var url = $"/api/activity-applications/{id}";
+        Assert.Equal(0, (await Json(await reviewer.GetAsync(queue))).GetProperty("totalItems").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync(queue)).StatusCode);
+        var missing = await Send(manager, HttpMethod.Post, url + "/submit", new { expectedVersion = 1 }, "missing");
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Equal("STAFFING_REQUIRED", (await Json(missing)).GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Patch, url, Payload(version: 1, swapStaffing: true), "swapped")).StatusCode);
+        var wrongRole = await Send(manager, HttpMethod.Post, url + "/submit", new { expectedVersion = 2 }, "wrong-role");
+        Assert.Equal(HttpStatusCode.Conflict, wrongRole.StatusCode);
+        Assert.Equal("STAFFING_MEMBER_INELIGIBLE", (await Json(wrongRole)).GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Patch, url, Payload(version: 2), "correct")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, url + "/submit", new { expectedVersion = 3 }, "submit")).StatusCode);
+        var pending = (await Json(await reviewer.GetAsync(queue))).GetProperty("items");
+        Assert.Equal(id, Assert.Single(pending.EnumerateArray()).GetProperty("id").GetInt32());
+        Assert.Equal(0, (await Json(await otherCampus.GetAsync(queue))).GetProperty("totalItems").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await Send(reviewer, HttpMethod.Post, url + "/review",
+            new { expectedVersion = 4, decision = "APPROVED" }, "approve")).StatusCode);
+        Assert.Equal(0, (await Json(await reviewer.GetAsync(queue))).GetProperty("totalItems").GetInt32());
     }
 
     [Theory]
@@ -573,7 +605,8 @@ public sealed class ActivityActionContractTests
         });
     }
 
-    private static object Payload(string title = "Workshop", int? version = null, string period = "FA2026", int capacity = 2, string method = "WORK_REVIEW") => new
+    private static object Payload(string title = "Workshop", int? version = null, string period = "FA2026", int capacity = 2,
+        string method = "WORK_REVIEW", bool includeStaffing = true, bool swapStaffing = false) => new
     {
         clubId = 1,
         period,
@@ -589,6 +622,11 @@ public sealed class ActivityActionContractTests
             scaleSource = "ACTIVITY", scale = (string?)null, expectedPeople = capacity, expectedOccurrencesPerPerson = 1,
             maxAwardsPerPerson = 1, maxAwardCount = capacity, verificationMethod = method, completionMode = "FULL_ONLY", stackingRule = "ADDITIVE" } },
         recruitment = (object?)null,
+        staffing = includeStaffing ? new[]
+        {
+            new { userId = swapStaffing ? 902 : 901, actionClientId = "work", assignmentKind = "HOST" },
+            new { userId = swapStaffing ? 901 : 902, actionClientId = "work", assignmentKind = "STAFF" }
+        } : null,
         expectedVersion = version
     };
     private static Task<HttpResponseMessage> Send(HttpClient client, HttpMethod method, string path, object body, string key)
@@ -997,6 +1035,12 @@ public sealed class ActivityActionContractTests
                         Instant.AddDays(60), "APPROVED", "PROJECT", 2, "REVERSE_SOURCE_INVALIDATION");
                 else if (path == "/api/internal/experience/capabilities")
                     result = new VerificationCapabilityResponse(actor == 300 && f.VerifierEnabled && (!r.RequestUri.Query.Contains("attendance.verify", StringComparison.Ordinal) || f.AttendanceVerification));
+                else if (path == "/api/clubs/1/roles" && r.RequestUri.Query.Contains("includeStaffing=true", StringComparison.Ordinal))
+                    result = new { version = Guid.NewGuid(), page = 1, totalItems = 2, totalPages = 1, items = new[]
+                    {
+                        new ClubAssignmentCandidate(91, 901, "Event member", Instant.AddDays(-2)) { StaffingKind = "HOST" },
+                        new ClubAssignmentCandidate(92, 902, "Regular member", Instant.AddDays(-2)) { StaffingKind = "STAFF" }
+                    } };
                 else if (path.EndsWith("/member-roster/resolve", StringComparison.Ordinal))
                     result = new[] { new ClubMemberRosterItem(1, 100, "User 100", "100@example.test", "", "Member", "Approved", Instant.AddDays(-10)) };
                 else if (path.EndsWith("/member-roster", StringComparison.Ordinal))
@@ -1057,7 +1101,11 @@ public sealed class ActivityActionContractTests
             Assert.Equal(HttpStatusCode.Created, created.StatusCode); var id = (await Json(created)).GetProperty("id").GetInt32();
             Assert.Equal(HttpStatusCode.OK, (await Send(manager, HttpMethod.Post, $"/api/activity-applications/{id}/submit", new { expectedVersion = 1 }, "submit")).StatusCode);
             var approved = await Send(reviewer, HttpMethod.Post, $"/api/activity-applications/{id}/review", new { expectedVersion = 2, decision = "APPROVED", reason = "Approved without points" }, "approve");
-            Assert.Equal(HttpStatusCode.OK, approved.StatusCode); return (id, (await Json(approved)).GetProperty("activityId").GetInt32());
+            Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+            var activityId = (await Json(approved)).GetProperty("activityId").GetInt32();
+            // Execution tests provide their own assignments, starting from empty capacity.
+            await WithDb(db => db.Set<ActivityStaffAssignment>().Where(row => row.ActivityId == activityId).ExecuteDeleteAsync());
+            return (id, activityId);
         }
         internal async Task WithDb(Func<ActivityDbContext, Task> action)
         { await using var scope = app.Services.CreateAsyncScope(); await action(scope.ServiceProvider.GetRequiredService<ActivityDbContext>()); }
