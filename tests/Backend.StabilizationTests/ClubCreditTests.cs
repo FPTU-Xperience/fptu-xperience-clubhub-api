@@ -203,6 +203,7 @@ public sealed class ClubCreditTests
                 return input is { Kind: "club-reward", OwnerId: 1, PublicUrl: "https://assets.example.test/verified.png" }
                     ? Ok(new { publicUrl = input.PublicUrl }) : new(HttpStatusCode.Forbidden);
             }
+            if (request.RequestUri.Query == "?userId=") return new(HttpStatusCode.BadRequest);
             var clubId = int.Parse(path.Split('/').Last());
             var member = request.RequestUri.Query.Contains("userId=200", StringComparison.Ordinal) && MemberActive && clubId == 1;
             return Ok(new ClubExperienceAuthority(clubId, "Club " + clubId, "HAN", true, member, null));
