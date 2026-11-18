@@ -26,7 +26,9 @@ internal static class ActivityTagEndpoints
         {
             if (request.ExpectedVersion != activity.Version)
                 return ApiOperations.Error(409, "STALE_ACTIVITY", "Reload the activity.");
-            var encoded = DiscoveryTags.Store(tags);
+            var type = DiscoveryTags.Read(activity.TagSelectionJson).ActivityType;
+            var selection = type is null ? tags : new DiscoveryTagSelection(Custom: tags.Custom) { ActivityType = type };
+            var encoded = DiscoveryTags.Store(selection);
             if (activity.TagSelectionJson != encoded)
             {
                 activity.TagSelectionJson = encoded;
@@ -34,7 +36,7 @@ internal static class ActivityTagEndpoints
                 activity.UpdatedAtUtc = ActivitySessionEndpoints.Now(http);
                 await db.SaveChangesAsync(ct);
             }
-            return Results.Ok(new { activity.Version, TagSelection = tags });
+            return Results.Ok(new { activity.Version, TagSelection = selection });
         }, ct, required: false);
     }
 }

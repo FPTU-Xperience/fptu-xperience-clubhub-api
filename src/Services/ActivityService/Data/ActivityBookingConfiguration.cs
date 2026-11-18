@@ -16,6 +16,7 @@ internal static class ActivityBookingConfiguration
             entity.Property(x => x.VenueType).HasMaxLength(40);
             entity.Property(x => x.Building).HasMaxLength(80);
             entity.Property(x => x.Floor).HasMaxLength(40);
+            entity.Property(x => x.PlanArea).HasMaxLength(256);
             entity.HasIndex(x => new { x.CampusCode, x.Code }).IsUnique();
         });
         model.Entity<CampusBookingPolicy>(entity =>
@@ -54,6 +55,13 @@ internal static class ActivityBookingConfiguration
             entity.HasOne<CampusVenue>().WithMany().HasForeignKey(x => x.RequestedVenueId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<CampusVenue>().WithMany().HasForeignKey(x => x.ConfirmedVenueId).OnDelete(DeleteBehavior.Restrict);
             entity.HasMany(x => x.Equipment).WithOne().HasForeignKey(x => x.BookingId);
+            entity.HasMany(x => x.AdditionalVenues).WithOne().HasForeignKey(x => x.BookingId);
+        });
+        model.Entity<ActivityBookingVenue>(entity =>
+        {
+            entity.HasKey(x => new { x.BookingId, x.VenueId, x.IsConfirmed });
+            entity.HasIndex(x => new { x.VenueId, x.IsConfirmed });
+            entity.HasOne<CampusVenue>().WithMany().HasForeignKey(x => x.VenueId).OnDelete(DeleteBehavior.Restrict);
         });
         model.Entity<ActivityBookingEquipment>(entity =>
         {

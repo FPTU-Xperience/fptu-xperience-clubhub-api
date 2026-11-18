@@ -403,6 +403,24 @@ namespace ActivityService.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityBookingVenue", b =>
+                {
+                    b.Property<int>("BookingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VenueId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsConfirmed")
+                        .HasColumnType("bit");
+
+                    b.HasKey("BookingId", "VenueId", "IsConfirmed");
+
+                    b.HasIndex("VenueId", "IsConfirmed");
+
+                    b.ToTable("ActivityBookingVenue");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityCertificate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1533,11 +1551,18 @@ namespace ActivityService.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<string>("PlanArea")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
                     b.Property<int?>("PlanX")
                         .HasColumnType("int");
 
                     b.Property<int?>("PlanY")
                         .HasColumnType("int");
+
+                    b.Property<string>("SharedFloorAreas")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("VenueType")
                         .IsRequired()
@@ -1928,6 +1953,21 @@ namespace ActivityService.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityBookingVenue", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityBooking", null)
+                        .WithMany("AdditionalVenues")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ActivityService.Models.CampusVenue", null)
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityCertificate", b =>
                 {
                     b.HasOne("ActivityService.Models.ActivityCertificateDefinition", "Definition")
@@ -2156,6 +2196,8 @@ namespace ActivityService.Migrations
 
             modelBuilder.Entity("ActivityService.Models.ActivityBooking", b =>
                 {
+                    b.Navigation("AdditionalVenues");
+
                     b.Navigation("Equipment");
                 });
 

@@ -175,6 +175,7 @@ public static class ActivitySessionEndpoints
                 db.Sessions.Add(row);
                 rows.Add(row);
             }
+            await ActivityBookingEndpoints.AddApplicationBooking(db, activity, rows, http, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             foreach (var row in rows) Audit(db, row, http, "CREATE", null);
             activity.Version = Guid.NewGuid();

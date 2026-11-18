@@ -159,7 +159,7 @@ public static class StudentActivityEndpoints
                 action, canRegister, eligible, a.SemesterId, session?.Id, a.Version, session?.Version, a.PolicyVersion,
                 weights)
             {
-                DiscoveryTags = DiscoveryTags.ForActivity(a.TagSelectionJson, weights),
+                DiscoveryTags = DiscoveryTags.ForActivity(a.TagSelectionJson, weights, a.ClubId, club?.ClubName ?? a.ClubName),
                 NextSessionStartTimeUtc = timeline?.NextSessionStartTimeUtc,
                 IsInternal = a.IsInternal,
                 IsRegistered = registered.Contains(a.Id),

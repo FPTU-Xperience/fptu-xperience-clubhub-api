@@ -85,7 +85,7 @@ internal static class ActivityEndpointHelpers
             PolicyVersion = activity.PolicyVersion,
             EvidenceRequirements = activity.EvidenceRequirements,
             PillarWeights = weights,
-            DiscoveryTags = DiscoveryTags.ForActivity(activity.TagSelectionJson, weights),
+            DiscoveryTags = DiscoveryTags.ForActivity(activity.TagSelectionJson, weights, activity.ClubId, activity.ClubName),
             TagSelection = DiscoveryTags.Read(activity.TagSelectionJson)
         };
     }

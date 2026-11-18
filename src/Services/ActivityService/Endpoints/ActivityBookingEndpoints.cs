@@ -1,4 +1,8 @@
 using System.Data;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using ActivityService.Contracts;
 using ActivityService.Data;
 using ActivityService.Models;
 using ClubReportHub.Shared.Auth;
@@ -12,13 +16,17 @@ namespace ActivityService.Endpoints;
 public static class ActivityBookingEndpoints
 {
     private sealed record EquipmentRequest(int EquipmentId, int Quantity);
-    private sealed record BookingRequest(Guid SessionVersion, int? VenueId, string? VenueType, EquipmentRequest[]? Equipment);
-    private sealed record BookingDecision(Guid Version, int? VenueId, EquipmentRequest[]? Equipment, bool Cancel);
+    private sealed record BookingRequest(Guid SessionVersion, int? VenueId, string? VenueType, EquipmentRequest[]? Equipment, int[]? VenueIds = null);
+    private sealed record BookingDecision(Guid Version, int? VenueId, EquipmentRequest[]? Equipment, bool Cancel, int[]? VenueIds = null);
     private sealed record VenueInput(string Code, string Name, string Type, string? Building, string? Floor,
-        int Capacity, bool IsBookable, int? PlanX, int? PlanY);
+        int Capacity, bool IsBookable, int? PlanX, int? PlanY, bool CreateOnly = false, string? PlanArea = null,
+        Dictionary<string, string>? PlanAreasByFloor = null);
     private sealed record EquipmentInput(string Code, string Name, int Quantity, bool IsBookable);
     private sealed record CutoffInput(int Day, TimeOnly Time);
-    private sealed record LayoutInput(string? Building, string? Floor, string? ImageUrl, int? PlanX, int? PlanY);
+    private sealed record MappedRoomInput(string Code, string Name, string Type, int Capacity, bool IsBookable, int? PlanX, int? PlanY,
+        string? PlanArea = null, Dictionary<string, string>? PlanAreasByFloor = null);
+    private sealed record LayoutInput(string? Building, string? Floor, string? ImageUrl, int? PlanX, int? PlanY,
+        string? UploadedImageUrl = null, MappedRoomInput[]? Rooms = null, bool ReplaceGeometry = false);
     private sealed record CancelInput(Guid Version);
 
     public static void MapActivityBookingEndpoints(this IEndpointRouteBuilder app)
@@ -90,6 +98,8 @@ public static class ActivityBookingEndpoints
         {
             booking.Id, booking.SessionId, booking.CampusCode, booking.RequestedVenueId, booking.RequestedVenueType,
             booking.ConfirmedVenueId, booking.StartsAtUtc, booking.EndsAtUtc, status, booking.Version,
+            requestedVenueIds = VenueIds(booking.RequestedVenueId, booking.AdditionalVenues.Where(x => !x.IsConfirmed).Select(x => x.VenueId)),
+            confirmedVenueIds = VenueIds(booking.ConfirmedVenueId, booking.AdditionalVenues.Where(x => x.IsConfirmed).Select(x => x.VenueId)),
             booking.RequestedAtUtc, booking.ProcessedAtUtc, booking.CutoffAtUtc,
             activityId = booking.Session.ActivityId,
             activityTitle = booking.Session.Activity.Title,
@@ -109,6 +119,18 @@ public static class ActivityBookingEndpoints
         };
     }
 
+    private static int[] VenueIds(int? primary, IEnumerable<int> additional) =>
+        primary.HasValue ? [primary.Value, .. additional] : [];
+
+    private static int[] RequestedIds(int? legacy, int[]? ids)
+    {
+        var result = ids ?? (legacy.HasValue ? [legacy.Value] : []);
+        Require((ids is null || !legacy.HasValue) && result.Length <= 200
+            && result.All(id => id > 0) && result.Distinct().Count() == result.Length,
+            400, "INVALID_VENUE", "Select distinct rooms.");
+        return result;
+    }
+
     private static DateOnly Monday(DateTimeOffset instant)
     {
         var day = DateOnly.FromDateTime(instant.ToOffset(TimeSpan.FromHours(7)).DateTime);
@@ -122,13 +144,52 @@ public static class ActivityBookingEndpoints
             Monday(start).AddDays(policy.CutoffDay - 8).ToDateTime(policy.CutoffTime), TimeSpan.FromHours(7));
     }
 
+    internal static string RoomLocation(string[] names)
+    {
+        var location = string.Join(" · ", names);
+        return location.Length <= 200 ? location : $"{names[0]} + {names.Length - 1} phòng";
+    }
+
+    internal static async Task AddApplicationBooking(ActivityDbContext db, ClubActivity activity,
+        IReadOnlyList<ActivitySession> sessions, HttpContext http, CancellationToken ct)
+    {
+        var session = sessions.SingleOrDefault(x => x.Mode == "ONSITE" && x.StartTimeUtc == activity.StartTimeUtc
+            && x.EndTimeUtc == activity.EndTimeUtc && x.StartTimeUtc > Now(http));
+        if (session is null) return;
+
+        var application = await (from execution in db.Set<ActivityExecution>()
+            join proposal in db.Set<ActivityApplication>() on execution.ApplicationId equals proposal.Id
+            where execution.ActivityId == activity.Id && proposal.Status == "APPROVED"
+            select proposal).AsNoTracking().SingleOrDefaultAsync(ct);
+        if (application is null) return;
+
+        var content = JsonSerializer.Deserialize<ActivityApplicationInput>(application.ContentJson, Json);
+        if (content?.VenueIds is not { Length: > 0 } ids
+            || content.StartTimeUtc != session.StartTimeUtc || content.EndTimeUtc != session.EndTimeUtc) return;
+
+        var submittedAt = await db.Set<ActivityApplicationHistory>().Where(x => x.ApplicationId == application.Id && x.Status == "SUBMITTED")
+            .OrderByDescending(x => x.Version).Select(x => (DateTimeOffset?)x.CreatedAt).FirstOrDefaultAsync(ct);
+        db.Add(new ActivityBooking
+        {
+            Session = session,
+            CampusCode = application.CampusCode,
+            RequestedVenueId = ids[0],
+            AdditionalVenues = ids.Skip(1).Select(id => new ActivityBookingVenue { VenueId = id }).ToList(),
+            StartsAtUtc = session.StartTimeUtc,
+            EndsAtUtc = session.EndTimeUtc,
+            CutoffAtUtc = await Cutoff(db, application.CampusCode, session.StartTimeUtc, ct),
+            RequestedByUserId = application.CreatedBy,
+            RequestedAtUtc = submittedAt ?? application.UpdatedAt
+        });
+    }
+
     private static async Task<IResult> ForSession(int sessionId, ActivityDbContext db, HttpContext http, CancellationToken ct)
     {
         var session = await LoadSession(sessionId, db, ct);
         var scope = await Authorize(session.Activity.ClubId, http, ct);
         Manager(scope);
         var campus = scope.Club.CampusCode;
-        var rows = await db.Set<ActivityBooking>().AsNoTracking().Include(x => x.Equipment)
+        var rows = await db.Set<ActivityBooking>().AsNoTracking().Include(x => x.Equipment).Include(x => x.AdditionalVenues)
             .Include(x => x.Session).ThenInclude(x => x.Activity)
             .Where(x => x.SessionId == sessionId).OrderByDescending(x => x.Id).ToListAsync(ct);
         var now = Now(http);
@@ -156,10 +217,11 @@ public static class ActivityBookingEndpoints
         var input = await Body<BookingRequest>(http, ct);
         var type = input.VenueType?.Trim();
         var lines = input.Equipment ?? [];
+        var venueIds = RequestedIds(input.VenueId, input.VenueIds);
         Require(type?.Length is not > 40 && lines.Length <= 100 && lines.All(x => x is { Quantity: > 0 })
-            && !(input.VenueId.HasValue && !string.IsNullOrEmpty(type))
+            && !(venueIds.Length > 0 && !string.IsNullOrEmpty(type))
             && lines.Select(x => x.EquipmentId).Distinct().Count() == lines.Length
-            && (input.VenueId.HasValue || !string.IsNullOrEmpty(type) || lines.Length > 0),
+            && (venueIds.Length > 0 || !string.IsNullOrEmpty(type) || lines.Length > 0),
             400, "INVALID_BOOKING", "Provide a venue preference or equipment quantities.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await db.Entry(session).ReloadAsync(ct);
@@ -169,15 +231,16 @@ public static class ActivityBookingEndpoints
         Require(!await db.Set<ActivityBooking>().AnyAsync(x => x.SessionId == sessionId && (x.Status == "PENDING" || x.Status == "CONFIRMED")
             && x.StartsAtUtc == session.StartTimeUtc && x.EndsAtUtc == session.EndTimeUtc, ct),
             409, "BOOKING_EXISTS", "The session already has a booking.");
-        if (input.VenueId.HasValue)
-            Require(await db.Set<CampusVenue>().AnyAsync(x => x.Id == input.VenueId && x.CampusCode == campus && x.IsBookable, ct),
-                400, "INVALID_VENUE", "Select a bookable venue in this campus.");
+        if (venueIds.Length > 0)
+            Require(await db.Set<CampusVenue>().CountAsync(x => venueIds.Contains(x.Id) && x.CampusCode == campus && x.IsBookable, ct) == venueIds.Length,
+                400, "INVALID_VENUE", "Select bookable rooms in this campus.");
         var ids = lines.Select(x => x.EquipmentId).ToArray();
         Require(await db.Set<CampusEquipment>().CountAsync(x => ids.Contains(x.Id) && x.CampusCode == campus && x.IsBookable, ct) == ids.Length,
             400, "INVALID_EQUIPMENT", "Select bookable equipment in this campus.");
         var row = new ActivityBooking
         {
-            Session = session, CampusCode = campus, RequestedVenueId = input.VenueId, RequestedVenueType = type,
+            Session = session, CampusCode = campus, RequestedVenueId = venueIds.Length > 0 ? venueIds[0] : null, RequestedVenueType = type,
+            AdditionalVenues = venueIds.Skip(1).Select(venueId => new ActivityBookingVenue { VenueId = venueId }).ToList(),
             StartsAtUtc = session.StartTimeUtc, EndsAtUtc = session.EndTimeUtc,
             CutoffAtUtc = await Cutoff(db, campus, session.StartTimeUtc, ct),
             RequestedByUserId = http.User.GetUserId(), RequestedAtUtc = Now(http),
@@ -207,6 +270,8 @@ public static class ActivityBookingEndpoints
         var building = input.Building?.Trim() ?? "";
         var floor = input.Floor?.Trim() ?? "";
         var image = string.IsNullOrWhiteSpace(input.ImageUrl) ? null : input.ImageUrl.Trim();
+        var uploaded = input.UploadedImageUrl?.Trim();
+        var rooms = input.Rooms ?? [];
         var isBuildingPin = building.Length > 0 && floor.Length == 0;
         Require(building.Length <= 80 && floor.Length <= 40 && (floor.Length == 0 || building.Length > 0)
             && (isBuildingPin
@@ -214,6 +279,24 @@ public static class ActivityBookingEndpoints
                 : input.PlanX is null && input.PlanY is null && (image is null || image.Length <= 2048
                     && Uri.TryCreate(image, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps && uri.UserInfo.Length == 0)),
             400, "INVALID_LAYOUT", "Provide a valid HTTPS plan image or both building coordinates.");
+        Require(uploaded is null || !isBuildingPin && image is null && uploaded.Length > 0,
+            400, "INVALID_LAYOUT", "Choose a single plan image source.");
+        Require(rooms.Length <= 200 && (rooms.Length == 0 || floor.Length > 0)
+            && rooms.All(x => x is not null && Fits(x.Code, 40) && Fits(x.Name, 160) && Fits(x.Type, 40)
+                && x.Capacity >= 0 && x.PlanX is >= 0 and <= 100 && x.PlanY is >= 0 and <= 100 && ValidPlanArea(x.PlanArea)
+                && ValidSharedFloors(x.PlanAreasByFloor, floor))
+            && rooms.Select(x => x.Code.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() == rooms.Length,
+            400, "INVALID_ROOM_MAPPING", "Provide distinct room codes, names, types and valid coordinates for this floor.");
+
+        if (uploaded is not null)
+        {
+            var media = http.RequestServices.GetRequiredService<MediaAttachmentClient>();
+            var verified = await media.VerifyAsync(uploaded, null, "campus-plan", http.User.GetUserId(), http, ct);
+            Require(verified.StatusCode == 200, verified.StatusCode, verified.Code ?? "MEDIA_ATTACHMENT_REJECTED",
+                "The uploaded floor plan could not be attached.");
+            image = verified.PublicUrl;
+        }
+
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var row = await db.Set<CampusBookingLayout>().FindAsync([campus, building, floor], ct);
         if (row is null)
@@ -224,6 +307,62 @@ public static class ActivityBookingEndpoints
         row.ImageUrl = image;
         row.PlanX = input.PlanX;
         row.PlanY = input.PlanY;
+        if (rooms.Length > 0)
+        {
+            var codes = rooms.Select(x => x.Code.Trim().ToUpperInvariant()).ToArray();
+            var existing = await db.Set<CampusVenue>().Where(x => x.CampusCode == campus && codes.Contains(x.Code))
+                .ToDictionaryAsync(x => x.Code, StringComparer.OrdinalIgnoreCase, ct);
+            for (var index = 0; index < rooms.Length; index++)
+            {
+                var room = rooms[index];
+                var code = codes[index];
+                if (!existing.TryGetValue(code, out var venue))
+                {
+                    venue = new CampusVenue
+                    {
+                        CampusCode = campus, Code = code, Name = room.Name.Trim(), VenueType = room.Type.Trim(),
+                        Building = row.Building, Floor = row.Floor, Capacity = room.Capacity, IsBookable = room.IsBookable
+                    };
+                    db.Add(venue);
+                }
+                else
+                {
+                    var sameBuilding = string.Equals(venue.Building, row.Building, StringComparison.OrdinalIgnoreCase);
+                    var shared = venue.PlanAreasByFloor;
+                    if (sameBuilding && shared?.ContainsKey(row.Floor) == true && !string.IsNullOrEmpty(room.PlanArea))
+                    {
+                        shared[row.Floor] = room.PlanArea;
+                        venue.SharedFloorAreas = JsonSerializer.Serialize(shared);
+                        continue;
+                    }
+                    Require(sameBuilding && string.Equals(venue.Floor, row.Floor, StringComparison.OrdinalIgnoreCase),
+                        409, "ROOM_CODE_IN_USE", $"Room code {code} belongs to a different location.");
+                    venue.Building = row.Building;
+                    venue.Floor = row.Floor;
+                }
+                venue.PlanX = room.PlanX;
+                venue.PlanY = room.PlanY;
+                if (room.PlanArea is not null) venue.PlanArea = room.PlanArea.Length == 0 ? null : room.PlanArea;
+                if (room.PlanAreasByFloor is not null) venue.SharedFloorAreas = JsonSerializer.Serialize(room.PlanAreasByFloor);
+            }
+        }
+        if (input.ReplaceGeometry && floor.Length > 0)
+        {
+            var included = rooms.Select(room => room.Code.Trim().ToUpperInvariant()).ToArray();
+            var oldVenues = await db.Set<CampusVenue>().Where(x => x.CampusCode == campus && x.Building == building
+                && !included.Contains(x.Code)).ToListAsync(ct);
+            foreach (var venue in oldVenues)
+            {
+                if (venue.Floor == floor)
+                {
+                    venue.PlanX = null;
+                    venue.PlanY = null;
+                    venue.PlanArea = null;
+                }
+                var shared = venue.PlanAreasByFloor;
+                if (shared?.Remove(floor) == true) venue.SharedFloorAreas = JsonSerializer.Serialize(shared);
+            }
+        }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return Results.Ok(row);
@@ -249,6 +388,30 @@ public static class ActivityBookingEndpoints
     }
 
     private static bool Fits(string? value, int max) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= max;
+    private static bool ValidSharedFloors(Dictionary<string, string>? floors, string? primaryFloor) =>
+        floors is null || floors.Count <= 10 && (floors.Count == 0 || Fits(primaryFloor, 40))
+        && floors.All(pair => Fits(pair.Key, 40) && pair.Key == pair.Key.Trim()
+            && !string.Equals(pair.Key, primaryFloor, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(pair.Value) && ValidPlanArea(pair.Value));
+
+    // SVG coordinates are stored in the image's 0–100 coordinate space.
+    private static bool ValidPlanArea(string? area)
+    {
+        if (string.IsNullOrEmpty(area)) return true;
+        const string coordinate = @"[0-9]{1,3}(?:\.[0-9]{1,2})?";
+        if (area.Length > 256 || !Regex.IsMatch(area, $@"\A{coordinate},{coordinate}(?: {coordinate},{coordinate}){{2,11}}\z"))
+            return false;
+        var points = area.Split(' ').Select(point => point.Split(',')
+            .Select(value => decimal.Parse(value, CultureInfo.InvariantCulture)).ToArray()).ToArray();
+        if (points.Any(point => point[0] > 100 || point[1] > 100) ||
+            points.Select(point => (point[0], point[1])).Distinct().Count() != points.Length)
+            return false;
+        return points.Select((point, index) =>
+        {
+            var next = points[(index + 1) % points.Length];
+            return point[0] * next[1] - point[1] * next[0];
+        }).Sum() != 0;
+    }
 
     private static async Task<IResult> SaveVenue(string campus, ActivityDbContext db, HttpContext http, CancellationToken ct)
     {
@@ -256,12 +419,17 @@ public static class ActivityBookingEndpoints
         var input = await Body<VenueInput>(http, ct);
         Require(Fits(input.Code, 40) && Fits(input.Name, 160) && Fits(input.Type, 40)
             && input.Building?.Length is not > 80 && input.Floor?.Length is not > 40 && input.Capacity >= 0
+            && ValidPlanArea(input.PlanArea)
+            && ValidSharedFloors(input.PlanAreasByFloor, input.Floor?.Trim())
+            && (string.IsNullOrEmpty(input.PlanArea) && input.PlanAreasByFloor?.Count is not > 0
+                || Fits(input.Building, 80) && Fits(input.Floor, 40))
             && (input.PlanX is null && input.PlanY is null || input.PlanX is >= 0 and <= 100
                 && input.PlanY is >= 0 and <= 100 && Fits(input.Building, 80) && Fits(input.Floor, 40)),
             400, "INVALID_VENUE", "Check venue code, name, type and capacity.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var code = input.Code.Trim().ToUpperInvariant();
         var row = await db.Set<CampusVenue>().SingleOrDefaultAsync(x => x.CampusCode == campus && x.Code == code, ct);
+        Require(!input.CreateOnly || row is null, 409, "ROOM_CODE_IN_USE", $"Room code {code} already exists.");
         if (row is null)
         {
             row = new CampusVenue { CampusCode = campus, Code = code };
@@ -269,6 +437,12 @@ public static class ActivityBookingEndpoints
         }
         row.Name = input.Name.Trim();
         row.VenueType = input.Type.Trim();
+        var building = input.Building?.Trim();
+        var floor = input.Floor?.Trim();
+        if (input.PlanArea is not null || row.Building != building || row.Floor != floor)
+            row.PlanArea = string.IsNullOrEmpty(input.PlanArea) ? null : input.PlanArea;
+        if (input.PlanAreasByFloor is not null || row.Building != building || row.Floor != floor)
+            row.SharedFloorAreas = input.PlanAreasByFloor is null ? null : JsonSerializer.Serialize(input.PlanAreasByFloor);
         row.Building = input.Building?.Trim();
         row.Floor = input.Floor?.Trim();
         row.Capacity = input.Capacity;
@@ -316,7 +490,7 @@ public static class ActivityBookingEndpoints
             400, "INVALID_WEEK", "Provide the Monday of the event week.");
         var start = new DateTimeOffset(weekOf.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7));
         var end = start.AddDays(7);
-        var rows = await db.Set<ActivityBooking>().AsNoTracking().Include(x => x.Equipment)
+        var rows = await db.Set<ActivityBooking>().AsNoTracking().Include(x => x.Equipment).Include(x => x.AdditionalVenues)
             .Include(x => x.Session).ThenInclude(x => x.Activity)
             .Where(x => x.CampusCode == campus && x.StartsAtUtc >= start && x.StartsAtUtc < end)
             .OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id).ToListAsync(ct);
@@ -360,7 +534,7 @@ public static class ActivityBookingEndpoints
         Require(row is not null, 404, "BOOKING_NOT_FOUND", "Booking not found.");
         await CampusAccess(row!.CampusCode, http, true, ct);
         var now = Now(http);
-        var reserved = await VenueConflicts(db, row, now).Select(x => x.ConfirmedVenueId).Distinct().ToListAsync(ct);
+        var reserved = await ReservedRooms(db, row, now).Distinct().ToListAsync(ct);
         var equipmentIds = row.Equipment.Select(x => x.EquipmentId).ToArray();
         var items = await db.Set<CampusEquipment>().AsNoTracking().Where(x => equipmentIds.Contains(x.Id)).ToListAsync(ct);
         var quantities = new Dictionary<int, int>();
@@ -381,6 +555,13 @@ public static class ActivityBookingEndpoints
             && x.Session.Activity.Status == ActivityStatuses.Scheduled && x.ConfirmedVenueId != null
             && x.StartsAtUtc < row.EndsAtUtc && x.EndsAtUtc > row.StartsAtUtc);
 
+    private static IQueryable<int> ReservedRooms(ActivityDbContext db, ActivityBooking row, DateTimeOffset now)
+    {
+        var conflicts = VenueConflicts(db, row, now);
+        return conflicts.Select(x => x.ConfirmedVenueId!.Value)
+            .Concat(conflicts.SelectMany(x => x.AdditionalVenues.Where(venue => venue.IsConfirmed).Select(venue => venue.VenueId)));
+    }
+
     private static async Task<IResult> Decide(int id, ActivityDbContext db, HttpContext http, CancellationToken ct)
     {
         var campus = await db.Set<ActivityBooking>().Where(x => x.Id == id).Select(x => x.CampusCode).SingleOrDefaultAsync(ct);
@@ -388,7 +569,7 @@ public static class ActivityBookingEndpoints
         await CampusAccess(campus!, http, true, ct);
         var input = await Body<BookingDecision>(http, ct);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        var row = await db.Set<ActivityBooking>().Include(x => x.Equipment).Include(x => x.Session)
+        var row = await db.Set<ActivityBooking>().Include(x => x.Equipment).Include(x => x.AdditionalVenues).Include(x => x.Session)
             .ThenInclude(x => x.Activity).SingleAsync(x => x.Id == id, ct);
         var now = Now(http);
         Require(row.Version == input.Version && EffectiveStatus(row, now) is "PENDING" or "CONFIRMED",
@@ -397,19 +578,21 @@ public static class ActivityBookingEndpoints
             409, "SESSION_CHANGED", "This session no longer accepts booking changes.");
         if (!input.Cancel)
         {
-            Require(!input.VenueId.HasValue || row.RequestedVenueId.HasValue || !string.IsNullOrEmpty(row.RequestedVenueType),
+            var venueIds = RequestedIds(input.VenueId, input.VenueIds);
+            Require(venueIds.Length == 0 || row.RequestedVenueId.HasValue || !string.IsNullOrEmpty(row.RequestedVenueType),
                 400, "VENUE_NOT_REQUESTED", "This request is for equipment only.");
-            if (input.VenueId.HasValue)
+            if (venueIds.Length > 0)
             {
-                var venue = await db.Set<CampusVenue>().SingleOrDefaultAsync(x => x.Id == input.VenueId && x.CampusCode == campus
-                    && (x.IsBookable || x.Id == row.ConfirmedVenueId), ct);
-                Require(venue is not null, 400, "INVALID_VENUE", "Select a bookable venue in this campus.");
-                Require(!await VenueConflicts(db, row, now).AnyAsync(x => x.ConfirmedVenueId == input.VenueId, ct),
-                    409, "VENUE_UNAVAILABLE", "The venue already has a booking in this time window.");
+                var current = VenueIds(row.ConfirmedVenueId, row.AdditionalVenues.Where(venue => venue.IsConfirmed).Select(venue => venue.VenueId));
+                var venues = await db.Set<CampusVenue>().Where(x => venueIds.Contains(x.Id) && x.CampusCode == campus
+                    && (x.IsBookable || current.Contains(x.Id))).ToDictionaryAsync(x => x.Id, ct);
+                Require(venues.Count == venueIds.Length, 400, "INVALID_VENUE", "Select bookable rooms in this campus.");
+                Require(!await ReservedRooms(db, row, now).AnyAsync(room => venueIds.Contains(room), ct),
+                    409, "VENUE_UNAVAILABLE", "At least one room already has a booking in this time window.");
                 row.OriginalLocation ??= row.Session.Location;
-                row.Session.Location = venue!.Name;
+                row.Session.Location = RoomLocation(venueIds.Select(venueId => venues[venueId].Name).ToArray());
             }
-            Require(!row.ConfirmedVenueId.HasValue || input.VenueId.HasValue, 400, "VENUE_REQUIRED", "Cancel to release the confirmed venue.");
+            Require(!row.ConfirmedVenueId.HasValue || venueIds.Length > 0, 400, "VENUE_REQUIRED", "Cancel to release the confirmed venue.");
             var quantities = input.Equipment ?? [];
             Require(quantities.All(x => x is { Quantity: >= 0 }) && quantities.Length == row.Equipment.Count
                 && quantities.Select(x => x.EquipmentId).Distinct().Count() == quantities.Length
@@ -428,7 +611,11 @@ public static class ActivityBookingEndpoints
                 }
                 line.ConfirmedQuantity = quantity;
             }
-            row.ConfirmedVenueId = input.VenueId;
+            row.ConfirmedVenueId = venueIds.Length > 0 ? venueIds[0] : null;
+            var additional = venueIds.Skip(1).ToHashSet();
+            row.AdditionalVenues.RemoveAll(venue => venue.IsConfirmed && !additional.Contains(venue.VenueId));
+            additional.ExceptWith(row.AdditionalVenues.Where(venue => venue.IsConfirmed).Select(venue => venue.VenueId));
+            row.AdditionalVenues.AddRange(additional.Select(venueId => new ActivityBookingVenue { VenueId = venueId, IsConfirmed = true }));
         }
         if (input.Cancel) Cancel(row);
         else row.Status = "CONFIRMED";
@@ -446,7 +633,7 @@ public static class ActivityBookingEndpoints
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await db.Entry(session).ReloadAsync(ct);
         await db.Entry(session.Activity).ReloadAsync(ct);
-        var row = await db.Set<ActivityBooking>().Include(x => x.Equipment)
+        var row = await db.Set<ActivityBooking>().Include(x => x.Equipment).Include(x => x.AdditionalVenues)
             .SingleOrDefaultAsync(x => x.Id == id && x.SessionId == sessionId, ct);
         var now = Now(http);
         Require(row is not null, 404, "BOOKING_NOT_FOUND", "Booking not found.");
