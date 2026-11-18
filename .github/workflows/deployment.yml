@@ -256,6 +256,8 @@ jobs:
               # Keep live SQL Server responsive on a small VPC; BuildKit can otherwise build every service at once.
               while IFS= read -r service; do
                 docker compose -p "${COMPOSE_PROJECT_NAME}" build "${service}"
+                # Keep intermediates from multiple service builds from filling the VPC disk.
+                docker builder prune --all --force
               done < <(docker compose -p "${COMPOSE_PROJECT_NAME}" config --services)
             fi
 
