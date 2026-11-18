@@ -11,6 +11,10 @@ public sealed record ActivityApplicationInput(int ClubId, string? Period, string
 {
     public DiscoveryTagSelection? TagSelection { get; init; }
     public IReadOnlyList<ApplicationStaffingInput>? Staffing { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int[]? VenueIds { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ActivityType { get; init; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

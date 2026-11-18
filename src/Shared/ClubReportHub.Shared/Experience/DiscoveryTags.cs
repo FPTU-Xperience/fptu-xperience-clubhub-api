@@ -8,7 +8,11 @@ namespace ClubReportHub.Shared.Experience;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DiscoveryTagSelection(IReadOnlyList<string>? Experience = null,
-    string? ActivityCategory = null, IReadOnlyList<string>? Custom = null);
+    string? ActivityCategory = null, IReadOnlyList<string>? Custom = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ActivityType { get; init; }
+}
 
 public sealed record DiscoveryTag(string Id, string Label, string Kind);
 
@@ -81,9 +85,18 @@ public static class DiscoveryTags
         ];
     }
 
-    public static IReadOnlyList<DiscoveryTag> ForActivity(string? json, IReadOnlyList<PillarWeight> weights)
+    public static IReadOnlyList<DiscoveryTag> ForActivity(string? json, IReadOnlyList<PillarWeight> weights,
+        int clubId = 0, string? clubName = null)
     {
         var selection = Read(json);
+        if (selection.ActivityType is { } type && RadarPillars.CoreSix.Contains(type))
+        {
+            var tags = new List<DiscoveryTag> { new("experience:" + type, RadarPillars.GetVietnameseName(type), "experience") };
+            if (clubId > 0 && !string.IsNullOrWhiteSpace(clubName))
+                tags.Add(new("host-club:" + clubId.ToString(System.Globalization.CultureInfo.InvariantCulture), clubName, "host"));
+            tags.AddRange(Details(new(Custom: selection.Custom), []));
+            return tags;
+        }
         var category = selection.ActivityCategory ?? "other";
         return [
             new("activity-category:" + category, ActivityCategories[category], "category"),

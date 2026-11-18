@@ -166,11 +166,7 @@ internal static class CampusActivityEndpoints
             campus = (await Authorize(activity.ClubId, http, ct)).Club.CampusCode;
         Require(campus == actor.CampusCode, 403, "CAMPUS_SCOPE_DENIED", "This activity belongs to another campus.");
         var input = await Body<CampusXpInput>(http, ct);
-        var attributes = new ContributionAttributes(input.Tier ?? "", ContributionRoles.Participant,
-            activity.OrganizerCampusCode is null ? ActivityScales.Club : ActivityScales.Campus,
-            BonusResults.None, input.PillarWeights ?? []);
-        Require(VerifiedExperienceRules.Validate(attributes) is null && input.PolicyVersion != Guid.Empty,
-            400, "INVALID_SCORING_ATTRIBUTES", "Choose a policy, effort tier and valid pillar weights.");
+        Require(input.PolicyVersion != Guid.Empty, 400, "INVALID_SCORING_ATTRIBUTES", "Choose an approved policy.");
         var policy = await http.RequestServices.GetRequiredService<ExperienceAuthorityClient>()
             .ResolvePolicyAsync(activity.SemesterId!, input.PolicyVersion, http, ct);
         var environment = http.RequestServices.GetRequiredService<IConfiguration>().GetValue("Experience:Environment", "PROJECT");
@@ -188,6 +184,12 @@ internal static class CampusActivityEndpoints
             Require(activity.SemesterId == policy!.SemesterId && activity.StartTimeUtc >= policy.StartDate
                 && activity.EndTimeUtc < policy.EndDate!.Value.AddDays(1),
                 400, "ACTIVITY_OUTSIDE_SEMESTER", "The activity must fit the approved policy period.");
+            var type = DiscoveryTags.Read(activity.TagSelectionJson).ActivityType;
+            IReadOnlyList<PillarWeight> weights = type is null ? input.PillarWeights ?? [] : [new(type, 1m)];
+            var attributes = new ContributionAttributes(input.Tier ?? "", ContributionRoles.Participant,
+                activity.OrganizerCampusCode is null ? ActivityScales.Club : ActivityScales.Campus, BonusResults.None, weights);
+            Require(VerifiedExperienceRules.Validate(attributes) is null, 400, "INVALID_SCORING_ATTRIBUTES",
+                "Choose a valid effort tier and pillar weights.");
             activity.PolicyVersion = policy.PolicyVersion;
             activity.EffortTier = attributes.Tier;
             activity.Scale = attributes.Scale;

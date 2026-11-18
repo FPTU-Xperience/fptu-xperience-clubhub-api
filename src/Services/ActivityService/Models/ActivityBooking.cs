@@ -1,3 +1,7 @@
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace ActivityService.Models;
 
 public sealed class CampusVenue
@@ -12,6 +16,12 @@ public sealed class CampusVenue
     public int Capacity { get; set; }
     public int? PlanX { get; set; }
     public int? PlanY { get; set; }
+    public string? PlanArea { get; set; }
+    [JsonIgnore]
+    public string? SharedFloorAreas { get; set; }
+    [NotMapped]
+    public Dictionary<string, string>? PlanAreasByFloor => SharedFloorAreas is null
+        ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(SharedFloorAreas);
     public bool IsBookable { get; set; } = true;
 }
 
@@ -62,6 +72,14 @@ public sealed class ActivityBooking
     public DateTimeOffset? ProcessedAtUtc { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public List<ActivityBookingEquipment> Equipment { get; set; } = [];
+    public List<ActivityBookingVenue> AdditionalVenues { get; set; } = [];
+}
+
+public sealed class ActivityBookingVenue
+{
+    public int BookingId { get; set; }
+    public int VenueId { get; set; }
+    public bool IsConfirmed { get; set; }
 }
 
 public sealed class ActivityBookingEquipment

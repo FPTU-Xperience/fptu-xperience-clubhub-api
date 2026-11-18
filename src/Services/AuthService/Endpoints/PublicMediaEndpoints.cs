@@ -24,11 +24,15 @@ public static class PublicMediaEndpoints
         app.MapPost("/api/media/upload-intents", async (PublicMediaIntentRequest input, AuthDbContext db, IPublicMediaStorage storage,
             ClubAccessClient access, IHttpClientFactory clients, HttpContext http, CancellationToken ct) =>
         {
-            var self = input.Kind is "student-avatar" or "student-cover";
-            if (input.Kind is not ("club-logo" or "club-cover" or "club-reward" or "activity-cover" or "student-avatar" or "student-cover") || input.ContentType is not ("image/png" or "image/jpeg" or "image/webp")
+            var campusPlan = input.Kind == "campus-plan";
+            var self = campusPlan || input.Kind is "student-avatar" or "student-cover";
+            if ((!self && input.Kind is not ("club-logo" or "club-cover" or "club-reward" or "activity-cover"))
+                || input.ContentType is not ("image/png" or "image/jpeg" or "image/webp")
                 || input.SizeBytes is <= 0 or > 5_242_880 || !int.TryParse(input.OwnerId, NumberStyles.None, CultureInfo.InvariantCulture, out var owner) || owner <= 0)
                 return ApiOperations.Error(400, "INVALID_MEDIA_INTENT", "Provide an owner, a supported basic image kind, JPEG/PNG/WebP and size up to 5 MiB.");
             if (self && (owner != http.User.GetUserId() || !await db.Users.AsNoTracking().AnyAsync(x => x.Id == owner && x.IsActive && !x.IsLocked, ct))) return Results.Forbid();
+            if (campusPlan && !http.User.IsInRole(AuthRoles.Admin) && !http.User.IsInRole(AuthRoles.StudentAffairsAdmin))
+                return Results.Forbid();
             var clubId = owner;
             try
             {
@@ -72,7 +76,7 @@ public static class PublicMediaEndpoints
         {
             if (!VerifiedExperienceRules.InternalRequest(http, config)) return Results.Forbid();
             var actor = http.User.GetUserId();
-            if (input.Kind is "student-avatar" or "student-cover" && (input.OwnerId != actor
+            if (input.Kind is "student-avatar" or "student-cover" or "campus-plan" && (input.OwnerId != actor
                 || !await db.Users.AsNoTracking().AnyAsync(x => x.Id == actor && x.IsActive && !x.IsLocked, ct))) return Results.Forbid();
             var row = await db.PublicMediaIntents.SingleOrDefaultAsync(x => x.ActorId == actor && x.Kind == input.Kind && x.OwnerId == input.OwnerId
                 && (x.PublicUrl == input.PublicUrl || x.VerifiedUrl == input.PublicUrl), ct);
