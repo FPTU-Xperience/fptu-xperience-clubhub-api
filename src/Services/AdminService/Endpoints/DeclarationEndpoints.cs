@@ -246,11 +246,13 @@ public static class DeclarationEndpoints
         var external = await ExperienceAuthorization.FindAsync(dbContext, actor.UserId ?? 0, "EXTERNAL", null, "contribution.review", cancellationToken) is not null;
         var realWorld = await ExperienceAuthorization.FindAsync(dbContext, actor.UserId ?? 0, "REAL_WORLD", null, "contribution.review", cancellationToken) is not null;
         var staff = actor.Roles.Any(role => role is AuthRoles.Admin or AuthRoles.StudentAffairsAdmin);
+        var admin = actor.Roles.Contains(AuthRoles.Admin);
+        var actorCampus = actor.CampusCode;
         if (!staff && clubs.Count == 0 && !external && !realWorld) return Results.Forbid();
         query = query.Where(x => x.StudentId != actor.UserId &&
             (x.ClubId != null && clubs.Contains(x.ClubId.Value) ||
              dbContext.Contributions.Any(c => c.Id == x.Id && (external && c.SourceType == "EXTERNAL" || realWorld && c.SourceType == "REAL_WORLD")) ||
-             staff && x.IsOutsideClub && !dbContext.Contributions.Any(c => c.Id == x.Id)));
+             staff && x.IsOutsideClub && x.ClubId == null && (admin || x.CampusCode == actorCampus)));
 
         if (!string.IsNullOrWhiteSpace(campus))
         {
