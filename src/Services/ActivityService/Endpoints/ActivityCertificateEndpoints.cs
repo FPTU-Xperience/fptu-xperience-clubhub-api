@@ -151,17 +151,29 @@ internal static class ActivityCertificateEndpoints
 
     private static async Task<IResult> List(string kind, int id, int? page, ActivityDbContext db, CancellationToken ct)
     {
-        const int size = 12;
         var current = page ?? 1;
         Require(current is >= 1 and <= 10000, 400, "INVALID_CERTIFICATE_PAGE", "Choose a valid certificate page.");
-        var rows = await db.Set<ActivityCertificate>().AsNoTracking().Where(x => x.RecipientKind == kind && x.RecipientId == id)
-            .OrderByDescending(x => x.ActivityId).ThenBy(x => x.Id).Skip((current - 1) * size).Take(size + 1)
+        var source = db.Set<ActivityCertificate>().AsNoTracking().Where(x => x.RecipientKind == kind && x.RecipientId == id);
+        // Assets are inline PNGs. Page by one complete activity (at most 30 definitions),
+        // rather than splitting its certificates or multiplying the asset payload by 12 groups.
+        var activities = await source.Select(x => x.ActivityId).Distinct().OrderByDescending(x => x)
+            .Skip(current - 1).Take(2).ToArrayAsync(ct);
+        var selected = activities.Take(1).ToArray();
+        var rows = await source.Where(x => selected.Contains(x.ActivityId)).OrderBy(x => x.Id)
             .Select(x => new
             {
-                x.Id, x.ActivityId, x.ActivityTitle, x.RecipientName, x.IssuerName, x.IssuedAtUtc,
-                x.Definition.Title, x.Definition.Role, x.Definition.BadgePng, x.Definition.FramePng
+                x.Id,
+                x.ActivityId,
+                x.ActivityTitle,
+                x.RecipientName,
+                x.IssuerName,
+                x.IssuedAtUtc,
+                x.Definition.Title,
+                x.Definition.Role,
+                x.Definition.BadgePng,
+                x.Definition.FramePng
             }).ToListAsync(ct);
-        return Results.Ok(new { items = rows.Take(size), hasMore = rows.Count > size });
+        return Results.Ok(new { items = rows, hasMore = activities.Length > 1 });
     }
 
     private static async Task<ClubActivity> AuthorizeDefinitions(int id, ActivityDbContext db, HttpContext http, CancellationToken ct)
