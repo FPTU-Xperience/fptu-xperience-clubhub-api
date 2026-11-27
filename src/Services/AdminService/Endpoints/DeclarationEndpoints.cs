@@ -71,7 +71,7 @@ public static class DeclarationEndpoints
 
         ValidateSubmission(request);
 
-        var campusCode = ClubReportHub.Shared.Auth.CampusCodes.Normalize(request.CampusCode);
+        var campusCode = actor.CampusCode;
 
         var declaration = new SelfDeclaration
         {
@@ -141,13 +141,13 @@ public static class DeclarationEndpoints
             ?? throw new ResourceNotFoundException("The requested declaration was not found.");
 
         // Non-staff users can only access their own declaration
-        var isStaff = actor.Roles.Any(r =>
-            string.Equals(r, AuthRoles.Admin, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(r, AuthRoles.StudentAffairsAdmin, StringComparison.OrdinalIgnoreCase));
+        var isAdmin = actor.Roles.Contains(AuthRoles.Admin);
+        var canReadAsStaff = declaration.IsOutsideClub && declaration.ClubId is null
+            && (isAdmin || actor.Roles.Contains(AuthRoles.StudentAffairsAdmin) && declaration.CampusCode == actor.CampusCode);
 
         var grant = await ExperienceAuthorization.FindAsync(dbContext, actor.UserId ?? 0,
             declaration.IsOutsideClub ? "EXTERNAL" : "CLUB", declaration.ClubId, "contribution.review", cancellationToken);
-        if (declaration.StudentId != actor.UserId && grant is null && (!isStaff || !declaration.IsOutsideClub))
+        if (declaration.StudentId != actor.UserId && grant is null && !canReadAsStaff)
         {
             throw new OperationForbiddenException("You do not have permission to view declarations of another student.");
         }
@@ -314,8 +314,11 @@ public static class DeclarationEndpoints
         var declaration = await dbContext.SelfDeclarations
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new ResourceNotFoundException("The requested declaration was not found.");
-        if (!declaration.IsOutsideClub || !actor.Roles.Any(role => role is AuthRoles.Admin or AuthRoles.StudentAffairsAdmin))
+        if (!declaration.IsOutsideClub || declaration.ClubId.HasValue
+            || !actor.Roles.Any(role => role is AuthRoles.Admin or AuthRoles.StudentAffairsAdmin))
             return ApiOperations.Error(409, "LEGACY_SOURCE_MIGRATION_REQUIRED", "Legacy records need a linked, versioned source before review. Use the contribution workflow for club sessions.");
+        if (!actor.Roles.Contains(AuthRoles.Admin) && declaration.CampusCode != actor.CampusCode)
+            throw new OperationForbiddenException("Only student affairs in the declaration's campus may review it.");
 
         // SOD Invariant: Reviewer cannot self-approve their own declaration (Appendix B & NFR01)
         if (actor.UserId.HasValue && declaration.StudentId == actor.UserId.Value)
