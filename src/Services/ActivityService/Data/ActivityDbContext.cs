@@ -36,7 +36,7 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     {
         Services.ClosingReportXpGate.HoldNewAttendanceEvents(this);
         ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
-        if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule or ActivityResourceAudit
+        if (ChangeTracker.Entries().Any(x => x.Entity is ActivityApplicationHistory or ActivityExecutionAudit or ActivityActionRule or ActivityResourceAudit or ActivityFundingCandidate
             && x.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Application history, approved rules and execution audit are append-only.");
     }
@@ -45,6 +45,13 @@ public sealed class ActivityDbContext(DbContextOptions<ActivityDbContext> option
     {
         ActivityActionConfiguration.Configure(modelBuilder);
         ActivityResourceConfiguration.Configure(modelBuilder);
+        modelBuilder.Entity<ClubActivity>().Property(x => x.RawBudget).HasPrecision(18, 4);
+        modelBuilder.Entity<ActivityFundingCandidate>(entity =>
+        {
+            entity.HasKey(x => new { x.ActivityId, x.UserId, x.SourceKey });
+            entity.Property(x => x.SourceKey).HasMaxLength(200);
+            entity.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+        });
         ActivityBookingConfiguration.Configure(modelBuilder);
         modelBuilder.Entity<ClubActivity>(entity =>
         {

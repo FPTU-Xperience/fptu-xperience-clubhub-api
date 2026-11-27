@@ -23,7 +23,7 @@ internal static class ActivityRegistrationCancellation
             if (row is null) return Results.NotFound();
             var now = ActivitySessionEndpoints.Now(http);
             if (row.Version != expected || row.CancelledAtUtc is not null) return ApiOperations.Error(409, "STALE_REGISTRATION", "Reload your current registration before cancelling.");
-            if (activity.Status != ActivityStatuses.Scheduled || now >= activity.StartTimeUtc
+            if (!(activity.Status == ActivityStatuses.Postponed || activity.Status == ActivityStatuses.Scheduled && now < activity.StartTimeUtc)
                 || await db.ActivityAttendances.AnyAsync(x => x.ActivityId == id && x.UserId == actor, ct))
                 return ApiOperations.Error(409, "CANCELLATION_CLOSED", "Cancellation is only available before the activity starts and before attendance exists.");
             row.CancelledAtUtc = now; row.Version = Guid.NewGuid();

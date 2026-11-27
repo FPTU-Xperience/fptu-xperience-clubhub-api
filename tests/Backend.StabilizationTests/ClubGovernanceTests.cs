@@ -109,13 +109,13 @@ public sealed partial class CrossServiceWorkflowAuthorizationTests
         Assert.Equal(HttpStatusCode.Forbidden, (await regular.GetAsync(roles)).StatusCode);
         var items = (await eventMember.GetFromJsonAsync<JsonElement>(roles)).GetProperty("items").EnumerateArray()
             .ToDictionary(row => row.GetProperty("userId").GetInt32(), row => row.GetProperty("staffingKind").GetString());
-        Assert.Null(items[100]);
+        Assert.Equal("HOST", items[100]);
         Assert.Equal("HOST", items[104]);
         Assert.Null(items[105]);
         Assert.Equal("STAFF", items[106]);
         state.Current = false;
         var expired = (await owner.GetFromJsonAsync<JsonElement>(roles)).GetProperty("items").EnumerateArray();
-        Assert.DoesNotContain(expired, row => row.GetProperty("staffingKind").GetString() == "HOST");
+        Assert.DoesNotContain(expired, row => row.GetProperty("userId").GetInt32() != 100 && row.GetProperty("staffingKind").GetString() == "HOST");
     }
 
     [Fact]

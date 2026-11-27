@@ -9,7 +9,7 @@ using static ActivityService.Endpoints.ActivityActionHelpers;
 
 namespace ActivityService.Endpoints;
 
-public static class ActivityResourceEndpoints
+public static partial class ActivityResourceEndpoints
 {
     public static void MapActivityResourceEndpoints(this IEndpointRouteBuilder app)
     {
@@ -20,6 +20,8 @@ public static class ActivityResourceEndpoints
         group.MapPatch("/{resourceId:guid}", Patch);
         group.MapDelete("/{resourceId:guid}", Detach);
         group.MapPost("/upload-intents", UploadUnavailable);
+        group.MapPost("/upload", Upload).DisableAntiforgery();
+        group.MapGet("/{resourceId:guid}/download", Download);
     }
 
     internal sealed record ResourceScope(ClubActivity Activity, bool Manager, bool CanReadClub);
@@ -29,7 +31,7 @@ public static class ActivityResourceEndpoints
         Require(activity is not null, 404, "ACTIVITY_NOT_FOUND", "The activity does not exist.");
         var scope = await Authorize(activity!.ClubId, http, ct);
         var canManage = scope.Can("event.content.write");
-        var canReadClub = canManage || scope.Club.IsApprovedMember;
+        var canReadClub = canManage || scope.Reviewer || scope.Club.IsApprovedMember;
         var visible = canReadClub || scope.Reviewer
             || activity.DiscoveryVisibility == "CAMPUS_PUBLIC" && activity.PublicationStatus is "PUBLISHED" or "CLOSED";
         Require(visible && (activity.PublicationStatus != "DRAFT" || canManage || scope.Reviewer),
@@ -40,7 +42,8 @@ public static class ActivityResourceEndpoints
     private static async Task Writable(ResourceScope scope, ActivityDbContext db, CancellationToken ct) =>
         Require(await db.Activities.AnyAsync(x => x.Id == scope.Activity.Id && x.Status != ActivityStatuses.Cancelled, ct),
             409, "ACTIVITY_CANCELLED", "Resources of a cancelled activity are read-only.");
-    internal static ActivityResourceCapabilities Capabilities(ResourceScope scope) => new(scope.Manager && scope.Activity.Status != ActivityStatuses.Cancelled, false, ["EMBED"]);
+    internal static ActivityResourceCapabilities Capabilities(ResourceScope scope) => new(scope.Manager && scope.Activity.Status != ActivityStatuses.Cancelled,
+        scope.Manager && scope.Activity.Status != ActivityStatuses.Cancelled, ["EMBED", "DOCUMENT", "MEDIA"]);
 
     internal static async Task<ActivityResourceGallery> Gallery(ResourceScope scope, ActivityDbContext db, CancellationToken ct)
     {
@@ -59,7 +62,7 @@ public static class ActivityResourceEndpoints
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
             await Writable(scope, db, ct);
-            if (input.Kind is "DOCUMENT" or "MEDIA") return FilesUnavailable();
+            if (input.Kind is "DOCUMENT" or "MEDIA") return ApiOperations.Error(400, "MULTIPART_UPLOAD_REQUIRED", "Use resources/upload to validate and attach a file atomically.");
             Require(input.Kind == "EMBED" && input.UploadIntentId is null, 400, "INVALID_RESOURCE_KIND", "Use EMBED without an upload intent.");
             var title = Title(input.Title); var visibility = Visibility(input.Visibility ?? "CLUB");
             var (url, provider) = ActivityResourceLinkPolicy.Normalize(input.Url);
@@ -115,6 +118,8 @@ public static class ActivityResourceEndpoints
             var reason = input.Reason?.Trim(); Require(reason is { Length: > 0 and <= 500 }, 400, "REASON_REQUIRED", "Provide a reason of 1–500 characters.");
             var before = Snapshot(row); row.DetachedAtUtc = Now(http); row.UpdatedAtUtc = Now(http); row.Version = Guid.NewGuid();
             Audit(db, row, "DETACH", before, reason, http); await db.SaveChangesAsync(ct);
+            var file = await db.Set<ActivityResourceFile>().SingleOrDefaultAsync(x => x.ResourceId == resourceId, ct);
+            if (file is not null) db.Remove(file);
             return Results.Ok(new { row.Id, row.Version, row.DetachedAtUtc });
         }, ct);
     }
@@ -129,8 +134,7 @@ public static class ActivityResourceEndpoints
         return Results.Ok(new { items = rows, page = number, pageSize = size, total });
     }
     private static async Task<IResult> UploadUnavailable(int activityId, ActivityDbContext db, HttpContext http, CancellationToken ct)
-    { Management(await Access(activityId, db, http, ct)); return FilesUnavailable(); }
-    private static IResult FilesUnavailable() => ApiOperations.Error(501, "RESOURCE_UPLOAD_NOT_IMPLEMENTED", "Document/media uploads, scanning and private delivery are not implemented. Use supported EMBED links.");
+    { Management(await Access(activityId, db, http, ct)); return ApiOperations.Error(410, "DIRECT_UPLOAD_REQUIRED", "Use the authenticated resources/upload endpoint."); }
     private static async Task<ActivityResource> Find(int activityId, Guid resourceId, ActivityDbContext db, CancellationToken ct)
     {
         var row = await db.Set<ActivityResource>().SingleOrDefaultAsync(x => x.ActivityId == activityId && x.Id == resourceId, ct);
@@ -158,5 +162,5 @@ public static class ActivityResourceEndpoints
         });
     private static ActivityResourceResponse Response(ActivityResource row, bool manager) => new(row.Id, row.Kind, row.Title, row.Visibility,
         row.Url, row.Provider, row.Position, row.Version, row.CreatedAtUtc, row.UpdatedAtUtc)
-    { UploadedByUserId = manager ? row.UploadedByUserId : null };
+    { UploadedByUserId = manager ? row.UploadedByUserId : null, FileName = row.FileName, MimeType = row.MimeType, SizeBytes = row.SizeBytes };
 }

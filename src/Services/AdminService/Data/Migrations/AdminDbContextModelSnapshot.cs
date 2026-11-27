@@ -1202,6 +1202,195 @@ namespace AdminService.Data.Migrations
                     b.ToTable("QuestParticipants", (string)null);
                 });
 
+            modelBuilder.Entity("AdminService.Data.RawFundingAccount", b =>
+                {
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CampusCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("SemesterId")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("Available")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("Granted")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("Reserved")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("Spent")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("ClubId", "CampusCode", "SemesterId");
+
+                    b.ToTable("RawFundingAccount");
+                });
+
+            modelBuilder.Entity("AdminService.Data.RawFundingEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ActorId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("AvailableDelta")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ContributionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("ExperienceEffectId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("GrantedDelta")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("OperationKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("ReservationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ReservedDelta")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("SemesterId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("SpentDelta")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExperienceEffectId");
+
+                    b.HasIndex("OperationKey")
+                        .IsUnique();
+
+                    b.HasIndex("ReservationId");
+
+                    b.HasIndex("ClubId", "CampusCode", "SemesterId", "RecordedAt");
+
+                    b.ToTable("RawFundingEntry");
+                });
+
+            modelBuilder.Entity("AdminService.Data.RawFundingReservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Budget")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("CampusCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("ClubId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PolicyVersion")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ReservedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("ReservedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SemesterId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("SourceVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Spent")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId")
+                        .IsUnique()
+                        .HasFilter("[ActivityId] IS NOT NULL");
+
+                    b.HasIndex("SourceKey", "SourceVersion")
+                        .IsUnique();
+
+                    b.HasIndex("ClubId", "CampusCode", "SemesterId");
+
+                    b.ToTable("RawFundingReservation");
+                });
+
             modelBuilder.Entity("AdminService.Data.SelfDeclaration", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2258,6 +2447,36 @@ namespace AdminService.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Quest");
+                });
+
+            modelBuilder.Entity("AdminService.Data.RawFundingEntry", b =>
+                {
+                    b.HasOne("AdminService.Data.ExperienceLedgerEffect", "ExperienceEffect")
+                        .WithMany()
+                        .HasForeignKey("ExperienceEffectId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AdminService.Data.RawFundingReservation", null)
+                        .WithMany()
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AdminService.Data.RawFundingAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId", "CampusCode", "SemesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExperienceEffect");
+                });
+
+            modelBuilder.Entity("AdminService.Data.RawFundingReservation", b =>
+                {
+                    b.HasOne("AdminService.Data.RawFundingAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ClubId", "CampusCode", "SemesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("AdminService.Data.SemesterRoster", b =>

@@ -10,6 +10,9 @@ public sealed record ActivityApplicationInput(int ClubId, string? Period, string
     ApplicationRecruitmentInput? Recruitment, int? ExpectedVersion = null, bool IsInternal = true)
 {
     public DiscoveryTagSelection? TagSelection { get; init; }
+    public decimal? RawBudget { get; init; }
+    public Guid? PolicyVersion { get; init; }
+    public ContributionAttributes? FundingAttributes { get; init; }
     public IReadOnlyList<ApplicationStaffingInput>? Staffing { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int[]? VenueIds { get; init; }

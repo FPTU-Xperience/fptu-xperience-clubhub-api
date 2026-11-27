@@ -5,4 +5,5 @@ public static class ActivityStatuses
     public const string Scheduled = "Scheduled";
     public const string Completed = "Completed";
     public const string Cancelled = "Cancelled";
+    public const string Postponed = "Postponed";
 }

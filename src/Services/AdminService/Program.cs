@@ -49,6 +49,7 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddClubReportTracing();
 builder.Services.AddScoped<StudentExperienceSourceClient>();
+builder.Services.AddRawFunding();
 builder.Services.AddSingleton<RecommendationWakeSignal>();
 builder.Services.AddHttpClient<RecommendationClient>(client =>
 {
@@ -156,6 +157,7 @@ app.MapAcademicProfileEndpoints();
 app.MapStudentInspectionEndpoints();
 app.MapClubCreditEndpoints();
 app.MapExperiencePolicyEndpoints();
+app.MapRawFundingEndpoints();
 app.MapWorkspaceCatalogEndpoints();
 app.MapVerificationAssignmentEndpoints();
 app.MapVerifiedContributionEndpoints();

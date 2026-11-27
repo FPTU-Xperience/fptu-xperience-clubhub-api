@@ -15,7 +15,10 @@ public sealed record ExperiencePolicyReference(Guid PolicyVersion, string Formul
     string CancellationRule);
 public sealed record ExperienceSourceSnapshot(int ActivityId, int ClubId, int SessionId, string SemesterId,
     string Title, DateTimeOffset StartTimeUtc, DateTimeOffset EndTimeUtc, Guid ActivityVersion, Guid SessionVersion,
-    string Status, bool ManualConfirmationEnabled, ContributionAttributes Attributes, ExperiencePolicyReference Policy);
+    string Status, bool ManualConfirmationEnabled, ContributionAttributes Attributes, ExperiencePolicyReference Policy)
+{
+    public Guid? FundingReservationId { get; init; }
+}
 
 public static class VerifiedExperienceRules
 {

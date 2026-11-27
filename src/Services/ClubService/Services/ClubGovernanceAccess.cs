@@ -19,7 +19,7 @@ internal static class ClubGovernanceAccess
         if (config is null && vice.Length == 0) return access;
         var users = await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync([actor], ct);
         if (!users.TryGetValue(actor, out var account) || account is not { IsActive: true, IsLocked: false })
-            return access with { Capabilities = [], IsVicePresident = false, GroupIds = [] };
+            return access with { Capabilities = [], IsVicePresident = false, IsSecretary = false, GroupIds = [] };
         var membershipIds = await db.ClubMemberships.AsNoTracking().Where(x => x.ClubId == access.ClubId && x.UserId == actor
             && x.Status == ClubMembershipStatuses.Approved).Select(x => x.Id).ToArrayAsync(ct);
         var campus = await db.Clubs.Where(x => x.Id == access.ClubId).Select(x => x.CampusCode).SingleAsync(ct);
@@ -27,7 +27,7 @@ internal static class ClubGovernanceAccess
         var groups = config?.Groups.Where(x => inCampus && !x.Archived && !x.Protected && x.Assignments.Any(a => a.UserId == actor && membershipIds.Contains(a.MembershipId))).ToArray() ?? [];
         var isVice = inCampus && vice.Any(x => membershipIds.Contains(x.MembershipId));
         var permissions = groups.SelectMany(x => x.PermissionCodes).Concat(access.IsTreasurer ? ClubGovernancePolicy.Presets["TREASURER"] : [])
-            .Concat(groups.Any(x => x.PresetCode == "SECRETARY") ? new[] { "club.declarations.process" } : [])
+            .Concat(groups.Any(x => x.PresetCode == "SECRETARY") ? ClubGovernancePolicy.Delegable : [])
             .Concat(isVice ? ClubGovernancePolicy.Delegable : []).Where(ClubGovernancePolicy.Delegable.Contains).Distinct().Order(StringComparer.Ordinal).ToArray();
         var groupIds = groups.Select(x => x.Id).ToArray();
         var treasurerIds = access.TreasurerUserIds.Concat(await ClubGovernancePolicy.GroupTreasurers(db, access.ClubId, http, ct)).Distinct().ToArray();
@@ -45,6 +45,7 @@ internal static class ClubGovernanceAccess
             Capabilities = permissions,
             AccessValidUntilUtc = expiry,
             IsVicePresident = isVice,
+            IsSecretary = groups.Any(x => x.PresetCode == "SECRETARY"),
             GovernanceRevisionId = term?.RevisionId,
             GroupIds = groupIds
         };

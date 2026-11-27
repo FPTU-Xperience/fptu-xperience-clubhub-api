@@ -121,6 +121,13 @@ internal static class ActivityActionHelpers
     };
     internal static void Validate(ActivityApplicationInput value, bool submit, HttpContext http)
     {
+        if (value.RawBudget.HasValue || value.PolicyVersion.HasValue || value.FundingAttributes is not null)
+            Require(value.RawBudget is > 0 and <= 1_000_000_000 && decimal.Round(value.RawBudget.Value, 4) == value.RawBudget
+                && value.PolicyVersion is { } fundingPolicy && fundingPolicy != Guid.Empty
+                && VerifiedExperienceRules.Validate(value.FundingAttributes) is null
+                && value.FundingAttributes!.Role == ContributionRoles.Participant && value.FundingAttributes.Result == BonusResults.None
+                && value.FundingAttributes.Scale == value.Scale && value.FundingAttributes.PillarWeights.All(x => RadarPillars.CoreSix.Contains(x.Pillar)),
+                400, "INVALID_RAW_FUNDING_PLAN", "Provide a positive raw budget, approved policy and valid six-axis funding attributes.");
         Require(value.ClubId > 0 && !string.IsNullOrWhiteSpace(value.Period) && value.Period.Length <= 40
             && value.Title?.Length <= 200 && value.Description?.Length <= 2000 && value.Objective?.Length <= 2000
             && value.Location?.Length <= 200 && ActivityScales.All.Contains(value.Scale)
@@ -224,8 +231,11 @@ internal static class ActivityActionHelpers
             content.Recruitment,
             content.Staffing,
             activityId,
-            expectedRawXp = (decimal?)null,
-            scoringStatus = ScoringStatus,
+            content.RawBudget,
+            content.PolicyVersion,
+            content.FundingAttributes,
+            expectedRawXp = content.RawBudget,
+            scoringStatus = content.RawBudget.HasValue ? "RAW_FUNDING_REQUIRED" : ScoringStatus,
             canAwardPoints = false,
             capabilities = new { canEdit = scope.Can("event.registrations.manage") && row.Status is "DRAFT" or "REVISION_REQUESTED", canSubmit = scope.Can("event.registrations.manage") && row.Status is "DRAFT" or "REVISION_REQUESTED", canReview = scope.Reviewer && row.CreatedBy != scope.Account.Id && row.Status == "SUBMITTED" },
             row.CreatedAt,

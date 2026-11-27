@@ -232,6 +232,7 @@ public sealed record StudentRadarResponse(
     public IReadOnlyList<PillarRadarItemResponse> RadarAxes { get; init; } = [];
     public PillarRadarItemResponse? PlusOne { get; init; }
     public int LegacyPreviewCount { get; init; }
+    public decimal? W { get; init; }
 }
 
 public sealed record PillarOverviewResponse(

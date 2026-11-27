@@ -1,6 +1,7 @@
 using ActivityService.Data;
 using ActivityService.Models;
 using ActivityService.Services;
+using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Data;
 using ClubReportHub.Shared.Experience;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ internal static class ActivityClosingReportEndpoints
         routes.MapGet("/{activityId:int}/closing-report", Get);
         routes.MapPost("/{activityId:int}/closing-report", Submit);
         routes.MapPost("/{activityId:int}/closing-report/approve", Approve);
+        routes.MapPost("/{activityId:int}/closing-report/return", Return);
     }
 
     private static async Task<IResult> GetPolicy(int clubId, ActivityDbContext db, HttpContext http, CancellationToken ct)
@@ -63,14 +65,18 @@ internal static class ActivityClosingReportEndpoints
         var verifiedParticipants = await db.ActivityAttendances.Where(x => x.ActivityId == activityId && x.VerificationStatus == "VERIFIED")
             .Select(x => x.UserId).Distinct().CountAsync(ct);
         var verifiedCompletions = await db.Set<ActivityActionCompletion>().CountAsync(x => x.ActivityId == activityId && x.Status == "VERIFIED", ct);
+        var history = await db.SessionAudits.AsNoTracking().Where(x => x.ActivityId == activityId && x.Action.StartsWith("CLOSING_REPORT_"))
+            .OrderByDescending(x => x.Id).Take(50).Select(x => new { x.Action, x.ActorId, x.Version, x.CreatedAtUtc, x.SnapshotJson }).ToListAsync(ct);
         return Results.Ok(new
         {
             available = true, completedAtUtc = completedAt, deadlineUtc = deadline,
             isOverdue = (report?.SubmittedAtUtc ?? Now(http)) >= deadline,
-            canSubmit = scope.Manager && report is null,
+            canSubmit = scope.Manager && (report is null || report.Status == "RETURNED"),
+            canReturn = scope.Reviewer && report is { Status: "SUBMITTED" } && report.SubmittedBy != scope.Account.Id,
             canApprove = scope.Reviewer && report is { Status: "SUBMITTED" }
                 && report.SubmittedBy != scope.Account.Id && report.SubmittedAtUtc < deadline,
             report = report is null ? null : Response(report),
+            history,
             totals = new { registrations, verifiedParticipants, verifiedCompletions }
         });
     }
@@ -88,14 +94,22 @@ internal static class ActivityClosingReportEndpoints
         {
             await db.Entry(activity).ReloadAsync(ct);
             Require(activity.Status == ActivityStatuses.Completed, 409, "ACTIVITY_NOT_COMPLETED", "Complete the activity before submitting a closing report.");
-            Require(!await db.Set<ActivityClosingReport>().AnyAsync(x => x.ActivityId == activityId, ct),
-                409, "CLOSING_REPORT_EXISTS", "A closing report already exists for this activity.");
-            var report = new ActivityClosingReport
+            Manager(await CampusActivityEndpoints.OrganizerScope(activity, db, http, ct));
+            var report = await db.Set<ActivityClosingReport>().SingleOrDefaultAsync(x => x.ActivityId == activityId, ct);
+            Require(report is null ? input.ExpectedVersion is null : report.Status == "RETURNED" && report.Version == input.ExpectedVersion,
+                409, "CLOSING_REPORT_LOCKED", "Reload the report; only a returned version can be resubmitted.");
+            var resubmission = report is not null;
+            if (report is null)
             {
-                ActivityId = activityId, Version = Guid.NewGuid(), Summary = summary!, Improvements = improvements,
-                SubmittedBy = scope.Account.Id, SubmittedAtUtc = Now(http)
-            };
-            db.Add(report);
+                report = new ActivityClosingReport { ActivityId = activityId, SubmittedAtUtc = Now(http) };
+                db.Add(report);
+            }
+            // Preserve the first submission time: a staff-requested correction does not
+            // turn an on-time submission into a late report or reopen final-role changes.
+            report.Version = Guid.NewGuid(); report.Status = "SUBMITTED";
+            report.Summary = summary!; report.Improvements = improvements; report.SubmittedBy = scope.Account.Id;
+            report.ReviewedBy = null; report.ReviewedAtUtc = null; report.ReviewNote = null;
+            Audit(db, report, resubmission ? "CLOSING_REPORT_RESUBMIT" : "CLOSING_REPORT_SUBMIT", http);
             return Results.Ok(Response(report));
         }, ct);
     }
@@ -109,11 +123,13 @@ internal static class ActivityClosingReportEndpoints
         Require((note?.Length ?? 0) <= 2000, 400, "INVALID_REVIEW_NOTE", "Use at most 2000 characters.");
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
+            var current = await CampusActivityEndpoints.OrganizerScope(activity, db, http, ct);
+            Require(current.Reviewer, 403, "REPORT_REVIEW_DENIED", "Current campus review authority is required.");
             await db.Entry(activity).ReloadAsync(ct);
             Require(activity.Status == ActivityStatuses.Completed, 409, "ACTIVITY_NOT_COMPLETED", "The activity must remain completed.");
             var report = await db.Set<ActivityClosingReport>().SingleOrDefaultAsync(x => x.ActivityId == activityId, ct);
             if (report is null) return Results.NotFound();
-            Require(report.SubmittedBy != scope.Account.Id, 403, "INDEPENDENT_REVIEW_REQUIRED", "The submitter cannot approve the report.");
+            Require(report.SubmittedBy != current.Account.Id, 403, "INDEPENDENT_REVIEW_REQUIRED", "The submitter cannot approve the report.");
             Require(report.Status == "SUBMITTED" && report.Version == input.ExpectedVersion,
                 409, "CLOSING_REPORT_LOCKED", "The report was already approved or its version changed.");
             var completedAt = await CompletionTime(db, activity, ct);
@@ -125,6 +141,7 @@ internal static class ActivityClosingReportEndpoints
             report.ReviewedBy = scope.Account.Id;
             report.ReviewedAtUtc = Now(http);
             report.ReviewNote = note;
+            Audit(db, report, "CLOSING_REPORT_APPROVE", http);
             await ClosingReportXpGate.ReleaseAsync(activity,
                 report.ReviewedAtUtc.Value < deadline ? report.ReviewedAtUtc.Value : deadline, db,
                 http.RequestServices.GetRequiredService<ClubExperienceAuthorityClient>(), ct);
@@ -132,6 +149,39 @@ internal static class ActivityClosingReportEndpoints
             return Results.Ok(Response(report));
         }, ct);
     }
+
+    private static async Task<IResult> Return(int activityId, ActivityDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var (activity, scope) = await Load(activityId, db, http, ct);
+        Require(scope.Reviewer, 403, "REPORT_REVIEW_DENIED", "Current campus review authority is required.");
+        var input = await Body<ApproveInput>(http, ct);
+        var note = input.Note?.Trim();
+        Require(note is { Length: >= 5 and <= 2000 }, 400, "REVIEW_REASON_REQUIRED", "Provide a correction reason of 5–2000 characters.");
+        return await ApiOperations.ExecuteAsync(http, db, input, async () =>
+        {
+            var current = await CampusActivityEndpoints.OrganizerScope(activity, db, http, ct);
+            Require(current.Reviewer, 403, "REPORT_REVIEW_DENIED", "Current campus review authority is required.");
+            await db.Entry(activity).ReloadAsync(ct);
+            Require(activity.Status == ActivityStatuses.Completed, 409, "ACTIVITY_NOT_COMPLETED", "The activity must remain completed.");
+            var report = await db.Set<ActivityClosingReport>().SingleOrDefaultAsync(x => x.ActivityId == activityId, ct);
+            Require(report is not null, 404, "CLOSING_REPORT_NOT_FOUND", "Submit a report first.");
+            Require(report!.SubmittedBy != current.Account.Id, 403, "INDEPENDENT_REVIEW_REQUIRED", "The submitter cannot review the report.");
+            Require(report.Status == "SUBMITTED" && report.Version == input.ExpectedVersion,
+                409, "CLOSING_REPORT_LOCKED", "Reload the submitted report version.");
+            report.Status = "RETURNED"; report.Version = Guid.NewGuid();
+            report.ReviewedBy = current.Account.Id; report.ReviewedAtUtc = Now(http); report.ReviewNote = note;
+            Audit(db, report, "CLOSING_REPORT_RETURN", http);
+            return Results.Ok(Response(report));
+        }, ct);
+    }
+
+    private static void Audit(ActivityDbContext db, ActivityClosingReport report, string action, HttpContext http) =>
+        db.SessionAudits.Add(new ActivitySessionAudit
+        {
+            ActivityId = report.ActivityId, Action = action, ActorId = http.User.GetUserId(),
+            Version = report.Version, CreatedAtUtc = Now(http),
+            SnapshotJson = System.Text.Json.JsonSerializer.Serialize(Response(report))
+        });
 
     internal static async Task<DateTimeOffset> CompletionTime(ActivityDbContext db, ClubActivity activity, CancellationToken ct)
     {
@@ -158,15 +208,15 @@ internal static class ActivityClosingReportEndpoints
     {
         var activity = await db.Activities.SingleOrDefaultAsync(x => x.Id == activityId, ct);
         Require(activity is not null, 404, "ACTIVITY_NOT_FOUND", "Activity does not exist.");
-        var scope = await Authorize(activity!.ClubId, http, ct);
+        var scope = await CampusActivityEndpoints.OrganizerScope(activity!, db, http, ct);
         Require(scope.Manager || scope.Reviewer, 403, "CLOSING_REPORT_ACCESS_DENIED", "Current club management or review authority is required.");
-        return (activity, scope);
+        return (activity!, scope);
     }
 
     private static object Response(ActivityClosingReport report) =>
         new { report.Version, report.Status, report.Summary, report.Improvements, report.SubmittedAtUtc, report.ReviewedAtUtc, report.ReviewNote };
 
     private sealed record PolicyInput(int ReportDays, long ExpectedVersion);
-    private sealed record ReportInput(string? Summary, string? Improvements);
+    private sealed record ReportInput(string? Summary, string? Improvements, Guid? ExpectedVersion = null);
     private sealed record ApproveInput(Guid ExpectedVersion, string? Note);
 }

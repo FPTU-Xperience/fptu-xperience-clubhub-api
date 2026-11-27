@@ -22,7 +22,7 @@ public sealed class CampusDeclarationLifecycleTests(AdminApiFactory factory) : I
         await factory.EnsureStudentPolicyAsync();
         using var student = Client("student-1");
         using var staff = Client("student-affairs-han");
-        var request = await Submission(student, pillar);
+        var request = (await Submission(student, pillar)) with { CampusCode = "HCM" };
         Key(student);
         var submitted = await student.PostAsJsonAsync("/api/v1/declarations", request);
         Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
@@ -30,6 +30,8 @@ public sealed class CampusDeclarationLifecycleTests(AdminApiFactory factory) : I
         var id = original.Id;
         Assert.Equal("SUBMITTED", original.Status);
         Assert.Equal(0, original.RawPoints);
+        await using (var campusScope = factory.Services.CreateAsyncScope())
+            Assert.Equal("HAN", (await campusScope.ServiceProvider.GetRequiredService<AdminDbContext>().SelfDeclarations.SingleAsync(x => x.Id == id)).CampusCode);
 
         var queue = await staff.GetFromJsonAsync<JsonElement>("/api/v1/student-affairs/declarations?status=Submitted&pageSize=100");
         Assert.Contains(queue.GetProperty("items").EnumerateArray(), row => row.GetProperty("id").GetGuid() == id);

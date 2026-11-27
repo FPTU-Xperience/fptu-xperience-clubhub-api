@@ -28,7 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Backend.StabilizationTests;
 
-public sealed class ActivityResourceContractTests
+public sealed partial class ActivityResourceContractTests
 {
     private const string Key = "Activity-Resource-Contract-Tests-Only-Signing-Key-2026";
     private static object Link(string title = "Workshop", string visibility = "CLUB", string url = "https://youtu.be/dQw4w9WgXcQ") =>
@@ -58,8 +58,8 @@ public sealed class ActivityResourceContractTests
         Assert.Single(detail.GetProperty("resources").EnumerateArray());
         Assert.Equal("AVAILABLE", detail.GetProperty("resourceAvailability").GetString());
         var capabilities = (await Json(await manager.GetAsync("/api/activities/1/resources"))).GetProperty("resourceCapabilities");
-        Assert.True(capabilities.GetProperty("canManage").GetBoolean()); Assert.False(capabilities.GetProperty("canUpload").GetBoolean());
-        Assert.Equal("EMBED", Assert.Single(capabilities.GetProperty("supportedKinds").EnumerateArray()).GetString());
+        Assert.True(capabilities.GetProperty("canManage").GetBoolean()); Assert.True(capabilities.GetProperty("canUpload").GetBoolean());
+        Assert.Equal(new[] { "EMBED", "DOCUMENT", "MEDIA" }, capabilities.GetProperty("supportedKinds").EnumerateArray().Select(x => x.GetString()));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class ActivityResourceContractTests
     }
 
     [Fact]
-    public async Task Gallery_BoundedStrictBodyAndRequiredKeyNeverAdvertiseFileSupport()
+    public async Task Gallery_BoundedStrictBodyRequiresAtomicMultipartFiles()
     {
         await using var f = await Fixture.Create(); using var manager = f.Client(200);
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(manager, HttpMethod.Post, "/api/activities/1/resources", Link(), null)).StatusCode);
@@ -138,8 +138,8 @@ public sealed class ActivityResourceContractTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(manager, HttpMethod.Post, "/api/activities/1/resources", Link(new string('a', 161)))).StatusCode);
         using var duplicate = new HttpRequestMessage(HttpMethod.Post, "/api/activities/1/resources") { Content = new StringContent("{\"kind\":\"EMBED\",\"Kind\":\"DOCUMENT\"}", Encoding.UTF8, "application/json") };
         duplicate.Headers.Add("Idempotency-Key", "dup"); Assert.Equal(HttpStatusCode.BadRequest, (await manager.SendAsync(duplicate)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotImplemented, (await Send(manager, HttpMethod.Post, "/api/activities/1/resources", new { kind = "DOCUMENT", title = "File", visibility = "CLUB", uploadIntentId = Guid.NewGuid() })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotImplemented, (await Send(manager, HttpMethod.Post, "/api/activities/1/resources/upload-intents", new { kind = "DOCUMENT", fileName = "a.pdf", mimeType = "application/pdf", sizeBytes = 10 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(manager, HttpMethod.Post, "/api/activities/1/resources", new { kind = "DOCUMENT", title = "File", visibility = "CLUB", uploadIntentId = Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, (await Send(manager, HttpMethod.Post, "/api/activities/1/resources/upload-intents", new { kind = "DOCUMENT", fileName = "a.pdf", mimeType = "application/pdf", sizeBytes = 10 })).StatusCode);
         Assert.Empty((await Json(await manager.GetAsync("/api/activities/1/resources"))).GetProperty("items").EnumerateArray());
     }
 

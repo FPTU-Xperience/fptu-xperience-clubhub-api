@@ -13,6 +13,8 @@ public sealed class ClubActivity
     public string PillarWeightsJson { get; set; } = "[]";
     public string? TagSelectionJson { get; set; }
     public Guid? PolicyVersion { get; set; }
+    public Guid? FundingReservationId { get; set; }
+    public decimal? RawBudget { get; set; }
     public string? ScoringSnapshotJson { get; set; }
     public int? Capacity { get; set; }
     public int RegisteredCount { get; set; }

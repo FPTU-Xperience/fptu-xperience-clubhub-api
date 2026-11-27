@@ -15,12 +15,15 @@ public sealed record ActivityResourcePatch(Guid ExpectedVersion,
 public sealed record ActivityResourceDetach(Guid ExpectedVersion, string? Reason);
 
 public sealed record ActivityResourceCapabilities(bool CanManage, bool CanUpload, IReadOnlyList<string> SupportedKinds,
-    string UploadStatus = "NOT_IMPLEMENTED");
+    string UploadStatus = "AVAILABLE");
 public sealed record ActivityResourceResponse(Guid Id, string Kind, string Title, string Visibility, string Url,
     string Provider, int Position, Guid Version, DateTimeOffset CreatedAtUtc, DateTimeOffset UpdatedAtUtc)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? UploadedByUserId { get; init; }
+    public string? FileName { get; init; }
+    public string? MimeType { get; init; }
+    public long? SizeBytes { get; init; }
 }
 public sealed record ActivityResourceGallery(IReadOnlyList<ActivityResourceResponse> Items,
     ActivityResourceCapabilities ResourceCapabilities, string Availability = "AVAILABLE");

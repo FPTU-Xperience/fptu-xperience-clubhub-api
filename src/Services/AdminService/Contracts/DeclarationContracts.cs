@@ -1,5 +1,7 @@
 using AdminService.Data;
 using ClubReportHub.Shared.Experience;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace AdminService.Contracts;
 
@@ -27,6 +29,8 @@ public sealed record ReviewDeclarationRequest(
     string? Scale = null,
     string? BonusResult = null, Guid? ExpectedVersion = null, string? Reason = null,
     ContributionAttributes? VerifiedAttributes = null);
+
+public sealed record UpgradeDeclarationRequest(string ExpectedLegacyVersion, SubmitDeclarationRequest Submission);
 
 public sealed record DeclarationResponse(
     Guid Id,
@@ -57,6 +61,11 @@ public sealed record DeclarationResponse(
     decimal? RawPoints,
     string CampusCode = ClubReportHub.Shared.Auth.CampusCodes.Hanoi)
 {
+    public bool IsAuthoritative => false;
+    public string SourceNamespace => "LEGACY_DECLARATION";
+    public string LegacyVersion { get; init; } = "";
+    public bool CanUpgradeLegacy => IsOutsideClub && ClubId is null && Status is "Submitted" or "RevisionRequested";
+    public static string Fingerprint(SelfDeclaration item) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(item)));
     public static DeclarationResponse From(SelfDeclaration item) =>
         new(
             item.Id,
@@ -85,5 +94,6 @@ public sealed record DeclarationResponse(
             item.Scale,
             item.BonusResult,
             item.RawPoints,
-            item.CampusCode);
+            item.CampusCode)
+        { LegacyVersion = Fingerprint(item) };
 }

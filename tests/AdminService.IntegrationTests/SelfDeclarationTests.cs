@@ -3,396 +3,137 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AdminService.Contracts;
-using AdminService.Errors;
+using AdminService.Data;
 using ClubReportHub.Shared.Experience;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 
 namespace AdminService.IntegrationTests;
 
+// Canonical submit/revise/reject/approve and exact XP effects are covered by
+// CampusDeclarationLifecycleTests. These protect the retired intake boundary and
+// the explicit, history-preserving transition for existing pending declarations.
 public sealed class SelfDeclarationTests(AdminApiFactory factory) : IClassFixture<AdminApiFactory>
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     [Fact]
-    public async Task SubmitDeclaration_WithoutToken_Returns401()
+    public async Task LegacyIntakeCannotCreateUnversionedRecordsAndStillRequiresAuthentication()
     {
-        using var client = factory.CreateClient();
-        var request = new SubmitDeclarationRequest(
-            Title: "Participated in Global Contest",
-            Category: ExperienceCategories.Global,
-            OrganizationSource: "Google Developer Groups",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/certificate.pdf",
-            EvidenceDescription: "Certificate of participation",
-            RoleProposed: ContributionRoles.Contributor,
-            StartDate: new DateOnly(2026, 9, 1),
-            EndDate: new DateOnly(2026, 9, 3));
+        using var anonymous = factory.CreateClient(); using var student = Client("student-1");
+        var input = Input();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/v1/declarations", input)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await student.PostAsJsonAsync("/api/v1/declarations", input)).StatusCode);
+        await Db(async db => Assert.False(await db.SelfDeclarations.AnyAsync(x => x.Title == input.Title)));
+    }
 
-        var response = await client.PostAsJsonAsync("/api/v1/declarations", request);
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    [Theory]
+    [InlineData("student-1", HttpStatusCode.Forbidden)]
+    [InlineData("student-affairs", HttpStatusCode.OK)]
+    [InlineData("admin", HttpStatusCode.OK)]
+    public async Task ReviewQueueRetainsItsStaffBoundary(string token, HttpStatusCode expected)
+    {
+        using var client = Client(token);
+        Assert.Equal(expected, (await client.GetAsync("/api/v1/student-affairs/declarations")).StatusCode);
     }
 
     [Fact]
-    public async Task SubmitDeclaration_WithValidStudentToken_Returns201AndStoredInPersonalQueue()
+    public async Task HistoricalDetailIsOwnedAndLegacyUpdateCannotRewriteIt()
     {
-        using var client = CreateClient("student-1");
-        var request = new SubmitDeclarationRequest(
-            Title: "Google Developer Hackathon 2026",
-            Category: ExperienceCategories.Global,
-            OrganizationSource: "Google Developer Groups",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/certificate.pdf",
-            EvidenceDescription: "Certificate of participation and source repository",
-            RoleProposed: ContributionRoles.Contributor,
-            StartDate: new DateOnly(2026, 9, 1),
-            EndDate: new DateOnly(2026, 9, 3));
-
-        var response = await client.PostAsJsonAsync("/api/v1/declarations", request);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-        var created = await response.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(created);
-        Assert.Equal("Google Developer Hackathon 2026", created.Title);
-        Assert.Equal(ExperienceCategories.Global, created.Category);
-        Assert.Equal(DeclarationStatuses.Submitted, created.Status);
-        Assert.Equal(301, created.StudentId);
-        Assert.Equal("student1@fpt.edu.vn", created.StudentEmail);
-
-        // Fetch personal declarations
-        var meResponse = await client.GetAsync("/api/v1/declarations/me");
-        Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
-        var myList = await meResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Contains(myList.GetProperty("items").EnumerateArray(), d => d.GetProperty("id").GetGuid() == created.Id);
-
-        // Student 2 cannot see Student 1's declaration in /me
-        using var client2 = CreateClient("student-2");
-        var student2Me = await client2.GetAsync("/api/v1/declarations/me");
-        var student2List = await student2Me.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.DoesNotContain(student2List.GetProperty("items").EnumerateArray(), d => d.GetProperty("id").GetGuid() == created.Id);
-
-        // Student 2 cannot fetch Student 1's declaration by ID (403 Forbidden)
-        var student2Detail = await client2.GetAsync($"/api/v1/declarations/{created.Id}");
-        Assert.Equal(HttpStatusCode.Forbidden, student2Detail.StatusCode);
+        var legacy = await Seed("Submitted"); using var student = Client("student-1"); using var other = Client("student-2");
+        var detail = await student.GetFromJsonAsync<JsonElement>($"/api/v1/declarations/{legacy.Id}");
+        Assert.False(detail.GetProperty("isAuthoritative").GetBoolean()); Assert.True(detail.GetProperty("canUpgradeLegacy").GetBoolean());
+        Assert.Equal(64, detail.GetProperty("legacyVersion").GetString()!.Length);
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync($"/api/v1/declarations/{legacy.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PutAsJsonAsync($"/api/v1/declarations/{legacy.Id}", Input())).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await student.PutAsJsonAsync($"/api/v1/declarations/{legacy.Id}", Input())).StatusCode);
+        await Db(async db => Assert.Equal(legacy.Title, (await db.SelfDeclarations.SingleAsync(x => x.Id == legacy.Id)).Title));
     }
 
-    [Fact]
-    public async Task SubmitDeclaration_MissingEvidence_Returns400()
+    [Theory]
+    [InlineData("Submitted")]
+    [InlineData("RevisionRequested")]
+    [InlineData("Approved")]
+    [InlineData("Rejected")]
+    public async Task LegacyReviewCannotWriteUnledgeredDecisionsOrRecalculateHistory(string state)
     {
-        using var client = CreateClient("student-1");
-        var invalidRequest = new SubmitDeclarationRequest(
-            Title: "Valid Title",
-            Category: ExperienceCategories.Academic,
-            OrganizationSource: "Coursera",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "", // Missing
-            EvidenceDescription: "Completed course",
-            RoleProposed: null,
-            StartDate: new DateOnly(2026, 9, 1),
-            EndDate: new DateOnly(2026, 9, 3));
-
-        var response = await client.PostAsJsonAsync("/api/v1/declarations", invalidRequest);
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CtsvQueue_OnlyAccessibleByStudentAffairsOrAdmin()
-    {
-        // Student attempting to view CTSV queue -> 403 Forbidden
-        using var studentClient = CreateClient("student-1");
-        var studentResponse = await studentClient.GetAsync("/api/v1/student-affairs/declarations");
-        Assert.Equal(HttpStatusCode.Forbidden, studentResponse.StatusCode);
-
-        // CTSV viewing queue -> 200 OK
-        using var ctsvClient = CreateClient("student-affairs");
-        var ctsvResponse = await ctsvClient.GetAsync("/api/v1/student-affairs/declarations");
-        Assert.Equal(HttpStatusCode.OK, ctsvResponse.StatusCode);
-    }
-
-    [Fact]
-    public async Task CtsvReview_ApproveDeclaration_CalculatesPointsAccurately()
-    {
-        // 1. Student submits a national contest declaration
-        using var studentClient = CreateClient("student-1");
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Vietnam National AI Hackathon 2026",
-            Category: ExperienceCategories.Research,
-            OrganizationSource: "Ministry of Science & Tech",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/award_finalist.pdf",
-            EvidenceDescription: "Reached top 10 finalists nationwide",
-            RoleProposed: ContributionRoles.Contributor,
-            StartDate: new DateOnly(2026, 9, 10),
-            EndDate: new DateOnly(2026, 9, 12));
-
-        var submitResponse = await studentClient.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        Assert.Equal(HttpStatusCode.Created, submitResponse.StatusCode);
-        var declaration = await submitResponse.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(declaration);
-
-        // 2. CTSV reviews and approves with rubric:
-        // Tier T4 (150) * Contributor (1.6) * National (2.2) * (1 + Finalist 0.3) = 686.4
-        using var ctsvClient = CreateClient("student-affairs");
-        var reviewRequest = new ReviewDeclarationRequest(
-            Decision: DeclarationDecisions.Approved,
-            ReviewNote: "Verified certificate against Ministry registry.",
-            FinalCategory: ExperienceCategories.Research,
-            Tier: EffortTiers.T4,
-            Role: ContributionRoles.Contributor,
-            Scale: ActivityScales.National,
-            BonusResult: BonusResults.Finalist);
-
-        var reviewResponse = await ctsvClient.PostAsJsonAsync(
-            $"/api/v1/student-affairs/declarations/{declaration.Id}/review",
-            reviewRequest);
-
-        Assert.Equal(HttpStatusCode.OK, reviewResponse.StatusCode);
-        var reviewed = await reviewResponse.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(reviewed);
-        Assert.Equal(DeclarationStatuses.Approved, reviewed.Status);
-        Assert.Equal(686.4m, reviewed.RawPoints);
-        Assert.Equal("Verified certificate against Ministry registry.", reviewed.ReviewNote);
-        Assert.Equal(EffortTiers.T4, reviewed.Tier);
-        Assert.Equal(ContributionRoles.Contributor, reviewed.Role);
-        Assert.Equal(ActivityScales.National, reviewed.Scale);
-        Assert.Equal(BonusResults.Finalist, reviewed.BonusResult);
-        Assert.NotNull(reviewed.ReviewedAtUtc);
-    }
-
-    [Fact]
-    public async Task CtsvReview_RejectDeclaration_UpdatesStatus()
-    {
-        // 1. Student submits
-        using var studentClient = CreateClient("student-1");
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Unverified external activity",
-            Category: ExperienceCategories.Community,
-            OrganizationSource: "Unknown",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/broken_link",
-            EvidenceDescription: "Volunteering without proof",
-            RoleProposed: null,
-            StartDate: new DateOnly(2026, 8, 1),
-            EndDate: new DateOnly(2026, 8, 1));
-
-        var submitResponse = await studentClient.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        var declaration = await submitResponse.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(declaration);
-
-        // 2. CTSV rejects with explanation
-        using var ctsvClient = CreateClient("student-affairs");
-        var reviewRequest = new ReviewDeclarationRequest(
-            Decision: DeclarationDecisions.Rejected,
-            ReviewNote: "Link is broken and no verifiable signature found.");
-
-        var reviewResponse = await ctsvClient.PostAsJsonAsync(
-            $"/api/v1/student-affairs/declarations/{declaration.Id}/review",
-            reviewRequest);
-
-        Assert.Equal(HttpStatusCode.OK, reviewResponse.StatusCode);
-        var reviewed = await reviewResponse.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(reviewed);
-        Assert.Equal(DeclarationStatuses.Rejected, reviewed.Status);
-        Assert.Null(reviewed.RawPoints);
-        Assert.Equal("Link is broken and no verifiable signature found.", reviewed.ReviewNote);
-    }
-
-    [Fact]
-    public async Task CtsvReview_SelfApprovalPrevention_EnforcesSegregationOfDuties()
-    {
-        // CTSV user (Id: 202) submits their own declaration as a student / learner
-        using var ctsvAsStudent = CreateClient("student-affairs");
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Self submitted activity by CTSV officer",
-            Category: ExperienceCategories.Academic,
-            OrganizationSource: "Coursera",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/cert",
-            EvidenceDescription: "Certificate of completion",
-            RoleProposed: ContributionRoles.Participant,
-            StartDate: new DateOnly(2026, 9, 1),
-            EndDate: new DateOnly(2026, 9, 10));
-
-        var submitResponse = await ctsvAsStudent.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        Assert.Equal(HttpStatusCode.Created, submitResponse.StatusCode);
-        var declaration = await submitResponse.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(declaration);
-
-        // The same CTSV officer (Id: 202) attempts to review their own submission -> 422 UnprocessableEntity
-        var reviewRequest = new ReviewDeclarationRequest(
-            Decision: DeclarationDecisions.Approved,
-            ReviewNote: "Approving my own declaration",
-            Tier: EffortTiers.T1,
-            Role: ContributionRoles.Participant,
-            Scale: ActivityScales.Club);
-
-        var reviewResponse = await ctsvAsStudent.PostAsJsonAsync(
-            $"/api/v1/student-affairs/declarations/{declaration.Id}/review",
-            reviewRequest);
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, reviewResponse.StatusCode);
-        var json = await reviewResponse.Content.ReadFromJsonAsync<JsonElement>();
-        var error = json.GetProperty("error");
-        Assert.Equal(ApiErrorCodes.BusinessRule, error.GetProperty("code").GetString());
-        Assert.Contains("không được tự thẩm định", error.GetProperty("message").GetString());
-    }
-
-    [Fact]
-    public async Task Admin_CanAlsoAccessCtsvQueue()
-    {
-        using var adminClient = CreateClient("admin");
-        var response = await adminClient.GetAsync("/api/v1/student-affairs/declarations");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task CtsvReview_CannotReapproveAlreadyApprovedDeclaration()
-    {
-        // 1. Submit
-        using var studentClient = CreateClient("student-1");
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Initial Submission",
-            Category: ExperienceCategories.Academic,
-            OrganizationSource: "Coursera",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/cert",
-            EvidenceDescription: "Certificate",
-            RoleProposed: ContributionRoles.Participant,
-            StartDate: new DateOnly(2026, 9, 1),
-            EndDate: new DateOnly(2026, 9, 2));
-
-        var submitResponse = await studentClient.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        var declaration = await submitResponse.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(declaration);
-
-        // 2. Approve first time
-        using var ctsvClient = CreateClient("student-affairs");
-        var reviewRequest = new ReviewDeclarationRequest(
-            Decision: DeclarationDecisions.Approved,
-            ReviewNote: "First approval",
-            Tier: EffortTiers.T1,
-            Role: ContributionRoles.Participant,
-            Scale: ActivityScales.Club);
-
-        var firstReview = await ctsvClient.PostAsJsonAsync(
-            $"/api/v1/student-affairs/declarations/{declaration.Id}/review",
-            reviewRequest);
-        Assert.Equal(HttpStatusCode.OK, firstReview.StatusCode);
-
-        // 3. Second review attempt -> 422 UnprocessableEntity
-        var secondReview = await ctsvClient.PostAsJsonAsync(
-            $"/api/v1/student-affairs/declarations/{declaration.Id}/review",
-            reviewRequest);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, secondReview.StatusCode);
-        var json = await secondReview.Content.ReadFromJsonAsync<JsonElement>();
-        var error = json.GetProperty("error");
-        Assert.Equal(ApiErrorCodes.BusinessRule, error.GetProperty("code").GetString());
-        Assert.Contains("đã được phê duyệt", error.GetProperty("message").GetString());
-    }
-
-    [Fact]
-    public async Task Student_CanUpdateDeclaration_AndOtherStudentForbidden()
-    {
-        // 1. Student 1 submits
-        using var student1 = CreateClient("student-1");
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Original Title",
-            Category: ExperienceCategories.Community,
-            OrganizationSource: "Red Cross",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/v1",
-            EvidenceDescription: "Original description",
-            RoleProposed: ContributionRoles.Participant,
-            StartDate: new DateOnly(2026, 8, 1),
-            EndDate: new DateOnly(2026, 8, 2));
-
-        var submitResp = await student1.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        var created = await submitResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(created);
-
-        // 2. Student 2 tries to update -> 403 Forbidden
-        using var student2 = CreateClient("student-2");
-        var updateRequest = submitRequest with { Title = "Hacked Title" };
-        var student2UpdateResp = await student2.PutAsJsonAsync($"/api/v1/declarations/{created.Id}", updateRequest);
-        Assert.Equal(HttpStatusCode.Forbidden, student2UpdateResp.StatusCode);
-
-        // 3. Student 1 updates successfully -> 200 OK
-        var legitimateUpdate = submitRequest with
+        var legacy = await Seed(state); using var staff = Client("student-affairs-han");
+        var response = await staff.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{legacy.Id}/review", new ReviewDeclarationRequest("APPROVED", "No implicit migration"));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await Db(async db =>
         {
-            Title = "Updated Title with Better Proof",
-            EvidenceUrl = "https://example.com/v2-updated"
-        };
-        var updateResp = await student1.PutAsJsonAsync($"/api/v1/declarations/{created.Id}", legitimateUpdate);
-        Assert.Equal(HttpStatusCode.OK, updateResp.StatusCode);
-        var updated = await updateResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(updated);
-        Assert.Equal("Updated Title with Better Proof", updated.Title);
-        Assert.Equal("https://example.com/v2-updated", updated.EvidenceUrl);
+            var row = await db.SelfDeclarations.SingleAsync(x => x.Id == legacy.Id);
+            Assert.Equal(state, row.Status); Assert.Equal(legacy.RawPoints, row.RawPoints);
+            Assert.False(await db.ExperienceLedgerEffects.AnyAsync(x => x.ContributionId == legacy.Id));
+        });
+    }
+
+    [Theory]
+    [InlineData("Submitted")]
+    [InlineData("RevisionRequested")]
+    public async Task OwnerCanUpgradePendingHistoryWithRealEvidenceAndReplayWithoutDuplicateRecords(string state)
+    {
+        await factory.EnsureStudentPolicyAsync();
+        var legacy = await Seed(state); using var student = Client("student-1"); using var other = Client("student-2");
+        var submission = await Submission(student);
+        var input = new UpgradeDeclarationRequest(DeclarationResponse.Fingerprint(legacy), submission);
+        var path = $"/api/v1/declarations/{legacy.Id}/upgrade";
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsJsonAsync(path, input)).StatusCode);
+        student.DefaultRequestHeaders.Remove("Idempotency-Key"); student.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var response = await student.PostAsJsonAsync(path, input);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var receipt = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(legacy.Id, receipt.GetProperty("id").GetGuid()); Assert.Equal("SUBMITTED", receipt.GetProperty("status").GetString());
+        Assert.Equal(0, receipt.GetProperty("rawPoints").GetDecimal());
+        Assert.Equal(await response.Content.ReadAsStringAsync(), await (await student.PostAsJsonAsync(path, input)).Content.ReadAsStringAsync());
+        await Db(async db =>
+        {
+            var record = await db.Contributions.SingleAsync(x => x.Id == legacy.Id);
+            Assert.Equal("FA26", record.SemesterId); Assert.Contains("legacyDeclarationSnapshot", record.SourceSnapshotJson);
+            Assert.Equal(legacy.CreatedAtUtc, (await db.SelfDeclarations.SingleAsync(x => x.Id == legacy.Id)).CreatedAtUtc);
+            Assert.False(await db.ExperienceLedgerEffects.AnyAsync(x => x.ContributionId == legacy.Id));
+            Assert.Single(await db.ContributionRevisions.Where(x => x.ContributionId == legacy.Id).ToArrayAsync());
+        });
+    }
+
+    [Theory]
+    [InlineData("Approved")]
+    [InlineData("Rejected")]
+    public async Task HistoricalDecisionsCannotBeUpgradedOrRescored(string state)
+    {
+        await factory.EnsureStudentPolicyAsync(); var legacy = await Seed(state); using var student = Client("student-1");
+        student.DefaultRequestHeaders.Remove("Idempotency-Key"); student.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var input = new UpgradeDeclarationRequest(DeclarationResponse.Fingerprint(legacy), await Submission(student));
+        Assert.Equal(HttpStatusCode.Conflict, (await student.PostAsJsonAsync($"/api/v1/declarations/{legacy.Id}/upgrade", input)).StatusCode);
+        await Db(async db => Assert.False(await db.Contributions.AnyAsync(x => x.Id == legacy.Id)));
     }
 
     [Fact]
-    public async Task Ctsv_CanReview_WithNeedClarification_And_DefaultApproval()
+    public async Task UpgradeRejectsChangedHistoricalVersionAndForeignEvidenceWithoutWritingAnything()
     {
-        using var student = CreateClient("student-1");
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Clarification Test Event",
-            Category: ExperienceCategories.Academic,
-            OrganizationSource: "Coursera",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://example.com/cert",
-            EvidenceDescription: "Certificate proof",
-            RoleProposed: ContributionRoles.Participant,
-            StartDate: new DateOnly(2026, 8, 1),
-            EndDate: new DateOnly(2026, 8, 2));
-
-        var submitResp = await student.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        var created = await submitResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(created);
-
-        // Review with NEED_CLARIFICATION (alias for RevisionRequested used by DeclarationsQueue.jsx)
-        using var ctsv = CreateClient("student-affairs");
-        var clarifyReq = new ReviewDeclarationRequest(
-            Decision: "NEED_CLARIFICATION",
-            ReviewNote: "Vui lòng đính kèm chứng chỉ định dạng PDF có mã xác thực.");
-
-        var clarifyResp = await ctsv.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{created.Id}/review", clarifyReq);
-        Assert.Equal(HttpStatusCode.OK, clarifyResp.StatusCode);
-
-        var clarified = await clarifyResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(clarified);
-        Assert.Equal(DeclarationStatuses.RevisionRequested, clarified.Status);
-
-        // Student updates
-        await student.PutAsJsonAsync($"/api/v1/declarations/{created.Id}", submitRequest with { EvidenceUrl = "https://example.com/valid.pdf" });
-
-        // CTSV Approves without explicit tier/role/scale (defaults applied gracefully)
-        var approveReq = new ReviewDeclarationRequest(
-            Decision: "APPROVED",
-            ReviewNote: "Hồ sơ đã đầy đủ chứng chỉ hợp lệ.");
-
-        var approveResp = await ctsv.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{created.Id}/review", approveReq);
-        Assert.Equal(HttpStatusCode.OK, approveResp.StatusCode);
-
-        var approved = await approveResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(approved);
-        Assert.Equal(DeclarationStatuses.Approved, approved.Status);
-        Assert.NotNull(approved.RawPoints);
-        Assert.True(approved.RawPoints > 0);
+        await factory.EnsureStudentPolicyAsync(); var legacy = await Seed("Submitted"); using var student = Client("student-1"); using var other = Client("student-2");
+        var version = DeclarationResponse.Fingerprint(legacy); var submission = await Submission(student);
+        await Db(async db => { (await db.SelfDeclarations.SingleAsync(x => x.Id == legacy.Id)).ReviewNote = "Changed since read"; await db.SaveChangesAsync(); });
+        student.DefaultRequestHeaders.Remove("Idempotency-Key"); student.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.Conflict, (await student.PostAsJsonAsync($"/api/v1/declarations/{legacy.Id}/upgrade", new UpgradeDeclarationRequest(version, submission))).StatusCode);
+        var foreign = await Submission(other);
+        Assert.Equal(HttpStatusCode.BadRequest, (await student.PostAsJsonAsync($"/api/v1/declarations/{legacy.Id}/upgrade", new UpgradeDeclarationRequest(version, foreign))).StatusCode);
+        await Db(async db => Assert.False(await db.Contributions.AnyAsync(x => x.Id == legacy.Id)));
     }
 
-    private HttpClient CreateClient(string token)
+    private async Task<SelfDeclaration> Seed(string state)
     {
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return client;
+        var row = new SelfDeclaration { StudentId = 301, StudentName = "Student One", StudentEmail = "student1@fpt.edu.vn", CampusCode = "HAN", Title = "Historical " + Guid.NewGuid(), Category = "Academic", OrganizationSource = "Original organization", EvidenceUrl = "https://example.test/old-evidence", EvidenceDescription = "Original evidence context", StartDate = new(2026, 11, 18), EndDate = new(2026, 11, 18), Status = state, RawPoints = state == "Approved" ? 42 : null };
+        await Db(async db => { db.SelfDeclarations.Add(row); await db.SaveChangesAsync(); await db.Entry(row).ReloadAsync(); }); return row;
     }
+    private async Task<SubmitDeclarationRequest> Submission(HttpClient client)
+    {
+        using var upload = new MultipartFormDataContent();
+        var png = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jfO0AAAAASUVORK5CYII=")); png.Headers.ContentType = new("image/png"); upload.Add(png, "file", "historical-evidence.png");
+        client.DefaultRequestHeaders.Remove("Idempotency-Key"); client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        var response = await client.PostAsync("/api/contributions/evidence", upload);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return Input() with { SemesterId = "FA26", OccurredAt = new DateTimeOffset(2026, 11, 18, 0, 0, 0, TimeSpan.Zero), ProposedAttributes = new("T1", "Participant", "National", "None", [new("Academic", 1)]), EvidenceRefs = [(await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("evidenceId").GetGuid()], PolicyVersion = factory.StudentPolicyVersion };
+    }
+    private static SubmitDeclarationRequest Input() => new("Declaration " + Guid.NewGuid(), "Academic", "Evidence organization", true, null, "https://example.test/old", "Actual evidence description", "Participant", new(2026, 11, 18), new(2026, 11, 18));
+    private HttpClient Client(string token) { var client = factory.CreateClient(); client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); return client; }
+    private async Task Db(Func<AdminDbContext, Task> action) { await using var scope = factory.Services.CreateAsyncScope(); await action(scope.ServiceProvider.GetRequiredService<AdminDbContext>()); }
 }

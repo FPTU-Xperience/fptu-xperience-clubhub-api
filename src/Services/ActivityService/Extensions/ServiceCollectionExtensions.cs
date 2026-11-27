@@ -47,6 +47,11 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
             client.Timeout = TimeSpan.FromSeconds(15);
         }).AddCorrelationIdForwarding();
+        services.AddHttpClient<RawFundingClient>(client =>
+        {
+            client.BaseAddress = new Uri(configuration["Services:AdminService:BaseUrl"] ?? "http://admin-service:8080/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        }).AddCorrelationIdForwarding();
 
         services.AddScoped<MemberActivityStatisticsService>();
         services.TryAddSingleton(TimeProvider.System);

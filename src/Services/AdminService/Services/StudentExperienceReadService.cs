@@ -47,7 +47,7 @@ internal static class StudentExperienceReadService
             .ThenByDescending(x => x.Id).FirstOrDefaultAsync(ct);
         if (policyRow is null) return new(null, 503, "SCORE_POLICY_UNAPPROVED", "This scope requires an approved policy for the configured environment.");
         var policy = VerifiedExperienceService.Read<ApprovedExperiencePolicySnapshot>(policyRow.SnapshotJson);
-        if (policy.Scope != scope || policy.IndexFormulaVersion != "ERI_MEAN_PIELOU_SATURATED_V1"
+        if (policy.Scope != scope || policy.IndexFormulaVersion is not (ExperienceIndexCalculator.LegacyIndexFormula or ExperienceIndexCalculator.LinearIndexFormula)
             || RadarPillars.AllSeven.Any(p => !policy.TauByPillar.TryGetValue(p, out var tau) || tau <= 0))
             return new(null, 503, "SCORE_POLICY_UNSUPPORTED", "The approved index policy cannot be evaluated by this server.");
         var effects = db.ExperienceLedgerEffects.AsNoTracking().Where(x => x.UserId == userId && x.RecordedAt <= asOf);
@@ -86,7 +86,7 @@ internal static class StudentExperienceReadService
             .Select(x => x.Key.Pillar).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var radar = ExperienceIndexCalculator.ComputeRadar(raw, policy.TauByPillar, leaderPillars,
             policy.ThresholdStarter, policy.ThresholdPractitioner, policy.ThresholdLeader,
-            policy.MinPillarScoreAllRounder, policy.MinJAllRounder);
+            policy.MinPillarScoreAllRounder, policy.MinJAllRounder, policy.IndexFormulaVersion);
         var canonical = db.Contributions.AsNoTracking().Where(x => x.UserId == userId && recognized.Contains(x.Id));
         var clubCount = await canonical.CountAsync(x => x.SourceType == "CLUB", ct);
         var externalCount = await canonical.CountAsync(x => x.SourceType != "CLUB", ct);
@@ -115,6 +115,7 @@ internal static class StudentExperienceReadService
             Version = $"{scope}:{period?.SemesterCode ?? "ALL"}:{policyRow.Id:N}:{revision}",
             RadarAxes = items.Where(x => RadarPillars.CoreSix.Contains(x.Pillar)).ToArray(),
             PlusOne = items.Single(x => x.Pillar == RadarPillars.PlusOne),
+            W = policy.IndexFormulaVersion == ExperienceIndexCalculator.LinearIndexFormula ? radar.M : null,
             ApprovedClubContributionsCount = clubCount,
             LegacyPreviewCount = legacyCount
         };

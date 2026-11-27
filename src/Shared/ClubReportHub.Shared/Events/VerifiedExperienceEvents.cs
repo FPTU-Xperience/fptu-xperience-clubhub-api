@@ -23,7 +23,10 @@ public sealed record AttendanceRecognitionEvent(Guid EventId, DateTimeOffset Occ
 
 public sealed record ExperienceSourceCancelledEvent(Guid EventId, DateTimeOffset OccurredAtUtc, int ActivityId,
     int? SessionId, int ClubId, int ActorId, string Reason)
-    : IntegrationEvent(EventId, OccurredAtUtc);
+    : IntegrationEvent(EventId, OccurredAtUtc)
+{
+    public Guid? FundingReservationId { get; init; }
+}
 
 public sealed record ExperienceNotificationEvent(Guid EventId, DateTimeOffset OccurredAtUtc,
     int ClubId, IReadOnlyList<int> RecipientUserIds, string Kind, string Title, string TargetPath)

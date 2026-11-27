@@ -49,6 +49,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
         ClubReportHub.Shared.Experience.RecommendationChangeCapture.Capture(this);
         ChangeTracker.DetectChanges();
         if (ChangeTracker.Entries<ExperienceLedgerEffect>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
+            || ChangeTracker.Entries<RawFundingEntry>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
             || ChangeTracker.Entries<ClubRewardRedemption>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
             || ChangeTracker.Entries<ClubRewardAudit>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
             || ChangeTracker.Entries<ClubCosmeticDefinition>().Any(x => x.State is EntityState.Modified or EntityState.Deleted)
@@ -68,6 +69,7 @@ public sealed class AdminDbContext(DbContextOptions<AdminDbContext> options) : D
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ClubCreditModel.Apply(modelBuilder, Database.ProviderName);
+        RawFundingModel.Apply(modelBuilder, Database.ProviderName);
         AcademicCalendarModel.Apply(modelBuilder);
         SemesterRosterModel.Apply(modelBuilder);
         VerifiedExperienceModel.Apply(modelBuilder, Database.ProviderName);

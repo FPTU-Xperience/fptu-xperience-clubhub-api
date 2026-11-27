@@ -97,7 +97,8 @@ public static class VerifiedContributionEndpoints
         }
         var delegatedRead = !referral && await ExperienceAuthorization.FindAsync(db, http.User.GetUserId(),
             row.SourceType, row.ClubId, "contribution.review", cancellationToken) is not null;
-        if (row.UserId != http.User.GetUserId() && !delegatedRead && !finalReview && !clubProcess) return Results.Forbid();
+        if (row.UserId != http.User.GetUserId() && !delegatedRead && !finalReview && !clubProcess
+            && !await RawFundingLedger.CanRead(row, db, http, cancellationToken)) return Results.Forbid();
         var revisions = await db.ContributionRevisions.AsNoTracking().Where(x => x.ContributionId == id).OrderBy(x => x.Ordinal).ToListAsync(cancellationToken);
         var decisions = await db.ContributionDecisions.AsNoTracking().Where(x => x.ContributionId == id).OrderBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
         var upgrades = await db.ContributionUpgradeRequests.AsNoTracking().Where(x => x.ContributionId == id).ToListAsync(cancellationToken);
@@ -208,6 +209,8 @@ public static class VerifiedContributionEndpoints
         if (row is null) return Results.NotFound();
         var actor = http.User.GetUserId();
         if (row.UserId == actor) return ApiOperations.Error(403, "SELF_REVIEW_FORBIDDEN", "You cannot verify your own effort.");
+        if (RawFundingLedger.SourceReservation(row).HasValue)
+            return ApiOperations.Error(409, "FUNDED_SETTLEMENT_REQUIRED", "Review the complete funded closing settlement instead of posting individual awards.");
         if (ClubDeclarationWorkflow.IsReferral(row) && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         if (await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null)
             if (!await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
