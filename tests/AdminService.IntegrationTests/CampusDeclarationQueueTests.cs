@@ -127,6 +127,70 @@ public sealed class CampusDeclarationQueueTests(AdminApiFactory factory) : IClas
                 new { decision = "REJECT", reason = "QA boundary", expectedVersion = Guid.NewGuid() })).StatusCode);
     }
 
+    [Theory]
+    [InlineData("HAN", "student-affairs-han", "student-affairs-hcm")]
+    [InlineData("HCM", "student-affairs-hcm", "student-affairs-dan")]
+    [InlineData("DAN", "student-affairs-dan", "student-affairs-han")]
+    public async Task LegacyDeclaration_DirectEndpointsEnforceTheQueueCampusBoundary(
+        string campus, string staffToken, string foreignToken)
+    {
+        var id = Guid.NewGuid();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AdminDbContext>();
+            db.SelfDeclarations.Add(new SelfDeclaration
+            {
+                Id = id,
+                StudentId = 301,
+                CampusCode = campus,
+                IsOutsideClub = true,
+                Title = $"Legacy campus boundary {id}",
+                Category = "Academic",
+                Status = "Submitted"
+            });
+            await db.SaveChangesAsync();
+        }
+        using var foreign = Client(foreignToken);
+        var queue = await foreign.GetFromJsonAsync<JsonElement>("/api/v1/student-affairs/declarations?pageSize=100");
+        Assert.DoesNotContain(queue.GetProperty("items").EnumerateArray(), x => x.GetProperty("id").GetGuid() == id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await foreign.GetAsync($"/api/v1/declarations/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await foreign.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{id}/review",
+            new { decision = "RevisionRequested", reviewNote = "Foreign campus must not change this record." })).StatusCode);
+        await using (var scope = factory.Services.CreateAsyncScope())
+            Assert.Equal("Submitted", (await scope.ServiceProvider.GetRequiredService<AdminDbContext>().SelfDeclarations.SingleAsync(x => x.Id == id)).Status);
+        using var owner = Client("student-1");
+        using var admin = Client("admin");
+        using var staff = Client(staffToken);
+        foreach (var allowed in new[] { owner, admin, staff })
+            Assert.Equal(HttpStatusCode.OK, (await allowed.GetAsync($"/api/v1/declarations/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await staff.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{id}/review",
+            new { decision = "RevisionRequested", reviewNote = "Please clarify the supplied evidence." })).StatusCode);
+    }
+
+    [Fact]
+    public async Task LegacySubmission_TakesCampusFromTheAuthenticatedActor()
+    {
+        using var student = Client("student-2");
+        var response = await student.PostAsJsonAsync("/api/v1/declarations", new
+        {
+            title = "Legacy forged campus",
+            category = "Academic",
+            organizationSource = "External course",
+            isOutsideClub = true,
+            evidenceUrl = "https://example.invalid/evidence",
+            evidenceDescription = "Course certificate",
+            startDate = "2026-09-01",
+            endDate = "2026-09-02",
+            campusCode = "HAN"
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var saved = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("HCM", saved.GetProperty("campusCode").GetString());
+        await using var scope = factory.Services.CreateAsyncScope();
+        Assert.Equal("HCM", (await scope.ServiceProvider.GetRequiredService<AdminDbContext>().SelfDeclarations
+            .SingleAsync(x => x.Id == saved.GetProperty("id").GetGuid())).CampusCode);
+    }
+
     private HttpClient Client(string token)
     {
         var client = factory.CreateClient();
