@@ -42,10 +42,10 @@ internal static class SessionAttendanceManagement
                 isRegistered = registered.Contains(m.UserId),
                 attendance = rows.TryGetValue(m.UserId, out var attendance) ? SessionAttendanceEndpoints.Response(attendance) : null,
                 canMarkPresent = canVerify && registered.Contains(m.UserId) && m.UserId != http.User.GetUserId()
-                    && attendance?.VerificationStatus is not ("VERIFIED" or "REVOKED") && session.Status != "CANCELLED" && session.Activity.Status != ActivityStatuses.Cancelled
+                    && attendance?.VerificationStatus is not ("VERIFIED" or "REVOKED") && session.Status != "CANCELLED" && session.Activity.Status != ActivityStatuses.Cancelled && session.Activity.Status != ActivityStatuses.Postponed
                     && session.ManualConfirmationEnabled && session.StartTimeUtc <= now,
                 canMarkAbsent = canVerify && registered.Contains(m.UserId) && m.UserId != http.User.GetUserId()
-                    && attendance?.VerificationStatus is not ("VERIFIED" or "REVOKED") && session.Status != "CANCELLED" && session.Activity.Status != ActivityStatuses.Cancelled
+                    && attendance?.VerificationStatus is not ("VERIFIED" or "REVOKED") && session.Status != "CANCELLED" && session.Activity.Status != ActivityStatuses.Cancelled && session.Activity.Status != ActivityStatuses.Postponed
                     && session.EndTimeUtc <= now
             }),
             members.Page,
@@ -76,7 +76,7 @@ internal static class SessionAttendanceManagement
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
             await db.Entry(session).ReloadAsync(ct); await db.Entry(session.Activity).ReloadAsync(ct);
-            if (session.Version != request.ExpectedSessionVersion || session.Status == "CANCELLED" || session.Activity.Status == ActivityStatuses.Cancelled
+            if (session.Version != request.ExpectedSessionVersion || session.Status == "CANCELLED" || session.Activity.Status is ActivityStatuses.Cancelled or ActivityStatuses.Postponed
                 || session.StartTimeUtc > ActivitySessionEndpoints.Now(http)) return ApiOperations.Error(409, "STALE_SESSION", "Reload an eligible session that has started.");
             var userIds = members.Select(x => x.UserId).ToArray();
             if (await db.ActivityParticipants.CountAsync(x => x.ActivityId == activityId && userIds.Contains(x.UserId), ct) != userIds.Length)

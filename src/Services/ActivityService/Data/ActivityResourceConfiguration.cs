@@ -15,8 +15,16 @@ internal static class ActivityResourceConfiguration
             entity.Property(x => x.Visibility).HasMaxLength(10);
             entity.Property(x => x.Url).HasMaxLength(2000);
             entity.Property(x => x.Provider).HasMaxLength(20);
+            entity.Property(x => x.FileName).HasMaxLength(200);
+            entity.Property(x => x.MimeType).HasMaxLength(100);
+            entity.Property(x => x.Sha256).HasMaxLength(64);
             entity.HasIndex(x => new { x.ActivityId, x.DetachedAtUtc, x.Position });
             entity.HasOne<ClubActivity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
+        });
+        model.Entity<ActivityResourceFile>(entity =>
+        {
+            entity.HasKey(x => x.ResourceId);
+            entity.HasOne<ActivityResource>().WithOne().HasForeignKey<ActivityResourceFile>(x => x.ResourceId).OnDelete(DeleteBehavior.Restrict);
         });
         model.Entity<ActivityResourceAudit>(entity =>
         {

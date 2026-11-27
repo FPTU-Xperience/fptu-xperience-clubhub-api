@@ -53,7 +53,7 @@ public static class ClubRoleEndpoints
             var groups = config?.Groups.Where(group => !group.Archived && !group.Protected).ToArray() ?? [];
             var grouped = groups.SelectMany(group => group.Assignments)
                 .Select(member => (member.MembershipId, member.UserId)).ToHashSet();
-            var hosts = groups.Where(group => group.PresetCode == "EVENT").SelectMany(group => group.Assignments)
+            var hosts = groups.Where(group => group.PresetCode is "EVENT" or "SECRETARY").SelectMany(group => group.Assignments)
                 .Select(member => (member.MembershipId, member.UserId)).ToHashSet();
             var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
             var viceMembershipIds = await db.Set<ClubViceAppointment>().Where(row => row.ClubId == clubId
@@ -62,7 +62,7 @@ public static class ClubRoleEndpoints
             {
                 if (!profiles.TryGetValue(row.UserId, out var profile) || profile is not { IsActive: true, IsLocked: false }
                     || profile.CampusCode != club.CampusCode) continue;
-                if (hosts.Contains((row.Id, row.UserId))) staffing.Add(row.Id, "HOST");
+                if (owners.Contains(row.UserId) || viceMembershipIds.Contains(row.Id) || hosts.Contains((row.Id, row.UserId))) staffing.Add(row.Id, "HOST");
                 else if (row.Role == ClubMemberRoles.Member && !grouped.Contains((row.Id, row.UserId))
                     && !owners.Contains(row.UserId) && !viceMembershipIds.Contains(row.Id)) staffing.Add(row.Id, "STAFF");
             }

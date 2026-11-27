@@ -31,7 +31,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Backend.StabilizationTests;
 
-public sealed class ActivityActionContractTests
+public sealed partial class ActivityActionContractTests
 {
     private const string SigningKey = "ActivityActionTests-Only-Long-Signing-Key-2026-Not-Production";
     private const string TransparentPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==";

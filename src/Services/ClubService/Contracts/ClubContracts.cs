@@ -144,6 +144,7 @@ public sealed record ClubAccessResponse(
     public IReadOnlyCollection<string>? Capabilities { get; init; }
     public DateTimeOffset? AccessValidUntilUtc { get; init; }
     public bool IsVicePresident { get; init; }
+    public bool IsSecretary { get; init; }
     public Guid? GovernanceRevisionId { get; init; }
     public IReadOnlyCollection<Guid>? GroupIds { get; init; }
 }

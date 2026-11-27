@@ -101,6 +101,7 @@ internal static class ActivityActionConfiguration
         model.Entity<ActivityCertificateDisplay>(e =>
         {
             e.HasKey(x => x.UserId);
+            e.Property(x => x.UserId).ValueGeneratedNever();
             e.Property(x => x.Version).IsConcurrencyToken();
         });
         model.Entity<ActivityClosingReport>(e =>

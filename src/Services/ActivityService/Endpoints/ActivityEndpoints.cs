@@ -36,6 +36,7 @@ public static class ActivityEndpoints
         activities.MapActivityWriteEndpoints();
         activities.MapPut("/{id:int}/discovery-tags", ActivityTagEndpoints.UpdateAsync);
         app.MapActivityRescheduleEndpoints();
+        app.MapActivityPostponementEndpoints();
         app.MapActivityRecapEndpoints();
         app.MapActivityClosingReportEndpoints();
         app.MapActivityFinalRoleEndpoints();

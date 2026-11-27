@@ -510,10 +510,7 @@ namespace ActivityService.Migrations
             modelBuilder.Entity("ActivityService.Models.ActivityCertificateDisplay", b =>
                 {
                     b.Property<int>("UserId")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserId"));
 
                     b.Property<Guid?>("BadgeId")
                         .HasColumnType("uniqueidentifier");
@@ -1093,10 +1090,18 @@ namespace ActivityService.Migrations
                     b.Property<DateTimeOffset?>("DetachedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("FileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("MimeType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int>("Position")
                         .HasColumnType("int");
@@ -1105,6 +1110,13 @@ namespace ActivityService.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1181,6 +1193,20 @@ namespace ActivityService.Migrations
                     b.HasIndex("ActivityId", "Id");
 
                     b.ToTable("ActivityResourceAudit");
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityResourceFile", b =>
+                {
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Bytes")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.HasKey("ResourceId");
+
+                    b.ToTable("ActivityResourceFile");
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivitySession", b =>
@@ -2150,6 +2176,15 @@ namespace ActivityService.Migrations
                     b.HasOne("ActivityService.Models.ActivityResource", null)
                         .WithMany()
                         .HasForeignKey("ResourceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityResourceFile", b =>
+                {
+                    b.HasOne("ActivityService.Models.ActivityResource", null)
+                        .WithOne()
+                        .HasForeignKey("ActivityService.Models.ActivityResourceFile", "ResourceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

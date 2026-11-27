@@ -36,7 +36,14 @@ public static class ClubGovernancePolicy
         var actor = http.User.GetUserId();
         if (await db.UserOwnsClubAsync(clubId, actor, ct)) return true;
         var now = http.RequestServices.GetService<TimeProvider>()?.GetUtcNow() ?? DateTimeOffset.UtcNow;
-        if (!await IsVice(db, clubId, actor, now, ct)) return false;
+        var vice = await IsVice(db, clubId, actor, now, ct);
+        if (!vice)
+        {
+            var current = await Current(db, clubId, http, ct);
+            var memberships = await db.ClubMemberships.Where(x => x.ClubId == clubId && x.UserId == actor && x.Status == ClubMembershipStatuses.Approved).Select(x => x.Id).ToArrayAsync(ct);
+            if (current?.Groups.Any(x => !x.Archived && !x.Protected && x.PresetCode == "SECRETARY"
+                && x.Assignments.Any(a => a.UserId == actor && memberships.Contains(a.MembershipId))) != true) return false;
+        }
         var accounts = await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync([actor], ct);
         var campus = await db.Clubs.Where(x => x.Id == clubId && x.IsActive && x.DeletedAtUtc == null).Select(x => x.CampusCode).SingleOrDefaultAsync(ct);
         return campus is not null && accounts.TryGetValue(actor, out var account) && account is { IsActive: true, IsLocked: false }
@@ -68,7 +75,7 @@ public static class ClubGovernancePolicy
         if (isVice) return true;
         var memberships = await db.ClubMemberships.Where(x => x.ClubId == clubId && x.UserId == actor && x.Status == ClubMembershipStatuses.Approved).Select(x => x.Id).ToArrayAsync(ct);
         return config!.Groups.Any(g => !g.Archived && !g.Protected && (g.PermissionCodes.Contains(permission)
-                || permission == "club.declarations.process" && g.PresetCode == "SECRETARY")
+                || g.PresetCode == "SECRETARY")
             && g.Assignments.Any(a => a.UserId == actor && memberships.Contains(a.MembershipId)));
     }
     public static async Task<bool> HasWritableSpecialization(ClubDbContext db, int clubId, HttpContext http, CancellationToken ct)

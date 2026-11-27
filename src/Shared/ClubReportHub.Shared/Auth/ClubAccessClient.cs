@@ -27,13 +27,14 @@ public sealed record ClubAccessSnapshot(
     public IReadOnlyCollection<string>? Capabilities { get; init; }
     public DateTimeOffset? AccessValidUntilUtc { get; init; }
     public bool IsVicePresident { get; init; }
+    public bool IsSecretary { get; init; }
     public Guid? GovernanceRevisionId { get; init; }
     public IReadOnlyCollection<Guid>? GroupIds { get; init; }
     public bool HasCapability(string code) => CanManage || (Capabilities?.Contains(code) == true
         && AccessValidUntilUtc.HasValue && DateTimeOffset.UtcNow < AccessValidUntilUtc);
-    public bool CanManage => IsManager || (IsVicePresident && AccessValidUntilUtc.HasValue && DateTimeOffset.UtcNow < AccessValidUntilUtc);
+    public bool CanManage => IsManager || ((IsVicePresident || IsSecretary) && AccessValidUntilUtc.HasValue && DateTimeOffset.UtcNow < AccessValidUntilUtc);
     public bool CanManageFinance => CanManage || (IsTreasurer && (Capabilities is null || new[] { "club.finance.read", "club.finance.draft.write", "club.finance.submit" }.All(HasCapability)));
-    public bool CanView => IsManager || IsApprovedMember || IsVicePresident;
+    public bool CanView => IsManager || IsApprovedMember || IsVicePresident || IsSecretary;
 }
 
 public sealed class ClubAccessClient(
@@ -46,7 +47,7 @@ public sealed class ClubAccessClient(
     private static readonly TimeSpan ActiveAbsoluteExpiration = TimeSpan.FromMinutes(3);
     // Negative caching duration for users without club access (PERF-F04)
     private static readonly TimeSpan NegativeCacheDuration = TimeSpan.FromMinutes(1);
-    private static bool Cacheable(IReadOnlyList<ClubAccessSnapshot> snapshots) => snapshots.All(x => x.Capabilities is null && !x.IsVicePresident);
+    private static bool Cacheable(IReadOnlyList<ClubAccessSnapshot> snapshots) => snapshots.All(x => x.Capabilities is null && !x.IsVicePresident && !x.IsSecretary);
 
     // Cache stampede protection (PERF-F04)
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _userLocks = new();
