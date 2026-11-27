@@ -88,7 +88,8 @@ public static class VerifiedContributionEndpoints
         var row = await db.Contributions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (row is null) return Results.NotFound();
         if (row.UserId != http.User.GetUserId() && await ExperienceAuthorization.FindAsync(db, http.User.GetUserId(),
-                row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null) return Results.Forbid();
+                row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null
+            && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         var revisions = await db.ContributionRevisions.AsNoTracking().Where(x => x.ContributionId == id).OrderBy(x => x.Ordinal).ToListAsync(cancellationToken);
         var decisions = await db.ContributionDecisions.AsNoTracking().Where(x => x.ContributionId == id).OrderBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
         var upgrades = await db.ContributionUpgradeRequests.AsNoTracking().Where(x => x.ContributionId == id).ToListAsync(cancellationToken);
@@ -199,12 +200,12 @@ public static class VerifiedContributionEndpoints
         var actor = http.User.GetUserId();
         if (row.UserId == actor) return ApiOperations.Error(403, "SELF_REVIEW_FORBIDDEN", "You cannot verify your own effort.");
         if (await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null)
-            return Results.Forbid();
+            if (!await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         if (!ValidDecision(request.Decision, request.Reason)) return ApiOperations.Error(400, "INVALID_REVIEW", "Provide a valid decision and reason.");
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
             var grant = await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "contribution.review", cancellationToken);
-            if (grant is null) return Results.Forbid();
+            if (grant is null && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
             if (row.Version != request.ExpectedVersion || row.Status != "SUBMITTED")
                 return ApiOperations.Error(409, "STALE_CONTRIBUTION", "Reload the submitted contribution.");
             var target = row.CurrentRevisionId;
@@ -254,7 +255,7 @@ public static class VerifiedContributionEndpoints
                 if (policy is null) return ApiOperations.Error(503, "SCORE_POLICY_UNAPPROVED", "No approved policy is available for this environment.");
                 attributes = request.VerifiedAttributes;
             }
-            grant.Version = Guid.NewGuid();
+            if (grant is not null) grant.Version = Guid.NewGuid();
             var status = request.Decision switch { "APPROVE" => "APPROVED", "REJECT" => "REJECTED", _ => "REVISION_REQUESTED" };
             var revision = Revision(db, row, status, attributes, actor, request.Reason.Trim());
             var decision = new ContributionDecision
@@ -263,8 +264,8 @@ public static class VerifiedContributionEndpoints
                 TargetRevisionId = target,
                 RevisionId = revision.Id,
                 ReviewerUserId = actor,
-                AssignmentId = grant.Id,
-                AssignmentVersion = grant.Version,
+                AssignmentId = grant?.Id,
+                AssignmentVersion = grant?.Version,
                 Decision = request.Decision,
                 Reason = request.Reason.Trim(),
                 CreatedAtUtc = DateTimeOffset.UtcNow
@@ -273,7 +274,7 @@ public static class VerifiedContributionEndpoints
             if (policy is not null)
             {
                 await AppendEffectAsync(db, row, revision, null, attributes, policy,
-                    "AWARD", decision.Id, actor, "ASSIGNED_REVIEW", request.Reason.Trim(), null, cancellationToken);
+                    "AWARD", decision.Id, actor, grant is null ? "CTSV_DECLARATION_REVIEW" : "ASSIGNED_REVIEW", request.Reason.Trim(), null, cancellationToken);
                 if (row.AttendanceId is { } attendanceId && row.SessionId is { } sessionId)
                 {
                     var manual = await db.ManualAttendanceRequests.Where(x => x.SessionId == sessionId && x.UserId == row.UserId
