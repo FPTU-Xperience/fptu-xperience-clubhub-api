@@ -148,6 +148,12 @@ public sealed class ClubCreditTests
         await using var f = await Fixture.Create(sql: true); using var member = f.Client(200);
         var wallet = await member.GetFromJsonAsync<JsonElement>("/api/clubs/1/wallet/me");
         Assert.Equal(100m, wallet.GetProperty("balance").GetDecimal());
+        await f.Db(async db =>
+        {
+            var prior = await db.Contributions.ToListAsync();
+            Assert.Equal(new[] { 100m, 200m, 999m }, prior.Select(x => x.RawPoints).Order().ToArray());
+            Assert.All(prior, row => { Assert.Null(row.ClubReviewStatus); Assert.Null(row.CtsvSubmissionStatus); });
+        });
         await f.Db(async db => { Assert.Empty(await db.Set<ClubCreditWallet>().ToListAsync()); Assert.Empty(await db.Set<ClubCosmeticOwnership>().ToListAsync()); Assert.Equal(3, await db.ExperienceLedgerEffects.CountAsync()); });
     }
 
@@ -239,7 +245,23 @@ public sealed class ClubCreditTests
                 {
                     var row = new VerifiedContribution { UserId = 200, ClubId = item.Club, SourceType = item.Type, SourceKey = Guid.NewGuid().ToString(), SemesterId = "FALL2026", Status = "APPROVED", RawPoints = item.Amount, CreatedAtUtc = clock.Utc, UpdatedAtUtc = clock.Utc, OccurredAt = clock.Utc };
                     if (item is { Club: 1, Type: "CLUB" }) fixture.ClubContribution = row.Id;
-                    db.Add(row); db.Add(new ExperienceLedgerEffect { ContributionId = row.Id, RevisionId = Guid.NewGuid(), UserId = 200, SemesterId = "FALL2026", EffectType = "AWARD", Amount = item.Amount, VerificationId = Guid.NewGuid(), PolicyVersion = Guid.NewGuid(), FormulaVersion = "VERIFIED_TEST_POLICY", RecordedAt = clock.Utc, OccurredAt = clock.Utc });
+                    if (sql)
+                    {
+                        // Seed the historical schema, before applying newer migrations. The current EF entity
+                        // includes referral columns that intentionally do not exist at this upgrade checkpoint.
+                        await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            INSERT INTO [Contributions] ([Id], [UserId], [ClubId], [SourceType], [SourceKey], [SemesterId],
+                                [Title], [Message], [Status], [Version], [RevisionOrdinal], [CurrentRevisionId],
+                                [ProposedAttributesJson], [EvidenceRefsJson], [SourceSnapshotJson], [RawPoints],
+                                [OccurredAt], [CreatedAtUtc], [UpdatedAtUtc])
+                            VALUES ({row.Id}, {row.UserId}, {row.ClubId}, {row.SourceType}, {row.SourceKey}, {row.SemesterId},
+                                {row.Title}, {row.Message}, {row.Status}, {row.Version}, {row.RevisionOrdinal}, {row.CurrentRevisionId},
+                                {row.ProposedAttributesJson}, {row.EvidenceRefsJson}, {row.SourceSnapshotJson}, {row.RawPoints},
+                                {row.OccurredAt}, {row.CreatedAtUtc}, {row.UpdatedAtUtc})
+                            """);
+                    }
+                    else db.Add(row);
+                    db.Add(new ExperienceLedgerEffect { ContributionId = row.Id, RevisionId = Guid.NewGuid(), UserId = 200, SemesterId = "FALL2026", EffectType = "AWARD", Amount = item.Amount, VerificationId = Guid.NewGuid(), PolicyVersion = Guid.NewGuid(), FormulaVersion = "VERIFIED_TEST_POLICY", RecordedAt = clock.Utc, OccurredAt = clock.Utc });
                 }
                 await db.SaveChangesAsync();
                 if (sql) await db.Database.MigrateAsync();

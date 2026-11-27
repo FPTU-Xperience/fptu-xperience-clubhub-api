@@ -76,6 +76,9 @@ public sealed class ClubDeclarationReferralTests
         var revised = await Revise(student, id, changes);
         Assert.Equal("PENDING", revised.GetProperty("clubReviewStatus").GetString());
         var endorsed = await Json(await ClubAction(bod, id, revised, "club-review", "ENDORSE"));
+        f.OwnerLocked = true;
+        Assert.Equal(HttpStatusCode.Forbidden, (await ClubAction(bod, id, endorsed, "forward")).StatusCode);
+        f.OwnerLocked = false;
         f.Revoked = true;
         Assert.Equal(HttpStatusCode.Forbidden, (await ClubAction(bod, id, endorsed, "forward")).StatusCode);
         var evidence = endorsed.GetProperty("evidenceRefs")[0].GetGuid();
@@ -196,6 +199,7 @@ public sealed class ClubDeclarationReferralTests
     private sealed class ReferralFactory : AdminApiFactory
     {
         internal bool Revoked;
+        internal bool OwnerLocked;
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
@@ -215,7 +219,7 @@ public sealed class ClubDeclarationReferralTests
             if (request.RequestUri!.AbsolutePath.EndsWith("/user-profiles"))
             {
                 var ids = await request.Content!.ReadFromJsonAsync<int[]>(ct) ?? [];
-                value = ids.Select(id => new InternalUserProfile(id, "Test account " + id, id + "@example.invalid", id is 203 or 302 ? "HCM" : "HAN", true, false, null)).ToArray();
+                value = ids.Select(id => new InternalUserProfile(id, "Test account " + id, id + "@example.invalid", id is 203 or 302 ? "HCM" : "HAN", true, f.OwnerLocked && id == 101, null)).ToArray();
             }
             else if (request.RequestUri.AbsolutePath == "/api/clubs/me/access")
                 value = request.Headers.Authorization?.Parameter == "admin" && !f.Revoked
