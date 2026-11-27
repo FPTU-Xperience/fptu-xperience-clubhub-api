@@ -27,6 +27,7 @@ internal static class ClubGovernanceAccess
         var groups = config?.Groups.Where(x => inCampus && !x.Archived && !x.Protected && x.Assignments.Any(a => a.UserId == actor && membershipIds.Contains(a.MembershipId))).ToArray() ?? [];
         var isVice = inCampus && vice.Any(x => membershipIds.Contains(x.MembershipId));
         var permissions = groups.SelectMany(x => x.PermissionCodes).Concat(access.IsTreasurer ? ClubGovernancePolicy.Presets["TREASURER"] : [])
+            .Concat(groups.Any(x => x.PresetCode == "SECRETARY") ? new[] { "club.declarations.process" } : [])
             .Concat(isVice ? ClubGovernancePolicy.Delegable : []).Where(ClubGovernancePolicy.Delegable.Contains).Distinct().Order(StringComparer.Ordinal).ToArray();
         var groupIds = groups.Select(x => x.Id).ToArray();
         var treasurerIds = access.TreasurerUserIds.Concat(await ClubGovernancePolicy.GroupTreasurers(db, access.ClubId, http, ct)).Distinct().ToArray();

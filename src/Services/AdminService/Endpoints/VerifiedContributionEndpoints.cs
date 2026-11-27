@@ -87,9 +87,17 @@ public static class VerifiedContributionEndpoints
     {
         var row = await db.Contributions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (row is null) return Results.NotFound();
-        if (row.UserId != http.User.GetUserId() && await ExperienceAuthorization.FindAsync(db, http.User.GetUserId(),
-                row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null
-            && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
+        var referral = ClubDeclarationWorkflow.IsReferral(row);
+        var finalReview = await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken);
+        var clubProcess = false;
+        if (referral && row.UserId != http.User.GetUserId() && !finalReview)
+        {
+            try { clubProcess = await ClubDeclarationWorkflow.CanProcessAsync(row, http, cancellationToken); }
+            catch (HttpRequestException) { return ApiOperations.Error(503, "CLUB_AUTHORITY_UNAVAILABLE", "Club authority is unavailable."); }
+        }
+        var delegatedRead = !referral && await ExperienceAuthorization.FindAsync(db, http.User.GetUserId(),
+            row.SourceType, row.ClubId, "contribution.review", cancellationToken) is not null;
+        if (row.UserId != http.User.GetUserId() && !delegatedRead && !finalReview && !clubProcess) return Results.Forbid();
         var revisions = await db.ContributionRevisions.AsNoTracking().Where(x => x.ContributionId == id).OrderBy(x => x.Ordinal).ToListAsync(cancellationToken);
         var decisions = await db.ContributionDecisions.AsNoTracking().Where(x => x.ContributionId == id).OrderBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
         var upgrades = await db.ContributionUpgradeRequests.AsNoTracking().Where(x => x.ContributionId == id).ToListAsync(cancellationToken);
@@ -112,7 +120,7 @@ public static class VerifiedContributionEndpoints
         }
         return Results.Ok(new
         {
-            contribution = Response(row),
+            contribution = Response(row) with { Capabilities = referral ? ClubDeclarationWorkflow.Capabilities(row, clubProcess, finalReview) : null },
             revisions,
             decisions,
             roleUpgradeRequests = upgrades,
@@ -184,6 +192,7 @@ public static class VerifiedContributionEndpoints
                 return ApiOperations.Error(400, "SOURCE_TYPE_IMMUTABLE", "Keep this declaration in its assigned RealWorldWork scope.");
             row.ProposedAttributesJson = Json(request.ProposedAttributes); row.EvidenceRefsJson = Json(request.EvidenceRefs);
             row.Message = request.Message?.Trim() ?? string.Empty; row.Status = "SUBMITTED";
+            ClubDeclarationWorkflow.Reset(row);
             Revision(db, row, "SUBMITTED", request.ProposedAttributes, actor, "Author revision.");
             await DeclarationExperienceBridge.SyncAsync(db, row, cancellationToken);
             ExperienceAuthorization.Audit(db, http.User, "CONTRIBUTION_REVISED", "Contribution", id.ToString(), new { row.CurrentRevisionId });
@@ -199,12 +208,18 @@ public static class VerifiedContributionEndpoints
         if (row is null) return Results.NotFound();
         var actor = http.User.GetUserId();
         if (row.UserId == actor) return ApiOperations.Error(403, "SELF_REVIEW_FORBIDDEN", "You cannot verify your own effort.");
+        if (ClubDeclarationWorkflow.IsReferral(row) && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         if (await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null)
             if (!await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         if (!ValidDecision(request.Decision, request.Reason)) return ApiOperations.Error(400, "INVALID_REVIEW", "Provide a valid decision and reason.");
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
             var grant = await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "contribution.review", cancellationToken);
+            if (ClubDeclarationWorkflow.IsReferral(row))
+            {
+                if (!await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
+                grant = null;
+            }
             if (grant is null && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
             if (row.Version != request.ExpectedVersion || row.Status != "SUBMITTED")
                 return ApiOperations.Error(409, "STALE_CONTRIBUTION", "Reload the submitted contribution.");
@@ -336,6 +351,7 @@ public static class VerifiedContributionEndpoints
     {
         var row = await db.Contributions.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (row is null) return Results.NotFound();
+        if (ClubDeclarationWorkflow.IsReferral(row) && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         var actor = http.User.GetUserId();
         if (row.UserId == actor) return ApiOperations.Error(403, "SELF_REVIEW_FORBIDDEN", "You cannot verify your own effort.");
         if (await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "contribution.review", cancellationToken) is null) return Results.Forbid();
@@ -414,6 +430,7 @@ public static class VerifiedContributionEndpoints
     {
         var row = await db.Contributions.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (row is null) return Results.NotFound();
+        if (ClubDeclarationWorkflow.IsReferral(row) && !await CampusDeclarationReview.CanReviewAsync(db, http.User, row, cancellationToken)) return Results.Forbid();
         var actor = http.User.GetUserId();
         if (row.UserId == actor) return ApiOperations.Error(403, "SELF_REVIEW_FORBIDDEN", "You cannot adjust your own effort.");
         if (await ExperienceAuthorization.FindAsync(db, actor, row.SourceType, row.ClubId, "experience.adjust", cancellationToken) is null) return Results.Forbid();
@@ -519,7 +536,7 @@ public static class VerifiedContributionEndpoints
         if (clubs.Count == 0 && manualClubs.Count == 0 && !external && !realWorld) return Results.Forbid();
         if (clubId.HasValue && !clubs.Contains(clubId.Value) && !manualClubs.Contains(clubId.Value)) return Results.Forbid();
         var current = Math.Max(page ?? 1, 1); var size = Math.Clamp(pageSize ?? 20, 1, 100);
-        var pending = db.Contributions.AsNoTracking().Where(x => (x.ClubId != null && clubs.Contains(x.ClubId.Value)
+        var pending = db.Contributions.AsNoTracking().Where(x => x.ClubReviewStatus == null && (x.ClubId != null && clubs.Contains(x.ClubId.Value)
                 || clubId == null && (external && x.SourceType == "EXTERNAL" || realWorld && x.SourceType == "REAL_WORLD"))
             && x.UserId != actor && x.Status == "SUBMITTED" && (clubId == null || x.ClubId == clubId));
         var total = await pending.CountAsync(cancellationToken);
@@ -527,7 +544,7 @@ public static class VerifiedContributionEndpoints
             .Skip((int)Math.Min((long)(current - 1) * size, int.MaxValue)).Take(size).ToListAsync(cancellationToken);
         var upgrades = await (from upgrade in db.ContributionUpgradeRequests.AsNoTracking()
                               join contribution in db.Contributions.AsNoTracking() on upgrade.ContributionId equals contribution.Id
-                              where (contribution.ClubId != null && clubs.Contains(contribution.ClubId.Value)
+                              where contribution.ClubReviewStatus == null && (contribution.ClubId != null && clubs.Contains(contribution.ClubId.Value)
                                       || clubId == null && (external && contribution.SourceType == "EXTERNAL" || realWorld && contribution.SourceType == "REAL_WORLD")) && contribution.UserId != actor
                                   && upgrade.Status == "SUBMITTED" && (clubId == null || contribution.ClubId == clubId)
                               select new { upgrade, contribution.UserId, contribution.ClubId, contribution.Title }).OrderBy(x => x.upgrade.CreatedAtUtc)

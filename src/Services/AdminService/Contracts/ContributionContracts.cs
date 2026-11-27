@@ -32,8 +32,20 @@ public sealed record ContributionResponse(Guid Id, int UserId, string SourceType
     ContributionAttributes ProposedAttributes, ContributionAttributes? VerifiedAttributes,
     IReadOnlyList<Guid> EvidenceRefs, decimal RawPoints, string RecognitionStatus, DateTimeOffset UpdatedAt)
 {
+    public int? ReferringClubId { get; init; }
+    public string? OrganizationSource { get; init; }
+    public string? StudentName { get; init; }
+    public string? StudentEmail { get; init; }
+    public string? ClubReviewStatus { get; init; }
+    public string? CtsvSubmissionStatus { get; init; }
+    public string? ClubReviewReason { get; init; }
+    public int? ClubReviewedBy { get; init; }
+    public int? CtsvSubmittedBy { get; init; }
+    public DeclarationCapabilities? Capabilities { get; init; }
     public string SourceNamespace { get; init; } = "CONTRIBUTION";
     public string SourceKey { get; init; } = string.Empty;
     public bool IsAuthoritative { get; init; } = true;
     public CalculationBreakdown? CalculationBreakdown { get; init; }
 }
+
+public sealed record DeclarationCapabilities(bool CanClubReview, bool CanSubmitToStudentAffairs, bool CanFinalReview);

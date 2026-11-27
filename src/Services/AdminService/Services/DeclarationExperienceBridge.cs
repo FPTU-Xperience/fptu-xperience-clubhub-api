@@ -17,7 +17,22 @@ internal static class DeclarationExperienceBridge
     {
         var error = VerifiedExperienceRules.Validate(input.ProposedAttributes);
         var actor = http.User.GetUserId();
-        if (error is not null || !input.IsOutsideClub || input.ClubId.HasValue || string.IsNullOrWhiteSpace(input.Title)
+        InternalUserProfile? referralAuthor = null;
+        if (input.ReferringClubId.HasValue)
+        {
+            if (input.ReferringClubId <= 0) return ApiOperations.Error(400, "INVALID_REFERRING_CLUB", "Choose a current club membership.");
+            try
+            {
+                var club = await http.RequestServices.GetRequiredService<ClubExperienceAuthorityClient>().GetAsync(input.ReferringClubId.Value, actor, ct);
+                if (club is not { IsActive: true, IsApprovedMember: true }) return Results.Forbid();
+                var profiles = await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync([actor], ct);
+                if (!profiles.TryGetValue(actor, out referralAuthor) || referralAuthor is not { IsActive: true, IsLocked: false }
+                    || referralAuthor.CampusCode != http.User.GetCampus()) return Results.Forbid();
+            }
+            catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+            { return ApiOperations.Error(503, "CLUB_AUTHORITY_UNAVAILABLE", "Club membership and account authority are unavailable."); }
+        }
+        if (error is not null || !input.IsOutsideClub || input.ClubId.HasValue || input.ReferringClubId.HasValue && input.EvidenceRefs is not { Count: > 0 } || string.IsNullOrWhiteSpace(input.Title)
             || input.Title.Length > 200 || input.EvidenceDescription?.Length > 2000 || !input.OccurredAt.HasValue
             || input.OccurredAt > DateTimeOffset.UtcNow || !await OwnsEvidenceAsync(db, actor, input.EvidenceRefs, ct))
             return ApiOperations.Error(400, "INVALID_DECLARATION", error ?? "Provide an external declaration, occurredAt and owned evidence.");
@@ -33,13 +48,14 @@ internal static class DeclarationExperienceBridge
             var declaration = new SelfDeclaration
             {
                 StudentId = actor,
-                StudentName = http.User.Identity?.Name ?? $"User {actor}",
-                StudentEmail = http.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "",
+                StudentName = referralAuthor?.DisplayName ?? http.User.Identity?.Name ?? $"User {actor}",
+                StudentEmail = referralAuthor?.Email ?? http.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "",
                 CampusCode = http.User.GetCampus(),
                 Title = input.Title.Trim(),
                 Category = input.ProposedAttributes.PillarWeights[0].Pillar,
                 OrganizationSource = input.OrganizationSource?.Trim() ?? "",
                 IsOutsideClub = true,
+                ClubId = input.ReferringClubId,
                 EvidenceUrl = "",
                 EvidenceDescription = input.EvidenceDescription?.Trim() ?? "",
                 StartDate = DateOnly.FromDateTime(input.OccurredAt.Value.UtcDateTime),
@@ -49,6 +65,9 @@ internal static class DeclarationExperienceBridge
             {
                 Id = declaration.Id,
                 UserId = actor,
+                ClubId = input.ReferringClubId,
+                ClubReviewStatus = input.ReferringClubId.HasValue ? "PENDING" : null,
+                CtsvSubmissionStatus = input.ReferringClubId.HasValue ? "NOT_SUBMITTED" : null,
                 SourceType = kind,
                 SourceKey = $"DECLARATION:{declaration.Id:N}",
                 SourceId = declaration.Id.ToString(),

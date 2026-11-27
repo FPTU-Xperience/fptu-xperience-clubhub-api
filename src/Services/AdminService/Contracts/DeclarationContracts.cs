@@ -16,7 +16,7 @@ public sealed record SubmitDeclarationRequest(
     DateOnly EndDate,
     string? CampusCode = null, string? SemesterId = null, DateTimeOffset? OccurredAt = null,
     ContributionAttributes? ProposedAttributes = null, IReadOnlyList<Guid>? EvidenceRefs = null,
-    Guid? ExpectedVersion = null, Guid? PolicyVersion = null);
+    Guid? ExpectedVersion = null, Guid? PolicyVersion = null, int? ReferringClubId = null);
 
 public sealed record ReviewDeclarationRequest(
     string Decision,

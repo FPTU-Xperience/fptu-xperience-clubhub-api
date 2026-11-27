@@ -20,13 +20,13 @@ public static class ClubGovernancePolicy
     public const string CatalogVersion = "CLUB_GROUPS_V1";
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public static readonly string[] Delegable = ["club.profile.write", "club.media.write", "event.content.write", "event.staff.assign",
-        "event.registrations.manage", "club.members.recruit", "club.reports.draft.write", "club.finance.read", "club.finance.draft.write", "club.finance.submit"];
+        "event.registrations.manage", "club.members.recruit", "club.reports.draft.write", "club.finance.read", "club.finance.draft.write", "club.finance.submit", "club.declarations.process"];
     public static readonly IReadOnlyDictionary<string, string[]> Presets = new Dictionary<string, string[]>
     {
         ["CONTENT"] = ["club.profile.write", "club.media.write", "event.content.write"],
         ["EVENT"] = ["event.staff.assign", "event.registrations.manage"],
         ["HR"] = ["club.members.recruit", "club.profile.write"],
-        ["SECRETARY"] = ["club.reports.draft.write"],
+        ["SECRETARY"] = ["club.reports.draft.write", "club.declarations.process"],
         ["TREASURER"] = ["club.finance.read", "club.finance.draft.write", "club.finance.submit"],
         ["CUSTOM"] = []
     };
@@ -67,7 +67,8 @@ public static class ClubGovernancePolicy
             || (campus != CampusCodes.Global && account.CampusCode != campus)) return false;
         if (isVice) return true;
         var memberships = await db.ClubMemberships.Where(x => x.ClubId == clubId && x.UserId == actor && x.Status == ClubMembershipStatuses.Approved).Select(x => x.Id).ToArrayAsync(ct);
-        return config!.Groups.Any(g => !g.Archived && !g.Protected && g.PermissionCodes.Contains(permission)
+        return config!.Groups.Any(g => !g.Archived && !g.Protected && (g.PermissionCodes.Contains(permission)
+                || permission == "club.declarations.process" && g.PresetCode == "SECRETARY")
             && g.Assignments.Any(a => a.UserId == actor && memberships.Contains(a.MembershipId)));
     }
     public static async Task<bool> HasWritableSpecialization(ClubDbContext db, int clubId, HttpContext http, CancellationToken ct)

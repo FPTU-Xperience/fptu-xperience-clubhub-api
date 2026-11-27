@@ -10,7 +10,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace AdminService.IntegrationTests;
 
-public sealed class AdminApiFactory : WebApplicationFactory<Program>
+public class AdminApiFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
 
