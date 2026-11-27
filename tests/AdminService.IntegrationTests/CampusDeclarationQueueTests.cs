@@ -163,12 +163,12 @@ public sealed class CampusDeclarationQueueTests(AdminApiFactory factory) : IClas
         using var staff = Client(staffToken);
         foreach (var allowed in new[] { owner, admin, staff })
             Assert.Equal(HttpStatusCode.OK, (await allowed.GetAsync($"/api/v1/declarations/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await staff.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{id}/review",
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PostAsJsonAsync($"/api/v1/student-affairs/declarations/{id}/review",
             new { decision = "RevisionRequested", reviewNote = "Please clarify the supplied evidence." })).StatusCode);
     }
 
     [Fact]
-    public async Task LegacySubmission_TakesCampusFromTheAuthenticatedActor()
+    public async Task LegacySubmission_CannotBypassCanonicalEvidenceAndSemesterWithForgedCampus()
     {
         using var student = Client("student-2");
         var response = await student.PostAsJsonAsync("/api/v1/declarations", new
@@ -183,12 +183,9 @@ public sealed class CampusDeclarationQueueTests(AdminApiFactory factory) : IClas
             endDate = "2026-09-02",
             campusCode = "HAN"
         });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var saved = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("HCM", saved.GetProperty("campusCode").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await using var scope = factory.Services.CreateAsyncScope();
-        Assert.Equal("HCM", (await scope.ServiceProvider.GetRequiredService<AdminDbContext>().SelfDeclarations
-            .SingleAsync(x => x.Id == saved.GetProperty("id").GetGuid())).CampusCode);
+        Assert.False(await scope.ServiceProvider.GetRequiredService<AdminDbContext>().SelfDeclarations.AnyAsync(x => x.Title == "Legacy forged campus"));
     }
 
     private HttpClient Client(string token)

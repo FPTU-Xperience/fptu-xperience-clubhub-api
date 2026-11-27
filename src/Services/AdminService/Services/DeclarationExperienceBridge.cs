@@ -13,11 +13,27 @@ namespace AdminService.Services;
 internal static class DeclarationExperienceBridge
 {
     internal static async Task<IResult> SubmitAsync(SubmitDeclarationRequest input, AdminDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, CancellationToken ct, Guid? legacyId = null, string? expectedLegacyVersion = null)
     {
+        if (input is null) return ApiOperations.Error(400, "DECLARATION_REQUIRED", "Provide the declaration details.");
         var error = VerifiedExperienceRules.Validate(input.ProposedAttributes);
         var actor = http.User.GetUserId();
         InternalUserProfile? referralAuthor = null;
+        SelfDeclaration? legacy = null;
+        if (legacyId.HasValue)
+        {
+            legacy = await db.SelfDeclarations.SingleOrDefaultAsync(x => x.Id == legacyId, ct);
+            if (legacy is null) return Results.NotFound();
+            if (legacy.StudentId != actor) return Results.Forbid();
+            if (expectedLegacyVersion is not { Length: 64 }) return ApiOperations.Error(400, "LEGACY_VERSION_REQUIRED", "Reload the historical declaration before upgrading it.");
+            try
+            {
+                referralAuthor = (await http.RequestServices.GetRequiredService<CurrentUserProfileClient>().GetAsync([actor], ct)).GetValueOrDefault(actor);
+                if (referralAuthor is not { IsActive: true, IsLocked: false } || referralAuthor.CampusCode != legacy.CampusCode) return Results.Forbid();
+            }
+            catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+            { return ApiOperations.Error(503, "ACCOUNT_AUTHORITY_UNAVAILABLE", "Current account authority is unavailable."); }
+        }
         if (input.ReferringClubId.HasValue)
         {
             if (input.ReferringClubId <= 0) return ApiOperations.Error(400, "INVALID_REFERRING_CLUB", "Choose a current club membership.");
@@ -32,8 +48,9 @@ internal static class DeclarationExperienceBridge
             catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
             { return ApiOperations.Error(503, "CLUB_AUTHORITY_UNAVAILABLE", "Club membership and account authority are unavailable."); }
         }
-        if (error is not null || !input.IsOutsideClub || input.ClubId.HasValue || input.ReferringClubId.HasValue && input.EvidenceRefs is not { Count: > 0 } || string.IsNullOrWhiteSpace(input.Title)
-            || input.Title.Length > 200 || input.EvidenceDescription?.Length > 2000 || !input.OccurredAt.HasValue
+        if (error is not null || !input.IsOutsideClub || input.ClubId.HasValue || input.EvidenceRefs is not { Count: > 0 } || string.IsNullOrWhiteSpace(input.Title)
+            || input.Title.Length > 200 || string.IsNullOrWhiteSpace(input.OrganizationSource) || input.OrganizationSource.Length > 150
+            || string.IsNullOrWhiteSpace(input.EvidenceDescription) || input.EvidenceDescription.Length > 2000 || !input.OccurredAt.HasValue
             || input.OccurredAt > DateTimeOffset.UtcNow || !await OwnsEvidenceAsync(db, actor, input.EvidenceRefs, ct))
             return ApiOperations.Error(400, "INVALID_DECLARATION", error ?? "Provide an external declaration, occurredAt and owned evidence.");
         var identifier = input.SemesterId?.Trim() ?? "";
@@ -42,15 +59,25 @@ internal static class DeclarationExperienceBridge
         if (semester is null) return ApiOperations.Error(404, "SEMESTER_NOT_FOUND", "Use an existing project semester.");
         if (!semester.StartDate.HasValue || !semester.EndDate.HasValue || input.OccurredAt < semester.StartDate
             || input.OccurredAt >= semester.EndDate.Value.AddDays(1)) return ApiOperations.Error(400, "DECLARATION_OUTSIDE_SEMESTER", "The effort must fall inside the semester.");
-        return await ApiOperations.ExecuteAsync(http, db, input, async () =>
+        return await ApiOperations.ExecuteAsync(http, db, new { input, legacyId, expectedLegacyVersion }, async () =>
         {
+            string? historicalSnapshot = null;
+            if (legacy is not null)
+            {
+                await db.Entry(legacy).ReloadAsync(ct);
+                if (await db.Contributions.AnyAsync(x => x.Id == legacy.Id, ct) || !DeclarationResponse.From(legacy).CanUpgradeLegacy
+                    || DeclarationResponse.Fingerprint(legacy) != expectedLegacyVersion)
+                    return ApiOperations.Error(409, "LEGACY_DECLARATION_CHANGED", "Only the current pending external record can be upgraded. Historical decisions are read-only.");
+                historicalSnapshot = Json(legacy);
+            }
             var kind = input.ProposedAttributes!.PillarWeights.All(x => x.Pillar == ExperienceCategories.RealWorldWork) ? "REAL_WORLD" : "EXTERNAL";
             var declaration = new SelfDeclaration
             {
+                Id = legacy?.Id ?? Guid.NewGuid(),
                 StudentId = actor,
                 StudentName = referralAuthor?.DisplayName ?? http.User.Identity?.Name ?? $"User {actor}",
                 StudentEmail = referralAuthor?.Email ?? http.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "",
-                CampusCode = http.User.GetCampus(),
+                CampusCode = legacy?.CampusCode ?? http.User.GetCampus(),
                 Title = input.Title.Trim(),
                 Category = input.ProposedAttributes.PillarWeights[0].Pillar,
                 OrganizationSource = input.OrganizationSource?.Trim() ?? "",
@@ -83,12 +110,19 @@ internal static class DeclarationExperienceBridge
                     organizationSource = declaration.OrganizationSource,
                     semesterId = semester.SemesterCode,
                     input.OccurredAt,
-                    requestedPolicyVersion = input.PolicyVersion
+                    requestedPolicyVersion = input.PolicyVersion,
+                    legacyDeclarationSnapshot = historicalSnapshot
                 })
             };
-            db.SelfDeclarations.Add(declaration); db.Contributions.Add(row);
+            if (legacy is null) db.SelfDeclarations.Add(declaration);
+            else
+            {
+                declaration.CreatedAtUtc = legacy.CreatedAtUtc;
+                db.Entry(legacy).CurrentValues.SetValues(declaration);
+            }
+            db.Contributions.Add(row);
             Revision(db, row, "SUBMITTED", input.ProposedAttributes, actor, "External declaration submitted.");
-            ExperienceAuthorization.Audit(db, http.User, "DECLARATION_SUBMITTED", "SelfDeclaration", row.Id.ToString(), new { row.SourceType, row.SemesterId });
+            ExperienceAuthorization.Audit(db, http.User, legacyId.HasValue ? "LEGACY_DECLARATION_UPGRADED" : "DECLARATION_SUBMITTED", "SelfDeclaration", row.Id.ToString(), new { row.SourceType, row.SemesterId, legacyId });
             await db.SaveChangesAsync(ct);
             return Results.Created($"/api/v1/declarations/{row.Id}", Response(row));
         }, ct);

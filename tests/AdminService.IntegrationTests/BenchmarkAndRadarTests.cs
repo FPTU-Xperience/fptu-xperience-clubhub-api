@@ -7,6 +7,7 @@ using AdminService.Errors;
 using ClubReportHub.Shared.Auth;
 using ClubReportHub.Shared.Experience;
 using Xunit;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AdminService.IntegrationTests;
 
@@ -175,7 +176,7 @@ public sealed class BenchmarkAndRadarTests(AdminApiFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task StudentRadar_ComputesProperlyFromApprovedDeclarations()
+    public async Task HistoricalApprovedDeclarationRemainsPreviewWithoutChangingAuthoritativeRadar()
     {
         await factory.EnsureStudentPolicyAsync();
         // 1. Student 1 queries radar initially -> Unexplored
@@ -189,36 +190,33 @@ public sealed class BenchmarkAndRadarTests(AdminApiFactory factory) : IClassFixt
         Assert.Equal(0m, initialRadar.ERI);
         Assert.Equal(ExperienceTitles.Unexplored, initialRadar.ProfileTitle);
 
-        // 2. Student submits a declaration for Academic pillar
-        var submitRequest = new SubmitDeclarationRequest(
-            Title: "Coursera Deep Learning Specialization",
-            Category: ExperienceCategories.Academic,
-            OrganizationSource: "Coursera",
-            IsOutsideClub: true,
-            ClubId: null,
-            EvidenceUrl: "https://coursera.org/verify/123",
-            EvidenceDescription: "Certificate of completion",
-            RoleProposed: ContributionRoles.Contributor,
-            StartDate: new DateOnly(2026, 9, 1),
-            EndDate: new DateOnly(2026, 9, 20));
-
-        var submitResp = await studentClient.PostAsJsonAsync("/api/v1/declarations", submitRequest);
-        var declaration = await submitResp.Content.ReadFromJsonAsync<DeclarationResponse>(JsonOptions);
-        Assert.NotNull(declaration);
-
-        // 3. CTSV approves declaration: Tier T3 (60) * Contributor (1.6) * Club (1.0) = 96.0 points
-        using var ctsvClient = CreateClient("student-affairs");
-        var reviewRequest = new ReviewDeclarationRequest(
-            Decision: DeclarationDecisions.Approved,
-            ReviewNote: "Verified Coursera credential ID",
-            Tier: EffortTiers.T3,
-            Role: ContributionRoles.Contributor,
-            Scale: ActivityScales.Club);
-
-        var reviewResp = await ctsvClient.PostAsJsonAsync(
-            $"/api/v1/student-affairs/declarations/{declaration.Id}/review",
-            reviewRequest);
-        Assert.Equal(HttpStatusCode.OK, reviewResp.StatusCode);
+        // Seed a historical decision at the retired schema boundary. Its preview
+        // remains visible, but it cannot create a new canonical ledger effect.
+        var historical = new AdminService.Data.SelfDeclaration
+        {
+            StudentId = 301,
+            CampusCode = "HAN",
+            Title = "Historical Coursera decision",
+            Category = "Academic",
+            OrganizationSource = "Coursera",
+            IsOutsideClub = true,
+            Status = "Approved",
+            RawPoints = 96,
+            Tier = "T3",
+            Role = "Contributor",
+            Scale = "Club",
+            StartDate = new(2026, 9, 1),
+            EndDate = new(2026, 9, 20)
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AdminService.Data.AdminDbContext>();
+            db.SelfDeclarations.Add(historical); await db.SaveChangesAsync();
+        }
+        using var ctsvClient = CreateClient("student-affairs-han");
+        Assert.Equal(HttpStatusCode.Conflict, (await ctsvClient.PostAsJsonAsync(
+            $"/api/v1/student-affairs/declarations/{historical.Id}/review",
+            new ReviewDeclarationRequest("APPROVED", "Historical decision is read-only"))).StatusCode);
 
         // 4. Student queries radar again -> now has Academic score and profile title
         var afterRadarResp = await studentClient.GetAsync("/api/v1/declarations/me/radar");
