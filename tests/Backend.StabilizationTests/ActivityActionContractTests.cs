@@ -241,6 +241,76 @@ public sealed class ActivityActionContractTests
         Assert.Empty((await otherStudent.GetFromJsonAsync<JsonElement>("/api/activities/certificates/me")).GetProperty("items").EnumerateArray());
     }
 
+    [Theory]
+    [InlineData("/api/activities/certificates/me")]
+    [InlineData("/api/activities/certificates/club/1")]
+    public async Task CertificatePagesKeepEveryDefinitionForAnActivityTogetherAndScopeBeforePaging(string path)
+    {
+        await using var f = await Fixture.Create();
+        await f.WithDb(async db =>
+        {
+            foreach (var (activityId, count) in new[] { (10, 2), (20, 13), (30, 1) })
+            {
+                db.Activities.Add(new ClubActivity
+                {
+                    Id = activityId,
+                    ClubId = 1,
+                    ClubName = "Club One",
+                    Title = $"Activity {activityId}",
+                    StartTimeUtc = Instant.AddDays(-2),
+                    EndTimeUtc = Instant.AddDays(-1),
+                    CreatedByUserId = 200
+                });
+                for (var index = 0; index < count; index++)
+                {
+                    var definition = new ActivityCertificateDefinition
+                    {
+                        Id = Guid.NewGuid(),
+                        ActivityId = activityId,
+                        Role = "PARTICIPANT",
+                        Title = $"Certificate {index}",
+                        BadgePng = TransparentPng,
+                        CreatedAtUtc = Instant
+                    };
+                    db.Add(definition);
+                    foreach (var kind in new[] { "STUDENT", "CLUB" })
+                        db.Add(new ActivityCertificate
+                        {
+                            Id = Guid.NewGuid(),
+                            ActivityId = activityId,
+                            DefinitionId = definition.Id,
+                            RecipientKind = kind,
+                            RecipientId = activityId == 30 ? (kind == "STUDENT" ? 101 : 2) : (kind == "STUDENT" ? 100 : 1),
+                            RecipientName = "Recipient",
+                            ActivityTitle = $"Activity {activityId}",
+                            IssuerName = "Club One",
+                            IssuedAtUtc = Instant
+                        });
+                }
+            }
+            await db.SaveChangesAsync();
+        });
+        using var client = f.Client(100);
+        var first = await client.GetFromJsonAsync<JsonElement>(path + "?page=1");
+        var firstRows = first.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Equal(13, firstRows.Length);
+        Assert.All(firstRows, row => Assert.Equal(20, row.GetProperty("activityId").GetInt32()));
+        Assert.True(first.GetProperty("hasMore").GetBoolean());
+        var second = await client.GetFromJsonAsync<JsonElement>(path + "?page=2");
+        var secondRows = second.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Equal(2, secondRows.Length);
+        Assert.All(secondRows, row => Assert.Equal(10, row.GetProperty("activityId").GetInt32()));
+        Assert.False(second.GetProperty("hasMore").GetBoolean());
+        Assert.Empty(firstRows.Select(row => row.GetProperty("id").GetGuid()).Intersect(secondRows.Select(row => row.GetProperty("id").GetGuid())));
+        var empty = await client.GetFromJsonAsync<JsonElement>(path + "?page=3");
+        Assert.Empty(empty.GetProperty("items").EnumerateArray());
+        Assert.False(empty.GetProperty("hasMore").GetBoolean());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(path + "?page=0")).StatusCode);
+        using var other = f.Client(101);
+        var own = await other.GetFromJsonAsync<JsonElement>("/api/activities/certificates/me");
+        Assert.Equal(30, Assert.Single(own.GetProperty("items").EnumerateArray()).GetProperty("activityId").GetInt32());
+    }
+
     private static async Task<JsonElement> CreateCampusDraft(HttpClient reviewer)
     {
         var created = await Send(reviewer, HttpMethod.Post, "/api/activities/campus", new
