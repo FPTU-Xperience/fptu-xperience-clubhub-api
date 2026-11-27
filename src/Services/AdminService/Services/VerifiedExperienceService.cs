@@ -21,9 +21,29 @@ internal static class VerifiedExperienceService
         Read<ContributionAttributes>(row.ProposedAttributesJson), row.EffectiveAttributesJson is null ? null : Read<ContributionAttributes>(row.EffectiveAttributesJson),
         Read<List<Guid>>(row.EvidenceRefsJson), row.RawPoints, row.Status == "REVOKED" ? "REVOKED" : row.EffectiveAttributesJson is null ? "NOT_REQUESTED" : "RECORDED", row.UpdatedAtUtc)
     {
+        ReferringClubId = row.ClubReviewStatus is null ? null : row.ClubId,
+        OrganizationSource = Organization(row),
+        ClubReviewStatus = row.ClubReviewStatus,
+        CtsvSubmissionStatus = row.CtsvSubmissionStatus,
+        ClubReviewReason = row.ClubReviewReason,
+        ClubReviewedBy = row.ClubReviewedBy,
+        CtsvSubmittedBy = row.CtsvSubmittedBy,
         SourceKey = row.SourceKey,
         CalculationBreakdown = StudentCalculationService.Current(row)
     };
+
+    private static string? Organization(VerifiedContribution row)
+    {
+        if (row.SourceType is not ("EXTERNAL" or "REAL_WORLD")) return null;
+        try
+        {
+            using var source = JsonDocument.Parse(row.SourceSnapshotJson);
+            return source.RootElement.ValueKind == JsonValueKind.Object
+                && source.RootElement.TryGetProperty("organizationSource", out var value)
+                && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        }
+        catch (JsonException) { return null; }
+    }
 
     internal static ContributionRevision Revision(AdminDbContext db, VerifiedContribution row, string status,
         ContributionAttributes attributes, int? actor, string reason, IReadOnlyList<Guid>? evidence = null)

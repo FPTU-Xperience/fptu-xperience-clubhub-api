@@ -25,6 +25,7 @@ public static class DeclarationEndpoints
         declarations.MapPost("/", SubmitDeclarationAsync)
             .WithName("SubmitDeclaration")
             .Produces<DeclarationResponse>(StatusCodes.Status201Created);
+        declarations.MapClubDeclarations();
 
         declarations.MapGet("/me", GetMyDeclarationsAsync)
             .WithName("GetMyDeclarations")
@@ -62,7 +63,7 @@ public static class DeclarationEndpoints
         HttpContext http,
         CancellationToken cancellationToken)
     {
-        if (request.SemesterId is not null || request.ProposedAttributes is not null || request.EvidenceRefs is not null)
+        if (request.SemesterId is not null || request.ProposedAttributes is not null || request.EvidenceRefs is not null || request.ReferringClubId.HasValue)
             return await DeclarationExperienceBridge.SubmitAsync(request, dbContext, http, cancellationToken);
         if (!actor.UserId.HasValue)
         {
@@ -234,6 +235,7 @@ public static class DeclarationEndpoints
         string? category,
         string? campus,
         bool? isOutsideClub,
+        bool? viaClub,
         AdminDbContext dbContext,
         ICurrentActor actor,
         CancellationToken cancellationToken)
@@ -249,10 +251,16 @@ public static class DeclarationEndpoints
         var admin = actor.Roles.Contains(AuthRoles.Admin);
         var actorCampus = actor.CampusCode;
         if (!staff && clubs.Count == 0 && !external && !realWorld) return Results.Forbid();
+        // Club referrals have a separate BOD queue. Only independent campus staff may see them here after forwarding.
+        query = query.Where(x => !dbContext.Contributions.Any(c => c.Id == x.Id && c.ClubReviewStatus != null)
+            || staff && (admin || x.CampusCode == actorCampus) && dbContext.Contributions.Any(c => c.Id == x.Id
+                && c.ClubReviewStatus == "APPROVED" && c.CtsvSubmissionStatus == "SUBMITTED"
+                && c.ClubReviewedBy != actor.UserId && c.CtsvSubmittedBy != actor.UserId));
         query = query.Where(x => x.StudentId != actor.UserId &&
             (x.ClubId != null && clubs.Contains(x.ClubId.Value) ||
              dbContext.Contributions.Any(c => c.Id == x.Id && (external && c.SourceType == "EXTERNAL" || realWorld && c.SourceType == "REAL_WORLD")) ||
-             staff && x.IsOutsideClub && x.ClubId == null && (admin || x.CampusCode == actorCampus)));
+             staff && x.IsOutsideClub && (admin || x.CampusCode == actorCampus) && (x.ClubId == null
+                 || dbContext.Contributions.Any(c => c.Id == x.Id && c.ClubReviewStatus == "APPROVED" && c.CtsvSubmissionStatus == "SUBMITTED"))));
 
         if (!string.IsNullOrWhiteSpace(campus))
         {
@@ -279,6 +287,8 @@ public static class DeclarationEndpoints
         {
             query = query.Where(x => x.IsOutsideClub == isOutsideClub.Value);
         }
+        if (viaClub.HasValue)
+            query = query.Where(x => dbContext.Contributions.Any(c => c.Id == x.Id && c.ClubReviewStatus != null) == viaClub.Value);
 
         var total = await query.CountAsync(cancellationToken);
         var items = await query
@@ -290,7 +300,13 @@ public static class DeclarationEndpoints
         var ids = items.Select(x => x.Id).ToArray();
         var canonical = await dbContext.Contributions.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
         var responses = items.Select(item => canonical.TryGetValue(item.Id, out var row)
-            ? (object)VerifiedExperienceService.Response(row) : DeclarationResponse.From(item)).ToArray();
+            ? (object)(VerifiedExperienceService.Response(row) with
+            {
+                Capabilities = ClubDeclarationWorkflow.IsReferral(row) ? new(false, false, row.Status == "SUBMITTED") : null
+                ,
+                StudentName = item.StudentName,
+                StudentEmail = item.StudentEmail
+            }) : DeclarationResponse.From(item)).ToArray();
         return Results.Ok(PagedResult<object>.Create(responses, request.Page, request.PageSize, total));
     }
 

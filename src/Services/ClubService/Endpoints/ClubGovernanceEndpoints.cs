@@ -98,7 +98,7 @@ public static class ClubGovernanceEndpoints
             permissions = ClubGovernancePolicy.Delegable.Select(code => new { code, delegable = true, dutyCode = ClubGovernancePolicy.FinancialDuty([code]) ? "TREASURER" : null }),
             presets = ClubGovernancePolicy.Presets.Select(p => new { code = p.Key, permissionCodes = p.Value }),
             constraints = new { maxTreasurers = 2, ownerCanBeTreasurer = false, multipleGroupsPerMember = true },
-            unsupportedCapabilities = new[] { "club.declarations.process" },
+            unsupportedCapabilities = Array.Empty<string>(),
             capabilities = new { canManage = await Manage(clubId, db, http, ct), canNominateVice = owner, canTransferOwner = owner }
         });
     }
@@ -391,10 +391,13 @@ public static class ClubGovernanceEndpoints
                         (leadCampus != CampusCodes.Global && profile.CampusCode != leadCampus))
                         Reject(409, "MEMBERSHIP_CHANGED", "Select an active eligible club member.");
                 }
-                return config with { Groups = config.Groups.Select(g => g.Id == target.Id ? g with
+                return config with
                 {
-                    Assignments = g.Assignments.Select(a => a with { IsGroupLead = input.Operation == "SET_LEAD" && a.MembershipId == selected }).ToArray()
-                } : g).ToArray() };
+                    Groups = config.Groups.Select(g => g.Id == target.Id ? g with
+                    {
+                        Assignments = g.Assignments.Select(a => a with { IsGroupLead = input.Operation == "SET_LEAD" && a.MembershipId == selected }).ToArray()
+                    } : g).ToArray()
+                };
             }
             if (input.Operation == "REPLACE" && (input.MembershipIds!.Length != 1 ||
                 !target.Assignments.Any(a => a.MembershipId == input.ReplaceMembershipId && !a.IsGroupLead)))

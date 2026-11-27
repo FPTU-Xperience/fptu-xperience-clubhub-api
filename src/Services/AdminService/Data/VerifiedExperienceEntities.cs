@@ -18,6 +18,11 @@ public sealed class VerificationAssignment
 
 public sealed class VerifiedContribution
 {
+    public string? ClubReviewStatus { get; set; }
+    public string? CtsvSubmissionStatus { get; set; }
+    public string? ClubReviewReason { get; set; }
+    public int? ClubReviewedBy { get; set; }
+    public int? CtsvSubmittedBy { get; set; }
     public int? AttendanceId { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public int UserId { get; set; }

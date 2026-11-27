@@ -19,6 +19,9 @@ internal static class VerifiedExperienceModel
         });
         model.Entity<VerifiedContribution>(entity =>
         {
+            entity.Property(x => x.ClubReviewStatus).HasMaxLength(30);
+            entity.Property(x => x.CtsvSubmissionStatus).HasMaxLength(30);
+            entity.Property(x => x.ClubReviewReason).HasMaxLength(1000);
             entity.HasIndex(x => new { x.UserId, x.SourceKey }).IsUnique();
             entity.HasIndex(x => new { x.ClubId, x.SemesterId, x.Status });
             entity.HasIndex(x => new { x.ActivityId, x.SessionId });

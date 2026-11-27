@@ -1741,8 +1741,26 @@ namespace AdminService.Data.Migrations
                     b.Property<int?>("ClubId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ClubReviewReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ClubReviewStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("ClubReviewedBy")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CtsvSubmissionStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("CtsvSubmittedBy")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("CurrentRevisionId")
                         .HasColumnType("uniqueidentifier");
