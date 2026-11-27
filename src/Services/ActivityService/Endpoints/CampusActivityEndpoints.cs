@@ -21,6 +21,7 @@ internal static class CampusActivityEndpoints
         routes.MapPut("/campus/{id:int}", Update);
         routes.MapPost("/campus/{id:int}/publish", Publish);
         routes.MapPut("/campus/{id:int}/xp-policy", ConfigureXp);
+        routes.MapPost("/campus/{id:int}/funding-approval", ApproveFunding);
         routes.MapPost("/campus/{id:int}/cancel-publication", CancelPublication);
         routes.MapPost("/campus/{id:int}/handover", Offer);
         routes.MapGet("/handover/club/{clubId:int}", Inbox);
@@ -107,7 +108,7 @@ internal static class CampusActivityEndpoints
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
             await db.Entry(row).ReloadAsync(ct);
-            Require(row.ClubId == 0 && row.Version == input.ExpectedVersion && row.PublicationStatus == "DRAFT" && row.CampusPublishAtUtc is null,
+            Require(row.ClubId == 0 && row.Version == input.ExpectedVersion && row.PublicationStatus == "DRAFT" && row.CampusPublishAtUtc is null && row.FundingReservationId is null,
                 409, "CAMPUS_ACTIVITY_LOCKED", "Only the current campus draft can be edited.");
             var offer = await db.Set<ActivityHandover>().SingleOrDefaultAsync(x => x.ActivityId == id, ct);
             Require(offer?.Status != "PENDING", 409, "HANDOVER_PENDING", "Wait for the club decision before editing.");
@@ -141,6 +142,7 @@ internal static class CampusActivityEndpoints
             var now = Now(http);
             Require(row.Version == input.ExpectedVersion && row.Status == ActivityStatuses.Scheduled && row.PublicationStatus == "DRAFT",
                 409, "CAMPUS_ACTIVITY_LOCKED", "Only the current draft can go public.");
+            Require(row.RawBudget is null || row.FundingReservationId.HasValue, 409, "CAMPUS_RAW_APPROVAL_REQUIRED", "Campus staff must approve and reserve the raw budget before publication.");
             var offer = await db.Set<ActivityHandover>().SingleOrDefaultAsync(x => x.ActivityId == id, ct);
             Require(offer?.Status != "PENDING", 409, "HANDOVER_PENDING", "Wait for the club decision before publishing.");
             Require(input.PublishAtUtc is null || input.PublishAtUtc > now, 400, "INVALID_PUBLICATION_TIME", "Choose a future publication time.");
@@ -156,11 +158,35 @@ internal static class CampusActivityEndpoints
         }, ct);
     }
 
+    private static async Task<IResult> ApproveFunding(int id, ActivityDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var actor = await CampusReviewer(http, ct);
+        var input = await Body<VersionInput>(http, ct);
+        return await ApiOperations.ExecuteAsync(http, db, input, async () =>
+        {
+            var row = await Find(id, db, ct);
+            Require(row.OrganizerCampusCode == actor.CampusCode && row.Version == input.ExpectedVersion && row.Status == ActivityStatuses.Scheduled
+                && row.PublicationStatus == "DRAFT" && row.FundingReservationId is null && row.RawBudget > 0 && row.PolicyVersion.HasValue && row.ScoringSnapshotJson is not null,
+                409, "CAMPUS_FUNDING_NOT_READY", "Configure the current campus draft, raw budget and approved scoring source before reserving funding.");
+            var receipt = await http.RequestServices.GetRequiredService<RawFundingClient>().Reserve($"CAMPUS:{id}", row.Version.ToString("N"), http, ct);
+            Require(receipt.ClubId == 0 && receipt.CampusCode == actor.CampusCode && receipt.PolicyVersion == row.PolicyVersion && receipt.Budget == row.RawBudget,
+                502, "INVALID_RAW_RECEIPT", "The raw reservation must match the campus source.");
+            row.FundingReservationId = receipt.Id;
+            row.Version = Guid.NewGuid(); row.UpdatedAtUtc = Now(http);
+            var source = JsonSerializer.Deserialize<ExperienceSourceSnapshot>(row.ScoringSnapshotJson!, ActivitySessionEndpoints.JsonOptions)!;
+            row.ScoringSnapshotJson = JsonSerializer.Serialize(source with { FundingReservationId = receipt.Id, ActivityVersion = row.Version }, ActivitySessionEndpoints.JsonOptions);
+            db.SessionAudits.Add(new ActivitySessionAudit { ActivityId = id, Action = "GATE1_RAW_RESERVED", ActorId = actor.Id, Version = row.Version,
+                CreatedAtUtc = Now(http), SnapshotJson = JsonSerializer.Serialize(new { receipt.Id, receipt.Budget, receipt.PolicyVersion }, ActivitySessionEndpoints.JsonOptions) });
+            return Results.Ok(View(row, await db.Set<ActivityHandover>().AsNoTracking().SingleOrDefaultAsync(x => x.ActivityId == id, ct)));
+        }, ct);
+    }
+
     private static async Task<IResult> ConfigureXp(int id, ActivityDbContext db, HttpContext http, CancellationToken ct)
     {
         var actor = await CampusReviewer(http, ct);
         var activity = await db.Activities.SingleOrDefaultAsync(x => x.Id == id, ct);
         Require(activity is not null, 404, "ACTIVITY_NOT_FOUND", "Activity does not exist.");
+        Require(activity!.FundingReservationId is null, 409, "FUNDED_POLICY_LOCKED", "The reserved funding policy is immutable.");
         var campus = activity!.OrganizerCampusCode;
         if (campus is null && activity.ClubId > 0)
             campus = (await Authorize(activity.ClubId, http, ct)).Club.CampusCode;
@@ -197,7 +223,8 @@ internal static class CampusActivityEndpoints
             activity.Version = Guid.NewGuid();
             activity.UpdatedAtUtc = Now(http);
             var source = new ExperienceSourceSnapshot(activity.Id, activity.ClubId, 0, policy.SemesterId, activity.Title,
-                activity.StartTimeUtc, activity.EndTimeUtc, activity.Version, Guid.Empty, "SCHEDULED", false, attributes, policy);
+                activity.StartTimeUtc, activity.EndTimeUtc, activity.Version, Guid.Empty, "SCHEDULED", false, attributes, policy)
+                { FundingReservationId = activity.FundingReservationId };
             activity.ScoringSnapshotJson = JsonSerializer.Serialize(source, ActivitySessionEndpoints.JsonOptions);
             return Results.Ok(View(activity, await db.Set<ActivityHandover>().AsNoTracking().SingleOrDefaultAsync(x => x.ActivityId == id, ct)));
         }, ct);
@@ -495,6 +522,7 @@ internal static class CampusActivityEndpoints
     private static async Task<IResult> CreateReport(int id, ActivityDbContext db, HttpContext http, CancellationToken ct)
     {
         var (actor, row) = await Own(id, db, http, ct);
+        Require(row.FundingReservationId is null, 409, "CANONICAL_CLOSING_REPORT_REQUIRED", "Use the versioned closing-report workflow for a funded campus activity.");
         var input = await Body<ReportInput>(http, ct);
         var summary = input.Summary?.Trim();
         Require(summary is { Length: > 0 and <= 4000 }, 400, "REPORT_SUMMARY_REQUIRED", "Provide a report summary.");
@@ -521,6 +549,7 @@ internal static class CampusActivityEndpoints
     private static async Task<IResult> FinalizeReport(int id, ActivityDbContext db, HttpContext http, CancellationToken ct)
     {
         var (actor, row) = await Own(id, db, http, ct);
+        Require(row.FundingReservationId is null, 409, "CANONICAL_CLOSING_REPORT_REQUIRED", "Funded campus reports require independent versioned closing approval.");
         var input = await Body<VersionInput>(http, ct);
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
@@ -560,6 +589,8 @@ internal static class CampusActivityEndpoints
 
     private static async Task Validate(Plan input, HttpContext http, CancellationToken ct)
     {
+        Require(input.RawBudget is null || input.RawBudget is > 0 and <= 1_000_000_000 && decimal.Round(input.RawBudget.Value, 4) == input.RawBudget,
+            400, "INVALID_RAW_BUDGET", "Use a positive raw budget with at most four decimals.");
         Require(input.Title?.Trim().Length is > 0 and <= 200 && input.Description?.Trim().Length is > 0 and <= 2000
             && input.Location?.Trim().Length is > 0 and <= 200 && input.SemesterId?.Trim().Length is > 0 and <= 40
             && input.StartTimeUtc > Now(http) && input.EndTimeUtc > input.StartTimeUtc && input.Capacity is null or (> 0 and <= 100000),
@@ -579,6 +610,7 @@ internal static class CampusActivityEndpoints
         row.StartTimeUtc = plan.StartTimeUtc;
         row.EndTimeUtc = plan.EndTimeUtc;
         row.Capacity = plan.Capacity;
+        row.RawBudget = plan.RawBudget;
         row.Version = Guid.NewGuid();
         row.UpdatedAtUtc = now;
     }
@@ -602,6 +634,8 @@ internal static class CampusActivityEndpoints
         a.RegistrationClosesAt,
         publishAtUtc = a.CampusPublishAtUtc,
         a.PolicyVersion,
+        a.FundingReservationId,
+        a.RawBudget,
         a.EffortTier,
         TagSelection = DiscoveryTags.Read(a.TagSelectionJson),
         handover = h is null ? null : new { h.ClubId, h.ClubName, h.Version, h.Status, h.OfferedAtUtc, h.DecidedAtUtc }
@@ -610,7 +644,7 @@ internal static class CampusActivityEndpoints
     private static object Report(ActivityClosingReport r) => new { r.Version, r.Status, r.Summary, r.ReviewedAtUtc };
     private sealed record Plan(string? Title, string? Description, string? Location, string? SemesterId,
         DateTimeOffset StartTimeUtc, DateTimeOffset EndTimeUtc, int? Capacity, Guid? ExpectedVersion,
-        DiscoveryTagSelection? TagSelection = null);
+        DiscoveryTagSelection? TagSelection = null, decimal? RawBudget = null);
     private sealed record PublishInput(Guid ExpectedVersion, DateTimeOffset RegistrationOpensAt, DateTimeOffset RegistrationClosesAt,
         DateTimeOffset? PublishAtUtc);
     private sealed record OfferInput(Guid ExpectedVersion, int ClubId);

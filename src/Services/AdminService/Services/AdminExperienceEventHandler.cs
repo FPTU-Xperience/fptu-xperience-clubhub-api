@@ -94,8 +94,9 @@ public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguratio
             };
             db.Contributions.Add(row);
         }
-        if (message.ClosingReportReviewRole is { } role)
+        if (message.ClosingReportReviewRole is not null || source.FundingReservationId.HasValue)
         {
+            var role = message.ClosingReportReviewRole ?? "PARTICIPANT";
             if (created)
             {
                 row.Message = $"Closing report confirmed {role}. Review XP under the approved policy.";
@@ -164,6 +165,13 @@ public sealed class AdminExperienceEventHandler(AdminDbContext db, IConfiguratio
             }
             else if (row.Status is "SUBMITTED" or "REVISION_REQUESTED") { row.Status = "INVALIDATED"; row.Version = Guid.NewGuid(); }
             Notify(db, row, "SOURCE_CANCELLED", "Buổi hoạt động đã bị hủy");
+        }
+        if (message.SessionId is null)
+        {
+            var reservations = await db.Set<RawFundingReservation>().Where(x => x.ActivityId == message.ActivityId
+                || message.FundingReservationId != null && x.Id == message.FundingReservationId).ToListAsync(ct);
+            foreach (var reservation in reservations)
+                await RawFundingLedger.Refund(db, reservation, message.ActorId, message.Reason, ct);
         }
     }
 }

@@ -94,7 +94,7 @@ internal static class ActivityClosingReportEndpoints
         {
             await db.Entry(activity).ReloadAsync(ct);
             Require(activity.Status == ActivityStatuses.Completed, 409, "ACTIVITY_NOT_COMPLETED", "Complete the activity before submitting a closing report.");
-            Manager(await Authorize(activity.ClubId, http, ct));
+            Manager(await CampusActivityEndpoints.OrganizerScope(activity, db, http, ct));
             var report = await db.Set<ActivityClosingReport>().SingleOrDefaultAsync(x => x.ActivityId == activityId, ct);
             Require(report is null ? input.ExpectedVersion is null : report.Status == "RETURNED" && report.Version == input.ExpectedVersion,
                 409, "CLOSING_REPORT_LOCKED", "Reload the report; only a returned version can be resubmitted.");
@@ -123,7 +123,7 @@ internal static class ActivityClosingReportEndpoints
         Require((note?.Length ?? 0) <= 2000, 400, "INVALID_REVIEW_NOTE", "Use at most 2000 characters.");
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
-            var current = await Authorize(activity.ClubId, http, ct);
+            var current = await CampusActivityEndpoints.OrganizerScope(activity, db, http, ct);
             Require(current.Reviewer, 403, "REPORT_REVIEW_DENIED", "Current campus review authority is required.");
             await db.Entry(activity).ReloadAsync(ct);
             Require(activity.Status == ActivityStatuses.Completed, 409, "ACTIVITY_NOT_COMPLETED", "The activity must remain completed.");
@@ -159,7 +159,7 @@ internal static class ActivityClosingReportEndpoints
         Require(note is { Length: >= 5 and <= 2000 }, 400, "REVIEW_REASON_REQUIRED", "Provide a correction reason of 5–2000 characters.");
         return await ApiOperations.ExecuteAsync(http, db, input, async () =>
         {
-            var current = await Authorize(activity.ClubId, http, ct);
+            var current = await CampusActivityEndpoints.OrganizerScope(activity, db, http, ct);
             Require(current.Reviewer, 403, "REPORT_REVIEW_DENIED", "Current campus review authority is required.");
             await db.Entry(activity).ReloadAsync(ct);
             Require(activity.Status == ActivityStatuses.Completed, 409, "ACTIVITY_NOT_COMPLETED", "The activity must remain completed.");
@@ -208,9 +208,9 @@ internal static class ActivityClosingReportEndpoints
     {
         var activity = await db.Activities.SingleOrDefaultAsync(x => x.Id == activityId, ct);
         Require(activity is not null, 404, "ACTIVITY_NOT_FOUND", "Activity does not exist.");
-        var scope = await Authorize(activity!.ClubId, http, ct);
+        var scope = await CampusActivityEndpoints.OrganizerScope(activity!, db, http, ct);
         Require(scope.Manager || scope.Reviewer, 403, "CLOSING_REPORT_ACCESS_DENIED", "Current club management or review authority is required.");
-        return (activity, scope);
+        return (activity!, scope);
     }
 
     private static object Response(ActivityClosingReport report) =>

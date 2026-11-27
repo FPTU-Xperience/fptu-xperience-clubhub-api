@@ -217,6 +217,17 @@ public static class ActivityApplicationEndpoints
             {
                 var content = JsonSerializer.Deserialize<ActivityApplicationInput>(row.ContentJson, Json)!;
                 Validate(content, true, http); await Semester(content, http, ct);
+                RawFundingReceipt? funding = null;
+                ExperiencePolicyReference? fundingPolicy = null;
+                if (content.RawBudget.HasValue)
+                {
+                    funding = await http.RequestServices.GetRequiredService<ActivityService.Services.RawFundingClient>()
+                        .Reserve($"APPLICATION:{row.Id}", ActivityFundingSourceEndpoints.SourceVersion(row), http, ct);
+                    Require(funding.ClubId == row.ClubId && funding.SemesterId == row.SemesterId && funding.PolicyVersion == content.PolicyVersion && funding.Budget == content.RawBudget,
+                        502, "INVALID_RAW_RECEIPT", "The reservation must match the approved opening plan.");
+                    fundingPolicy = await http.RequestServices.GetRequiredService<ExperienceAuthorityClient>().ResolvePolicyAsync(row.SemesterId, funding.PolicyVersion, http, ct);
+                    Require(fundingPolicy is { ApprovalStatus: "APPROVED" }, 409, "SCORE_POLICY_UNAPPROVED", "The funded opening plan requires its approved scoring policy.");
+                }
                 // Plans already in the review queue before internal staffing was introduced remain reviewable.
                 var staffing = content.Staffing is null ? [] : await ResolveStaffing(content, http, ct);
                 var activity = new ClubActivity
@@ -229,6 +240,10 @@ public static class ActivityApplicationEndpoints
                     StartTimeUtc = content.StartTimeUtc!.Value,
                     EndTimeUtc = content.EndTimeUtc!.Value,
                     Scale = content.Scale!,
+                    RawBudget = content.RawBudget,
+                    FundingReservationId = funding?.Id,
+                    PolicyVersion = content.PolicyVersion,
+                    EffortTier = content.FundingAttributes?.Tier ?? "T1",
                     TagSelectionJson = content.TagSelection is null ? null : DiscoveryTags.Store(content.TagSelection),
                     PillarWeightsJson = JsonSerializer.Serialize(
                         content.ActivityType is { } type ? new[] { new PillarWeight(type, 1m) } : [],
@@ -243,6 +258,13 @@ public static class ActivityApplicationEndpoints
                     UpdatedAtUtc = Now(http)
                 };
                 db.Add(activity); await db.SaveChangesAsync(ct);
+                if (funding is not null)
+                {
+                    activity.PillarWeightsJson = JsonSerializer.Serialize(content.FundingAttributes!.PillarWeights, Json);
+                    activity.ScoringSnapshotJson = JsonSerializer.Serialize(new ExperienceSourceSnapshot(activity.Id, activity.ClubId, 0, row.SemesterId,
+                        activity.Title, activity.StartTimeUtc, activity.EndTimeUtc, activity.Version, Guid.Empty, "SCHEDULED", false,
+                        content.FundingAttributes, fundingPolicy!) { FundingReservationId = funding.Id }, Json);
+                }
                 var execution = new ActivityExecution { ActivityId = activity.Id, ApplicationId = id };
                 db.Add(execution); await db.SaveChangesAsync(ct);
                 var rules = content.Actions!.Select(x => new ActivityActionRule
@@ -274,7 +296,7 @@ public static class ActivityApplicationEndpoints
                     db.AddRange(recruitment.Positions!.Select(x => new ActivityRecruitmentPosition
                     { RecruitmentId = recruitmentRow.Id, ActionRuleId = rules.Single(r => r.ClientId == x.ActionClientId).Id, Capacity = x.Capacity }));
                 }
-                Audit(db, execution, http, "APPROVED_WITHOUT_SCORING", new { applicationId = id, row.Revision, scoringStatus = ScoringStatus });
+                Audit(db, execution, http, funding is null ? "APPROVED_WITHOUT_SCORING" : "GATE1_RAW_RESERVED", new { applicationId = id, row.Revision, fundingReservationId = funding?.Id, content.RawBudget, awardedXp = 0 });
                 await db.SaveChangesAsync(ct);
             }
             row.Status = input.Decision; row.Version++; row.UpdatedAt = Now(http); History(db, row, http, input.Reason?.Trim());

@@ -43,7 +43,7 @@ internal static class ActivityTransitionEndpoints
                 foreach (var attendance in await db.ActivityAttendances.Where(x => x.ActivityId == id && x.VerificationStatus == "VERIFIED").ToListAsync(ct))
                 { attendance.VerificationStatus = "REVOKED"; attendance.RecognitionStatus = "REVOCATION_PENDING"; attendance.Version = Guid.NewGuid(); }
                 db.AddOutboxMessage(new ExperienceSourceCancelledEvent(Guid.NewGuid(), row.UpdatedAtUtc, id, null, row.ClubId,
-                    http.User.GetUserId(), input.Reason.Trim()), ExperienceRoutingKeys.SourceCancelled);
+                    http.User.GetUserId(), input.Reason.Trim()) { FundingReservationId = row.FundingReservationId }, ExperienceRoutingKeys.SourceCancelled);
             }
             db.SessionAudits.Add(new ActivitySessionAudit
             {

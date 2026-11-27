@@ -21,6 +21,8 @@ public sealed record RadarIndexResult(
 /// </summary>
 public static class ExperienceIndexCalculator
 {
+    public const string LegacyIndexFormula = "ERI_MEAN_PIELOU_SATURATED_V1";
+    public const string LinearIndexFormula = "ERI_MEAN_PIELOU_LINEAR_W_V2";
     private const double Ln6 = 1.791759469228055; // Math.Log(6)
 
     /// <summary>
@@ -84,8 +86,13 @@ public static class ExperienceIndexCalculator
         IReadOnlyDictionary<string, decimal> tauByPillar,
         ISet<string>? pillarsWithLeaderProof = null,
         decimal starterThreshold = 20m, decimal practitionerThreshold = 50m, decimal leaderThreshold = 80m,
-        decimal allRounderMinimum = 20m, decimal allRounderEvenness = 0.90m)
+        decimal allRounderMinimum = 20m, decimal allRounderEvenness = 0.90m,
+        string indexFormulaVersion = LegacyIndexFormula)
     {
+        if (indexFormulaVersion is not (LegacyIndexFormula or LinearIndexFormula))
+            throw new ArgumentException("Unsupported index formula.", nameof(indexFormulaVersion));
+        if (indexFormulaVersion == LinearIndexFormula && RadarPillars.AllSeven.Any(p => !tauByPillar.TryGetValue(p, out var tau) || tau <= 0))
+            throw new ArgumentException("All six tau values and T7 must be positive.", nameof(tauByPillar));
         var pillars = new Dictionary<string, PillarAccumulation>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var pillar in RadarPillars.AllSeven)
@@ -128,7 +135,10 @@ public static class ExperienceIndexCalculator
 
         // PlusOne (+1) pillar for M
         var plusOneSat = pillars[RadarPillars.PlusOne].SaturatedScore;
-        decimal m = 1.0m + 0.30m * (plusOneSat / 100.0m);
+        var plusOne = pillars[RadarPillars.PlusOne];
+        decimal m = 1.0m + 0.30m * (indexFormulaVersion == LinearIndexFormula
+            ? Math.Min(Math.Max(0m, plusOne.RawPointsSum) / plusOne.Tau, 1m)
+            : plusOneSat / 100.0m);
 
         // ERI = D * (0.5 + 0.5 * J) * M
         decimal eri;

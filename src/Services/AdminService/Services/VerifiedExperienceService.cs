@@ -116,6 +116,7 @@ internal static class VerifiedExperienceService
                 oldPoints, newPoints - oldPoints, oldAllocations, after))
         };
         db.ExperienceLedgerEffects.Add(effect);
+        await RawFundingLedger.Charge(db, row, effect, cancellationToken);
         row.RawPoints = newPoints; row.Status = revoke ? "REVOKED" : "APPROVED";
         row.EffectiveAttributesJson = Json(after); row.PolicySnapshotJson = Json(policy);
         await db.SaveChangesAsync(cancellationToken);

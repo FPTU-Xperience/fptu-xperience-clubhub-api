@@ -41,6 +41,8 @@ internal static class ClosingDutyXpEndpoints
         {
             var row = await db.Contributions.SingleOrDefaultAsync(x => x.Id == id && x.ActivityId == activityId && x.SourceType == "CLOSING_DUTY", ct);
             if (row is null) return Results.NotFound();
+            if (RawFundingLedger.SourceReservation(row).HasValue)
+                return ApiOperations.Error(409, "FUNDED_SETTLEMENT_REQUIRED", "Review the complete funded closing settlement instead of posting individual awards.");
             var actor = http.User.GetUserId();
             if (row.UserId == actor) return Results.Forbid();
             if (row.Status != "SUBMITTED" || row.Version != input.ExpectedVersion)

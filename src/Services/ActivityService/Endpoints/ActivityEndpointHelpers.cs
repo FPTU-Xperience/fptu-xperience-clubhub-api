@@ -69,6 +69,8 @@ internal static class ActivityEndpointHelpers
                 .ToArray())
         {
             Version = activity.Version,
+            FundingReservationId = activity.FundingReservationId,
+            RawBudget = activity.RawBudget,
             IsInternal = activity.IsInternal,
             PublicationStatus = activity.PublicationStatus,
             DiscoveryVisibility = activity.DiscoveryVisibility,

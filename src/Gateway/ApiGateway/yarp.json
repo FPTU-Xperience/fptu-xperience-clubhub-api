@@ -575,6 +575,23 @@
           "Path": "/api/v1/declarations"
         }
       },
+      "raw-funding-v1": {
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v1/raw-funding/{**catch-all}"
+        }
+      },
+      "raw-funding-v1-root": {
+        "Order": 1,
+        "ClusterId": "admin-service",
+        "AuthorizationPolicy": "Default",
+        "RateLimiterPolicy": "general-api",
+        "Match": {
+          "Path": "/api/v1/raw-funding"
+        }
+      },
       "backoffice-me-v1": {
         "ClusterId": "admin-service",
         "AuthorizationPolicy": "Default",

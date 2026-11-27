@@ -49,6 +49,7 @@ internal static class ClosingReportXpGate
             foreach (var batch in events.Select(x => x.Message.UserId).Distinct().Chunk(200))
                 members.UnionWith(await clubs.MembersAtAsync(activity.ClubId, activity.StartTimeUtc, batch, ct));
 
+        var candidateKeys = new HashSet<(int UserId, string SourceKey)>();
         foreach (var (row, message) in events)
         {
             var eligible = verified.TryGetValue(message.AttendanceId, out var attendance)
@@ -58,12 +59,17 @@ internal static class ClosingReportXpGate
                 && !duties.Contains(message.UserId);
             row.Status = eligible ? OutboxMessageStatus.Pending : Ineligible;
             if (eligible)
+            {
                 row.Payload = JsonSerializer.Serialize(message with
                 {
                     ClosingReportAuthorized = true,
                     ClosingReportReviewRole = members.Contains(message.UserId) || roles[message.UserId].Role != "PARTICIPANT"
                         ? roles[message.UserId].Role : null
                 }, Json);
+                var sourceKey = $"CLUB:{activity.Id}:SESSION:{message.Source.SessionId}";
+                if (activity.FundingReservationId.HasValue && candidateKeys.Add((message.UserId, sourceKey)))
+                    db.Add(new ActivityFundingCandidate { ActivityId = activity.Id, UserId = message.UserId, SourceKey = sourceKey });
+            }
             row.ConcurrencyToken = Guid.NewGuid();
         }
     }
@@ -81,6 +87,8 @@ internal static class ClosingReportXpGate
         };
         foreach (var role in roles.Where(x => x.ConfirmedAtUtc <= lockedAt && x.Role is "STAFF" or "HOST"))
         {
+            if (activity.FundingReservationId.HasValue)
+                db.Add(new ActivityFundingCandidate { ActivityId = activity.Id, UserId = role.UserId, SourceKey = $"closing-duty:{activity.Id}" });
             db.AddOutboxMessage(new ClosingDutyXpEvent(Guid.NewGuid(), lockedAt, role.UserId, role.Role, source),
                 ExperienceRoutingKeys.ClosingDutyXp);
             queued.Add(role.UserId);

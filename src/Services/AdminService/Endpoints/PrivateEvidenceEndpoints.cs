@@ -67,7 +67,8 @@ public static class PrivateEvidenceEndpoints
                     if ((!ClubDeclarationWorkflow.IsReferral(source)
                             && await ExperienceAuthorization.FindAsync(db, actor, source.SourceType, source.ClubId, "contribution.review", ct) is not null)
                         || await CampusDeclarationReview.CanReviewAsync(db, http.User, source, ct)
-                        || await ClubDeclarationWorkflow.CanProcessAsync(source, http, ct)) { allowed = true; break; }
+                        || await ClubDeclarationWorkflow.CanProcessAsync(source, http, ct)
+                        || await RawFundingLedger.CanRead(source, db, http, ct)) { allowed = true; break; }
                 if (!allowed)
                     foreach (var request in await db.ManualAttendanceRequests.AsNoTracking().Where(x => x.EvidenceRefsJson.Contains(needle)).ToListAsync(ct))
                         if (await ExperienceAuthorization.FindAsync(db, actor, "CLUB", request.ClubId, "attendance.verify", ct) is not null) { allowed = true; break; }

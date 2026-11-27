@@ -14,7 +14,8 @@ public sealed record UpdateVerificationAssignmentRequest(Guid ExpectedVersion, b
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ApproveExperiencePolicyRequest(Guid ExpectedVersion, string Environment,
     string ApprovalBasis, bool ParametersP01ThroughP06Agreed, string CancellationRule = "REVERSE_SOURCE_INVALIDATION",
-    string Scope = "PERIOD", DateTimeOffset? EffectiveAt = null);
+    string Scope = "PERIOD", DateTimeOffset? EffectiveAt = null,
+    string IndexFormulaVersion = ExperienceIndexCalculator.LinearIndexFormula);
 
 public sealed record ApprovedExperiencePolicySnapshot(ExperiencePolicyReference Policy, Guid BenchmarkId,
     IReadOnlyDictionary<string, decimal> TauByPillar, decimal ThresholdStarter, decimal ThresholdPractitioner,

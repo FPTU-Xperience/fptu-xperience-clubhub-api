@@ -20,6 +20,8 @@ public sealed record ActivityResponse(
     IReadOnlyCollection<ActivityAttendanceResponse> Attendances)
 {
     public Guid Version { get; init; }
+    public Guid? FundingReservationId { get; init; }
+    public decimal? RawBudget { get; init; }
     public bool IsInternal { get; init; } = true;
     public ActivityTimeline? Timeline { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

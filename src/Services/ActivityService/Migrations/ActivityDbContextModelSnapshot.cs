@@ -742,6 +742,23 @@ namespace ActivityService.Migrations
                     b.ToTable("ActivityFinalRole");
                 });
 
+            modelBuilder.Entity("ActivityService.Models.ActivityFundingCandidate", b =>
+                {
+                    b.Property<int>("ActivityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("ActivityId", "UserId", "SourceKey");
+
+                    b.ToTable("ActivityFundingCandidate");
+                });
+
             modelBuilder.Entity("ActivityService.Models.ActivityHandover", b =>
                 {
                     b.Property<int>("ActivityId")
@@ -1671,6 +1688,9 @@ namespace ActivityService.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<Guid?>("FundingReservationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsInternal")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -1705,6 +1725,10 @@ namespace ActivityService.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
                         .HasDefaultValue("LEGACY");
+
+                    b.Property<decimal?>("RawBudget")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("RegisteredCount")
                         .HasColumnType("int");
@@ -2063,6 +2087,15 @@ namespace ActivityService.Migrations
                 });
 
             modelBuilder.Entity("ActivityService.Models.ActivityFinalRole", b =>
+                {
+                    b.HasOne("ActivityService.Models.ClubActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ActivityService.Models.ActivityFundingCandidate", b =>
                 {
                     b.HasOne("ActivityService.Models.ClubActivity", null)
                         .WithMany()

@@ -14,6 +14,18 @@ public static class ExperiencePolicyEndpoints
 {
     public static void MapExperiencePolicyEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/v1/semesters/{identifier}/approved-experience-policies", async (string identifier, AdminDbContext db, IConfiguration configuration, CancellationToken ct) =>
+        {
+            var id = Guid.TryParse(identifier, out var guid) ? guid : Guid.Empty;
+            var code = identifier.Trim().ToUpperInvariant();
+            var semester = await db.Semesters.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id || x.SemesterCode == code, ct);
+            if (semester is null) return ApiOperations.Error(404, "SEMESTER_NOT_FOUND", "Choose an existing semester.");
+            var environment = configuration["Experience:Environment"] ?? "PROJECT"; var now = DateTimeOffset.UtcNow;
+            var rows = await db.ApprovedExperiencePolicies.AsNoTracking().Where(x => x.SemesterId == semester.SemesterCode && x.Scope == "PERIOD" && x.Environment == environment
+                && x.ApprovedAt <= now && (x.EffectiveAt == null || x.EffectiveAt <= now)).OrderByDescending(x => x.EffectiveAt ?? x.ApprovedAt).ThenByDescending(x => x.ApprovedAt).ToListAsync(ct);
+            return Results.Ok(new { semesterId = semester.SemesterCode, items = rows.Select(x => new { policyVersion = x.Id, x.SemesterId, x.ApprovedAt, x.EffectiveAt,
+                indexFormulaVersion = VerifiedExperienceService.Read<ApprovedExperiencePolicySnapshot>(x.SnapshotJson).IndexFormulaVersion }) });
+        }).RequireAuthorization(AdminPolicies.AnyActor).WithTags("Approved experience policies");
         app.MapPost("/api/v1/student-affairs/benchmarks/{id:guid}/draft", async (Guid id, SessionPolicyDraftRequest request,
             AdminDbContext db, HttpContext http, CancellationToken ct) =>
         {
@@ -64,8 +76,9 @@ public static class ExperiencePolicyEndpoints
         {
             var config = await db.SemesterBenchmarkConfigs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (config is null) return Results.NotFound();
-            var versions = await db.ApprovedExperiencePolicies.AsNoTracking().Where(x => x.BenchmarkId == id)
-                .Select(x => new { policyVersion = x.Id, x.SemesterId, x.Environment, x.ApprovedAt, x.ApprovalBasis, x.Scope, x.EffectiveAt }).ToListAsync(cancellationToken);
+            var rows = await db.ApprovedExperiencePolicies.AsNoTracking().Where(x => x.BenchmarkId == id).OrderByDescending(x => x.ApprovedAt).ToListAsync(cancellationToken);
+            var versions = rows.Select(x => new { policyVersion = x.Id, x.SemesterId, x.Environment, x.ApprovedAt, x.ApprovalBasis, x.Scope, x.EffectiveAt,
+                indexFormulaVersion = VerifiedExperienceService.Read<ApprovedExperiencePolicySnapshot>(x.SnapshotJson).IndexFormulaVersion });
             return Results.Ok(new { benchmarkId = id, version = config.Version, config.ApprovalStatus, versions });
         }).RequireAuthorization(AdminPolicies.BackofficeUser).WithTags("Experience policies");
         app.MapPost("/api/v1/student-affairs/benchmarks/{id:guid}/approval", ApproveAsync)
@@ -78,7 +91,8 @@ public static class ExperiencePolicyEndpoints
         if (!request.ParametersP01ThroughP06Agreed || request.Environment is not ("DEMO" or "PROJECT")
             || request.Scope is not ("PERIOD" or "CUMULATIVE") || request.EffectiveAt > DateTimeOffset.UtcNow
             || string.IsNullOrWhiteSpace(request.ApprovalBasis) || request.ApprovalBasis.Trim().Length > 1000
-            || request.CancellationRule != "REVERSE_SOURCE_INVALIDATION")
+            || request.CancellationRule != "REVERSE_SOURCE_INVALIDATION"
+            || request.IndexFormulaVersion != ExperienceIndexCalculator.LinearIndexFormula)
             return ApiOperations.Error(400, "POLICY_APPROVAL_REQUIRED", "Record the agreed parameters, environment, approval basis and supported cancellation rule.");
         return await ApiOperations.ExecuteAsync(http, db, request, async () =>
         {
@@ -99,7 +113,7 @@ public static class ExperiencePolicyEndpoints
             var snapshot = new ApprovedExperiencePolicySnapshot(policy, config.Id, config.ToTauDictionary(),
                 config.ThresholdStarter, config.ThresholdPractitioner, config.ThresholdLeader,
                 config.MinPillarScoreAllRounder, config.MinJAllRounder,
-                Scope: request.Scope, EffectiveAt: request.EffectiveAt ?? DateTimeOffset.UtcNow);
+                IndexFormulaVersion: request.IndexFormulaVersion, Scope: request.Scope, EffectiveAt: request.EffectiveAt ?? DateTimeOffset.UtcNow);
             db.ApprovedExperiencePolicies.Add(new ApprovedExperiencePolicy
             {
                 Id = version,
